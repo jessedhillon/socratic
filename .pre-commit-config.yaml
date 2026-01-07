@@ -19,7 +19,7 @@ repos:
       entry: nix fmt
       language: system
       files: \.nix$
-      pass_filenames: false
+      pass_filenames: true
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.2

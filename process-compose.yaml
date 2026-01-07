@@ -3,7 +3,6 @@ version: "0.1"
 processes:
   postgres:
     command: 'postgres -p5432 -k ${XDG_STATE_HOME} -c logging_collector=off -c log_destination=stderr -c log_min_messages=INFO -c log_statement=all'
-    disabled: true
     is_daemon: true
     readiness_probe:
       exec:

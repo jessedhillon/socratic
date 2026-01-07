@@ -113,6 +113,7 @@
           claude-code
           gh
           poetry
+          postgresql_17
           pre-commit
           process-compose
           python313
@@ -145,19 +146,19 @@
               }
               trap cleanup EXIT
 
-              
+
               echo "Starting Example API server..."
               poetry run python -m socratic.cli web serve example &
               SERVER_PIDS+=($!)
-              
+
               sleep 3
 
-              
+
               echo "Generating API client for Example..."
               pushd $PRJ_ROOT/socratic/web/example/frontend > /dev/null
               npx openapi-ts
               popd > /dev/null
-              
+
 
               echo "API clients generated successfully"
             '';
