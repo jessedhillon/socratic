@@ -1,0 +1,6 @@
+google:
+  service_account:
+    project_id: "..."
+    private_key_id: "..."
+    client_email: "foo@example.com"
+    client_id: "..."

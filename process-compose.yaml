@@ -1,0 +1,88 @@
+version: "0.1"
+
+processes:
+  postgres:
+    command: 'postgres -p5432 -k ${XDG_STATE_HOME} -c logging_collector=off -c log_destination=stderr -c log_min_messages=INFO -c log_statement=all'
+    disabled: true
+    is_daemon: true
+    readiness_probe:
+      exec:
+      command: "pg_isready -p5432"
+      interval: 5s
+    environment:
+      - PGDATA=${PGDATA}
+      - PGHOST=${PGHOST}
+    availability:
+      restart: "always"
+    shutdown:
+      command: "pg_ctl stop -D ${PGDATA} -m fast"
+      signal: 2  # INT
+      timeout: 30s
+
+  memcached:
+    command: "memcached -u nobody -m 64 -p 11211"
+    disabled: true
+    shutdown:
+      signal: 15  # TERM
+      timeout: 10s
+    readiness_probe:
+      exec:
+        command: "ss -tanl | grep 11211"
+      interval: 5s
+      timeout: 2s
+
+  rabbitmq:
+    command: "rabbitmq-server"
+    disabled: true
+    shutdown:
+      command: "rabbitmqctl stop"
+      timeout: 20s
+    readiness_probe:
+      exec:
+        command: "rabbitmqctl -n ${RABBITMQ_NODENAME} status"
+      interval: 5s
+      initial_delay: 10s
+      timeout: 3s
+
+
+  example-api:
+    command: "poetry run python -m socratic.cli web serve example"
+    disabled: true
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 8081
+        path: /openapi.json
+      interval: 5s
+      timeout: 2s
+    shutdown:
+      signal: 15  # TERM
+      timeout: 10s
+
+  example-dev:
+    command: "poetry run python -m socratic.cli web develop example"
+    disabled: false
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 8081
+        path: /openapi.json
+      interval: 5s
+      timeout: 2s
+    shutdown:
+      signal: 15  # TERM
+      timeout: 10s
+
+  example-vite:
+    command: "npm run dev --prefix socratic/web/example/frontend -- --port 9091"
+    disabled: false
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 9091
+        path: /
+      interval: 5s
+      timeout: 2s
+    shutdown:
+      signal: 15  # TERM
+      timeout: 10s

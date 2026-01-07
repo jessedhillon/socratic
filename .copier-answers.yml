@@ -1,0 +1,12 @@
+_commit: f15677d
+_src_path: gh:jessedhillon/kit
+class_prefix: Socratic
+include_example_app: true
+include_example_model: true
+memcached_port: 11211
+module_name: socratic
+postgresql_port: 5432
+process_compose_port: 8080
+project_description: Learning evalaution and reinforcement system.
+project_name: Socratic
+rabbitmq_port: 5632

@@ -1,0 +1,126 @@
+[build-system]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "poetry_dynamic_versioning.backend"
+
+[project]
+name = "Socratic"
+description = "..."
+dynamic = [ "version" ]
+requires-python = ">=3.13,<4.0"
+authors = [
+    {name = "Jesse Dhillon", email = "jesse@dhillon.com" },
+]
+dependencies = [
+    "alembic~=1.14.0",
+    "ansible~=11.1.0",
+    "click~=8.1.0",
+    "colorlog~=6.9.0",
+    "dependency-injector~=4.45.0",
+    "fastapi~=0.115.0",
+    "keyctl~=0.5.0",
+    "psycopg[binary]~=3.2.0",
+    "pydantic[email]~=2.10.0",
+    "pydantic-settings~=2.7.0",
+    "pygments~=2.18.0",
+    "shortuuid~=1.0.13",
+    "setuptools~=75.8.0",
+    "types-Pygments==2.19.0.20250107",
+    "uuid-utils~=0.10.0",
+    "uvicorn~=0.34.0",
+    "xdg-base-dirs~=6.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest~=8.3.0",
+]
+dev = [
+    "jdbpp@git+ssh://git@github.com/jessedhillon/jdbpp.git@14ade861a42be37536cc2612d028a2ae2dc589c8",
+    "google-api-python-client~=2.163.0",
+    "google-api-python-client-stubs~=1.29.0",
+    "isort~=6.0.0",
+    "pyright~=1.1.0",
+    "rpdb@git+ssh://git@github.com/incognita-labs/rpdb.git@v0.2.1",
+    "ruff~=0.11.0",
+    "sql_formatter~=0.6.0",
+]
+
+[project.scripts]
+socratic-cli = "socratic.cli.__main__:execute_command"
+
+[tool.setuptools]
+packages = [ "socratic" ]
+
+[tool.setuptools.dynamic]
+version.attr = "socratic.__version__"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--strict-markers -svx --pdbcls=jdbpp:Pdb"
+filterwarnings = [
+  "ignore:.*type_params.*ForwardRef._evaluate.*:DeprecationWarning:pydantic\\.v1\\.typing"
+]
+
+[tool.pyright]
+exclude = [
+  "socratic/typings/",
+  "**/node_modules/**",
+  "**/.venv/**",
+]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "strict"
+stubPath = "socratic/typings/"
+
+reportUnusedImport = false  # let ruff catch this
+reportUnusedVariable = false  # let ruff catch this
+
+# WARN: these would nice to have, but require better typings for dependency-injector (or lots of silencing)
+reportUnknownParameterType = true
+reportUnknownArgumentType = true
+reportUnknownLambdaType = true
+reportUnknownVariableType = true
+reportUnknownMemberType = false
+reportMissingTypeStubs = false
+
+[tool.ruff]
+exclude = [
+  ".venv",
+  "socratic/typings/"
+]
+line-length = 120
+lint.select = [ "E", "F", "B", "T" ]
+lint.extend-ignore = [
+    "I",
+    "B008"  # calling function in parameter list
+]
+preview = true
+target-version = "py313"
+
+[tool.ruff.lint.per-file-ignores]
+"socratic/model/id.py" = ["E302"]
+
+[tool.black]
+line-length = 120
+target-version = ["py313"]
+force-exclude = 'socratic/typings/*'
+skip-string-normalization = true
+
+[tool.isort]
+line_length = 120
+multi_line_output = 2  # HANGING_INDENT
+skip_glob = [
+    "socratic/typings/**/*.pyi"
+]
+
+[tool.poetry]
+name = "Socratic"
+version = "0.0.0"  # placeholder, read from VERSION.txt by poetry-dynamic-versioning
+packages = [{ include = "socratic" }]
+
+[tool.poetry-dynamic-versioning]
+enable = true
+
+[tool.poetry-dynamic-versioning.from-file]
+source = "VERSION.txt"

@@ -1,0 +1,6 @@
+persistent:
+  postgresql:
+    database: socratic
+    port: 5432
+# ephemeral: "memcached://localhost:11211"
+# messaging: "amqp://localhost:5632"

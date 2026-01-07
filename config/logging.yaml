@@ -1,0 +1,94 @@
+disable_existing_loggers: true
+formatters:
+  brief:
+    (): colorlog.TTYColoredFormatter
+    datefmt: '%Y-%m-%d %H:%M:%S'
+    format: '%(log_color)s[%(asctime)s %(name)s] %(levelname)-1.1s%(reset)s %(message)s'
+  compact:
+    (): socratic.lib.logging.ExtraFormatter
+    base: ext://colorlog.TTYColoredFormatter
+    datefmt: '%Y-%m-%d %H:%M:%S'
+    format: '%(light_cyan)s%%%(processName)-18s%(reset)s%(light_black)s%(light_blue)s#%(threadName)-18s%(light_cyan)s%(log_color)s[%(asctime)s %(name)s] %(levelname)-1.1s%(reset)s %(message)s'
+    indent: false
+    log_colors:
+      CRITICAL: bold_red
+      DEBUG: thin_white
+      ERROR: red
+      INFO: green
+      TRACE: reset
+      WARNING: yellow
+    no_color: false
+  extra:
+    (): socratic.lib.logging.ExtraFormatter
+    base: ext://colorlog.TTYColoredFormatter
+    datefmt: '%Y-%m-%d %H:%M:%S'
+    format: '%(light_cyan)s%%%(processName)-18s%(reset)s%(light_black)s%(light_blue)s#%(threadName)-18s%(light_cyan)s%(log_color)s[%(asctime)s %(name)s] %(levelname)-1.1s%(reset)s %(message)s'
+    log_colors:
+      CRITICAL: bold_red
+      DEBUG: reset
+      ERROR: red
+      INFO: green
+      WARNING: yellow
+    no_color: false
+handlers:
+  console:
+    class: colorlog.StreamHandler
+    formatter: compact
+    level: NOTSET
+    stream: ext://sys.stderr
+  file:
+    backupCount: 4
+    class: logging.handlers.TimedRotatingFileHandler
+    filename: .state/socratic.log
+    formatter: compact
+    level: NOTSET
+    when: W0
+loggers:
+  alembic:
+    level: INFO
+  asyncio:
+    propagate: false
+  socratic:
+    level: DEBUG
+  socratic.cli:
+    level: DEBUG
+  socratic.core:
+    level: DEBUG
+  socratic.model:
+    level: DEBUG
+  boto3:
+    propagate: false
+  botocore:
+    propagate: false
+  chardet:
+    propagate: false
+  fastapi:
+    level: INFO
+  httpcore:
+    level: INFO
+  multipart:
+    level: WARN
+  pdfminer:
+    propagate: false
+  pika:
+    propagate: false
+  pika.adapters.blocking_connection:
+    level: CRITICAL
+  starlette:
+    level: INFO
+  urllib3:
+    level: WARN
+  uvicorn:
+    level: INFO
+  vite:
+    level: INFO
+  websockets.client:
+    level: INFO
+  websockets.server:
+    level: INFO
+root:
+  handlers:
+  - console
+  - file
+  level: NOTSET
+version: 1
