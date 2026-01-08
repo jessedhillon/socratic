@@ -2,8 +2,10 @@
 
 from fastapi import APIRouter
 
-from . import auth, organization
+from . import auth, objective, organization, strand
 
 router = APIRouter()
 router.include_router(auth.router)
 router.include_router(organization.router)
+router.include_router(objective.router)
+router.include_router(strand.router)
