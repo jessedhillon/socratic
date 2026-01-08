@@ -35,8 +35,23 @@ __all__ = [
     "ReorderObjectivesRequest",
     "ObjectiveDependencyRequest",
     "ObjectiveDependencyResponse",
+    # Assignment views
+    "AssignmentCreateRequest",
+    "AssignmentUpdateRequest",
+    "AssignmentResponse",
+    "AssignmentListResponse",
+    "AssignmentWithAttemptsResponse",
+    "BulkAssignmentCreateRequest",
+    "AttemptResponse",
+    "LearnerResponse",
+    "LearnerListResponse",
+    "LearnerAssignmentSummary",
+    "LearnerDashboardResponse",
 ]
 
+from .assignment import AssignmentCreateRequest, AssignmentListResponse, AssignmentResponse, AssignmentUpdateRequest, \
+    AssignmentWithAttemptsResponse, AttemptResponse, BulkAssignmentCreateRequest, LearnerAssignmentSummary, \
+    LearnerDashboardResponse, LearnerListResponse, LearnerResponse
 from .auth import LoginRequest, LoginResponse, RegisterRequest, TokenResponse, UserResponse
 from .objective import FailureModeRequest, FailureModeResponse, GradeThresholdRequest, GradeThresholdResponse, \
     ObjectiveCreateRequest, ObjectiveListResponse, ObjectiveResponse, ObjectiveUpdateRequest, \
