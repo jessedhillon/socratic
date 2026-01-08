@@ -247,3 +247,23 @@ class educator_overrides(base):
     feedback: Mapped[str | None] = mapped_column(default=None)
 
     create_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now())
+
+
+# Agent States (LangGraph checkpoints)
+
+
+class agent_states(base):
+    """Stores LangGraph agent state for assessment interviews.
+
+    This table persists the conversation state between HTTP requests,
+    allowing the assessment to continue across multiple interactions.
+    """
+
+    __tablename__ = "agent_states"
+
+    attempt_id: Mapped[AttemptID] = mapped_column(ForeignKey("assessment_attempts.attempt_id"), primary_key=True)
+
+    checkpoint_data: Mapped[dict[str, t.Any]] = mapped_column(JSONB)
+    thread_id: Mapped[str]
+
+    update_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now(), onupdate=func.now())

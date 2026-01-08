@@ -1,0 +1,16 @@
+Deliver the following educator-defined question to the learner.
+
+## Question to Ask ({{ prompt_number }} of {{ total_prompts }})
+{{ current_prompt }}
+
+## Instructions
+- Present this question naturally as part of the conversation
+- You may rephrase slightly to maintain conversational flow, but preserve the intent
+- Do not add additional questions - just ask this one
+- Do not hint at what you're looking for in the answer
+- After asking, wait for the learner's response
+
+## Rubric Context (for your reference, do NOT share with learner)
+{% for criterion in rubric_criteria %}
+- {{ criterion.name }}: Looking for {{ criterion.evidence_indicators | join(", ") }}
+{% endfor %}

@@ -1,0 +1,46 @@
+Generate a follow-up question to probe deeper into the learner's understanding.
+
+## Issue Detected
+{% if detected_ambiguity %}
+- **Ambiguity**: The learner's response was unclear{% if ambiguous_phrase %}, specifically: "{{ ambiguous_phrase }}"{% endif %}
+{% endif %}
+{% if detected_inconsistency %}
+- **Inconsistency**: The learner said something that contradicts an earlier statement
+  {% if earlier_point %}- Earlier they said: "{{ earlier_point }}"{% endif %}
+  {% if current_point %}- Now they said: "{{ current_point }}"{% endif %}
+{% endif %}
+{% if detected_evasion %}
+- **Evasion**: The learner appears to be avoiding the question directly
+{% endif %}
+
+## Probing Depth
+This is follow-up #{{ probing_depth + 1 }}. Be proportionally more direct if this is a repeated follow-up.
+
+{% if challenge_prompts %}
+## Available Challenge Prompts (use if appropriate)
+{% for prompt in challenge_prompts %}
+- {{ prompt }}
+{% endfor %}
+{% endif %}
+
+## Instructions
+Generate a single follow-up question that:
+{% if detected_ambiguity %}
+- Asks them to clarify what they meant
+- Uses their own words to show you're listening
+- Example frame: "When you say X, what do you mean by that?"
+{% elif detected_inconsistency %}
+- Gently points out the apparent contradiction
+- Asks them to help you understand how both statements fit together
+- Avoid accusatory language - be curious, not challenging
+- Example frame: "Earlier you mentioned X, but just now you said Y. Can you help me understand how these connect?"
+{% elif detected_evasion %}
+- Asks for a specific example or concrete case
+- Brings them back to the core question
+- Example frame: "Can you give me a specific example of what that would look like?"
+{% else %}
+- Explores their reasoning more deeply
+- Asks "how" or "why" rather than "what"
+{% endif %}
+
+Keep the question focused and natural. Do not ask multiple questions at once.

@@ -54,17 +54,3 @@ repos:
         additional_dependencies:
           - prettier@3.5.0
           - prettier-plugin-tailwindcss
-
-  - repo: local
-    hooks:
-      - id: eslint
-        name: eslint
-        entry: eslint
-        language: node
-        types_or: [javascript, jsx, ts, tsx]
-        files: \.(js|jsx|ts|tsx|css|scss|html|json)$
-        additional_dependencies:
-          - eslint@9.20.1
-          - "@typescript-eslint/parser@8.24.0"
-          - "@typescript-eslint/eslint-plugin@8.24.0"
-

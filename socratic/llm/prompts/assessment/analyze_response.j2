@@ -1,0 +1,42 @@
+Analyze the learner's response for quality signals. This is an internal analysis - do NOT generate a message for the learner.
+
+## Learner's Response
+{{ learner_response }}
+
+## Recent Conversation Context
+{% for message in conversation_history %}
+- {{ message }}
+{% endfor %}
+
+## Rubric Criteria to Consider
+{% for criterion in rubric_criteria %}
+- {{ criterion.name }}: {{ criterion.description }}
+  - Evidence indicators: {{ criterion.evidence_indicators | join(", ") }}
+  {% if criterion.failure_modes %}
+  - Failure modes: {{ criterion.failure_modes | join(", ") }}
+  {% endif %}
+{% endfor %}
+
+## Analysis Required
+Evaluate the response for the following issues:
+
+1. **AMBIGUOUS**: Is the response unclear or vague?
+   - Did they use imprecise language that could mean multiple things?
+   - Did they avoid specifics when specifics were needed?
+   - If yes, identify the ambiguous phrase.
+
+2. **INCONSISTENT**: Does the response contradict something they said earlier?
+   - Did they make a claim that conflicts with a previous statement?
+   - If yes, identify both the earlier point and the current point.
+
+3. **EVASION**: Did they avoid answering the question directly?
+   - Did they change the subject?
+   - Did they give a generic answer that doesn't address the specific question?
+   - Did they demonstrate high fluency but low substance?
+
+Respond with your analysis in the following format:
+- AMBIGUOUS: [yes/no] - "[ambiguous phrase if yes]"
+- INCONSISTENT: [yes/no] - Earlier: "[earlier point]" Now: "[current point]"
+- EVASION: [yes/no] - "[description if yes]"
+
+Keep the analysis brief and factual.
