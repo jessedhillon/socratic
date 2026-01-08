@@ -1,5 +1,4 @@
 import datetime
-
 import typing as t
 
 import pydantic as p
@@ -38,11 +37,11 @@ class BaseModel(p.BaseModel):
         )
 
 
-class WithCtime(BaseModel):
+class WithCtime(object):
     create_time: datetime.datetime
 
 
-class WithMtime(BaseModel):
+class WithMtime(object):
     update_time: datetime.datetime
 
 

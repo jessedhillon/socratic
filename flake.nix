@@ -112,12 +112,14 @@
         packages = with pkgs; [
           claude-code
           gh
+          isort
           poetry
           postgresql_17
           pre-commit
           process-compose
           python313
           nodejs
+          ruff
         ];
 
         commands = [

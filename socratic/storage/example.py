@@ -4,11 +4,11 @@ import typing as t
 
 from sqlalchemy import select
 
-from socratic.model import Example, ExampleID
 from socratic.core import di
+from socratic.model import Example, ExampleID
 
-from .table import example
 from . import Session
+from .table import example
 
 
 def get(key: ExampleID, session: Session = di.Provide["storage.persistent.session"]) -> Example | None:

@@ -1,19 +1,6 @@
 from pygments.style import Style
-from pygments.token import (
-    Comment,
-    Error,
-    Generic,
-    Keyword,
-    Literal,
-    Name,
-    Number,
-    Operator,
-    Other,
-    Punctuation,
-    String,
-    Text,
-    Whitespace,
-)
+from pygments.token import Comment, Error, Generic, Keyword, Literal, Name, Number, Operator, Other, Punctuation, \
+    String, Text, Whitespace
 
 BACKGROUND = "#2f1e2e"
 CURRENT_LINE = "#41323f"

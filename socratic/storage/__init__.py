@@ -1,18 +1,30 @@
 import importlib
 import sys
-import typing as t
 import types
+import typing as t
 
 from sqlalchemy.orm import Session, SessionTransaction
 
 __all__ = [
-    "example",
     "Session",
     "SessionTransaction",
+    # Repository modules
+    "example",
+    "organization",
+    "user",
+    "objective",
+    "strand",
+    "rubric",
+    "assignment",
+    "attempt",
+    "transcript",
+    "evaluation",
+    "override",
 ]
 
 if t.TYPE_CHECKING:
-    from . import example
+    from . import assignment, attempt, evaluation, example, objective, organization, override, rubric, strand, \
+        transcript, user
 
 
 def __getattr__(name: str) -> types.ModuleType:
