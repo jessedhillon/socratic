@@ -1,1 +1,2 @@
 example_path: "socratic/templates"
+llm_path: "socratic/llm/prompts"
