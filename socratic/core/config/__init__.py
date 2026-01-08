@@ -1,8 +1,10 @@
 __all__ = [
+    "AuthSettings",
     "ExampleWebSettings",
     "LoggingSettings",
     "Secrets",
     "Settings",
+    "SocraticWebSettings",
     "WebSettings",
 ]
 
@@ -10,4 +12,4 @@ __all__ = [
 from .logging import LoggingSettings
 from .secrets import Secrets
 from .settings import Settings
-from .web import ExampleWebSettings, WebSettings
+from .web import AuthSettings, ExampleWebSettings, SocraticWebSettings, WebSettings

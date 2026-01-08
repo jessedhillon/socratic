@@ -93,9 +93,44 @@ def add_membership(
     return OrganizationMembership(**row)
 
 
+def update(
+    key: UserID,
+    params: UserUpdateParams,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> User | None:
+    stmt = select(users).where(users.user_id == key)
+    user = session.execute(stmt).scalar_one_or_none()
+    if user is None:
+        return None
+    for field, value in params.items():
+        if value is not None:
+            setattr(user, field, value)
+    session.flush()
+    return get(key, session=session)
+
+
+def add_to_organization(
+    user_id: UserID,
+    organization_id: OrganizationID,
+    role: UserRole,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> OrganizationMembership:
+    """Convenience function to add a user to an organization."""
+    return add_membership(
+        {"user_id": user_id, "organization_id": organization_id, "role": role},
+        session=session,
+    )
+
+
 class UserCreateParams(t.TypedDict, total=False):
     email: t.Required[str]
     name: t.Required[str]
+    password_hash: str | None
+
+
+class UserUpdateParams(t.TypedDict, total=False):
+    email: str
+    name: str
     password_hash: str | None
 
 

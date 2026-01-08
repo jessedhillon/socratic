@@ -117,6 +117,7 @@
           postgresql_17
           pre-commit
           process-compose
+          pyright
           python313
           nodejs
           ruff

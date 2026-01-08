@@ -6,3 +6,13 @@ example:
     host: 127.0.0.1
     port: 9091
 
+socratic:
+  backend:
+    host: 127.0.0.1
+    port: 8080
+  frontend:
+    host: 127.0.0.1
+    port: 9090
+  auth:
+    jwt_algorithm: HS256
+    access_token_expire_minutes: 30

@@ -19,6 +19,7 @@ from socratic.model import BaseModel, DeploymentEnvironment
 from ..config import Secrets, Settings
 from ..di import NotReady, register_loader_containers
 from ..provider import LoggingProvider, TimestampProvider
+from .auth import AuthContainer
 from .storage import StorageContainer
 from .template import TemplateContainer
 from .vendor import VendorContainer
@@ -66,6 +67,14 @@ class SocraticContainer(DeclarativeContainer):
     )
     template: Provider[TemplateContainer] = Container(TemplateContainer, config=config.template)
     vendor: Provider[VendorContainer] = Container(VendorContainer, config=config.vendor, secrets=secrets)
+
+    # Auth container - config comes from web.socratic.auth, session from storage
+    auth: Provider[AuthContainer] = Container(
+        AuthContainer,
+        config=config.web.socratic.auth,
+        secrets=secrets.auth,
+        session=storage.provided.persistent.session,
+    )
 
     utcnow: Provider[TimestampProvider] = Object(lambda: datetime.datetime.now(datetime.UTC))
 

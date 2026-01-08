@@ -13,6 +13,7 @@ authors = [
 dependencies = [
     "alembic~=1.14.0",
     "ansible~=11.1.0",
+    "bcrypt~=4.2.0",
     "click~=8.1.0",
     "colorlog~=6.9.0",
     "dependency-injector~=4.45.0",
@@ -22,6 +23,7 @@ dependencies = [
     "pydantic[email]~=2.10.0",
     "pydantic-settings~=2.7.0",
     "pygments~=2.18.0",
+    "PyJWT~=2.10.0",
     "shortuuid~=1.0.13",
     "setuptools~=75.8.0",
     "types-Pygments==2.19.0.20250107",

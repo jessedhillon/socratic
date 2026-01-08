@@ -14,6 +14,12 @@ class PostgresqlSecrets(BaseSecrets):
     password: p.Secret[str] | None = None
 
 
+class AuthSecrets(BaseSecrets):
+    """Authentication secrets."""
+
+    jwt_secret: p.Secret[str]
+
+
 class GoogleServiceAccountSecrets(BaseSecrets):
     private_key: p.Secret[str]
 
@@ -26,6 +32,7 @@ class Secrets(BaseSecrets, BaseModel):  # pyright: ignore [reportIncompatibleVar
     root: p.AnyUrl
     env: DeploymentEnvironment
 
+    auth: AuthSecrets | None = None
     # google: GoogleSecrets = p.Field(default=..., validate_default=True)
     # postgresql: PostgresqlSecrets = p.Field(default_factory=PostgresqlSecrets, validate_default=True)
 

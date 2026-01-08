@@ -1,0 +1,1 @@
+"""Socratic web application."""

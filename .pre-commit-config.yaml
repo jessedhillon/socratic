@@ -35,13 +35,13 @@ repos:
     hooks:
     - id: format
       name: ruff + isort socratic
-      entry: bash -c 'ruff format socratic/ && isort --dt socratic/'
+      entry: bash -c 'poetry run ruff format socratic/ && poetry run isort --dt socratic/'
       language: system
       types: [python]
       files: ^socratic/
     - id: format
       name: ruff + isort migrations
-      entry: bash -c 'ruff format migrations/versions/ && isort --dt migrations/versions/'
+      entry: bash -c 'poetry run ruff format migrations/versions/ && poetry run isort --dt migrations/versions/'
       language: system
       types: [python]
       files: ^migrations/versions
