@@ -1,0 +1,44 @@
+# LLM Configuration
+# Default provider for assessment tasks
+default_provider: openai
+
+# Model configurations for different assessment tasks
+models:
+  # Model for conducting the Socratic dialogue
+  dialogue:
+    provider: openai
+    model: gpt-4o
+    max_tokens: 2048
+    temperature: 0.7
+    max_retries: 3
+    timeout_seconds: 60.0
+
+  # Model for evaluating learner responses against rubric
+  evaluation:
+    provider: openai
+    model: gpt-4o
+    max_tokens: 4096
+    temperature: 0.3
+    max_retries: 3
+    timeout_seconds: 120.0
+
+  # Model for generating feedback summaries
+  feedback:
+    provider: openai
+    model: gpt-4o-mini
+    max_tokens: 1024
+    temperature: 0.5
+    max_retries: 3
+    timeout_seconds: 30.0
+
+# Rate limiting
+rate_limits:
+  requests_per_minute: 500
+  tokens_per_minute: 150000
+  concurrent_requests: 25
+
+# Cost management
+cost:
+  enable_tracking: true
+  alert_threshold_usd: 50.0
+  daily_budget_usd: null

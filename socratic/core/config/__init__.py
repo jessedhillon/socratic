@@ -1,6 +1,7 @@
 __all__ = [
     "AuthSettings",
     "ExampleWebSettings",
+    "LLMSettings",
     "LoggingSettings",
     "Secrets",
     "Settings",
@@ -9,6 +10,7 @@ __all__ = [
 ]
 
 
+from .llm import LLMSettings
 from .logging import LoggingSettings
 from .secrets import Secrets
 from .settings import Settings

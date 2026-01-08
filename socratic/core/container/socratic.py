@@ -20,6 +20,7 @@ from ..config import Secrets, Settings
 from ..di import NotReady, register_loader_containers
 from ..provider import LoggingProvider, TimestampProvider
 from .auth import AuthContainer
+from .llm import LLMContainer
 from .storage import StorageContainer
 from .template import TemplateContainer
 from .vendor import VendorContainer
@@ -74,6 +75,13 @@ class SocraticContainer(DeclarativeContainer):
         config=config.web.socratic.auth,
         secrets=secrets.auth,
         session=storage.provided.persistent.session,
+    )
+
+    # LLM container for AI model access
+    llm: Provider[LLMContainer] = Container(
+        LLMContainer,
+        config=config.llm,
+        secrets=secrets.llm,
     )
 
     utcnow: Provider[TimestampProvider] = Object(lambda: datetime.datetime.now(datetime.UTC))

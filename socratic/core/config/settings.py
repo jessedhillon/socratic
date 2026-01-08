@@ -5,6 +5,7 @@ from pydantic_settings import PydanticBaseSettingsSource
 from socratic.model import BaseModel, DeploymentEnvironment
 
 from .base import BaseSettings
+from .llm import LLMSettings
 from .logging import LoggingSettings
 from .source import OverrideSettingsSource, YAMLCascadingSettingsSource
 from .storage import StorageSettings
@@ -22,6 +23,7 @@ class Settings(BaseSettings, BaseModel):  # pyright: ignore [reportIncompatibleV
     env: DeploymentEnvironment
     override: tuple[str, ...]
 
+    llm: LLMSettings = SettingsField
     logging: LoggingSettings = SettingsField
     storage: StorageSettings = SettingsField
     template: TemplateSettings = SettingsField
