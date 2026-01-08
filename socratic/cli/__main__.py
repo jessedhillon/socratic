@@ -22,7 +22,7 @@ _wiring: list[types.ModuleType] = []
 
 class SocraticMultiCommand(click.Group):
     def list_commands(self, ctx: click.Context) -> t.List[str]:
-        return ["data", "example", "schema", "script", "web"]
+        return ["example", "schema", "script", "user", "web"]
 
     def get_command(self, ctx: click.Context, cmd_name: str) -> click.Group:
         global _wiring

@@ -1,4 +1,4 @@
-"""CLI commands for managing organizations and users."""
+"""CLI commands for managing users and organizations."""
 
 from __future__ import annotations
 
@@ -13,133 +13,10 @@ from socratic.storage import organization as org_storage
 from socratic.storage import user as user_storage
 
 
-@click.group("data")
-def data():
-    """Manage organizations, users, and other data."""
-    ...
-
-
-# Organization commands
-
-
-@data.group("org")
-def org():
-    """Manage organizations."""
-    ...
-
-
-@org.command("list")
-@di.inject
-def org_list(session: Session = di.Provide["storage.persistent.session"]) -> None:
-    """List all organizations."""
-    orgs = org_storage.find(session=session)
-    if not orgs:
-        click.echo("No organizations found.")
-        return
-
-    click.echo(f"{'ID':<30} {'Name':<30} {'Slug':<20}")
-    click.echo("-" * 80)
-    for o in orgs:
-        click.echo(f"{str(o.organization_id):<30} {o.name:<30} {o.slug:<20}")
-
-
-@org.command("create")
-@click.argument("name")
-@click.argument("slug")
-@di.inject
-def org_create(
-    name: str,
-    slug: str,
-    session: Session = di.Provide["storage.persistent.session"],
-) -> None:
-    """Create a new organization.
-
-    NAME is the display name for the organization.
-    SLUG is a URL-friendly identifier (e.g., 'acme-corp').
-    """
-    # Check if slug already exists
-    existing = org_storage.get_by_slug(slug, session=session)
-    if existing:
-        click.echo(f"Error: Organization with slug '{slug}' already exists.", err=True)
-        raise SystemExit(1)
-
-    organization = org_storage.create({"name": name, "slug": slug}, session=session)
-    session.commit()
-
-    click.echo(f"Created organization: {organization.name}")
-    click.echo(f"  ID: {organization.organization_id}")
-    click.echo(f"  Slug: {organization.slug}")
-
-
-@org.command("show")
-@click.argument("slug")
-@di.inject
-def org_show(
-    slug: str,
-    session: Session = di.Provide["storage.persistent.session"],
-) -> None:
-    """Show details for an organization by slug."""
-    organization = org_storage.get_by_slug(slug, session=session)
-    if not organization:
-        click.echo(f"Error: Organization '{slug}' not found.", err=True)
-        raise SystemExit(1)
-
-    click.echo(f"Organization: {organization.name}")
-    click.echo(f"  ID: {organization.organization_id}")
-    click.echo(f"  Slug: {organization.slug}")
-    click.echo(f"  Created: {organization.create_time}")
-
-    # List members
-    users = user_storage.find(organization_id=organization.organization_id, session=session)
-    if users:
-        click.echo(f"\nMembers ({len(users)}):")
-        for u in users:
-            memberships = user_storage.get_memberships(u.user_id, session=session)
-            role = next(
-                (m.role for m in memberships if m.organization_id == organization.organization_id),
-                None,
-            )
-            click.echo(f"  - {u.name} ({u.email}) [{role.value if role else 'unknown'}]")
-
-
-# User commands
-
-
-@data.group("user")
+@click.group("user")
 def user():
-    """Manage users."""
+    """Manage users and organizations."""
     ...
-
-
-@user.command("list")
-@click.option("--org", "-o", "org_slug", help="Filter by organization slug")
-@click.option("--role", "-r", type=click.Choice(["educator", "learner"]), help="Filter by role")
-@di.inject
-def user_list(
-    org_slug: str | None,
-    role: str | None,
-    session: Session = di.Provide["storage.persistent.session"],
-) -> None:
-    """List users, optionally filtered by organization or role."""
-    organization_id = None
-    if org_slug:
-        organization = org_storage.get_by_slug(org_slug, session=session)
-        if not organization:
-            click.echo(f"Error: Organization '{org_slug}' not found.", err=True)
-            raise SystemExit(1)
-        organization_id = organization.organization_id
-
-    user_role = UserRole(role) if role else None
-    users = user_storage.find(organization_id=organization_id, role=user_role, session=session)
-
-    if not users:
-        click.echo("No users found.")
-        return
-
-    click.echo(f"{'ID':<30} {'Name':<25} {'Email':<30}")
-    click.echo("-" * 85)
-    for u in users:
-        click.echo(f"{str(u.user_id):<30} {u.name:<25} {u.email:<30}")
 
 
 @user.command("create")
@@ -216,14 +93,57 @@ def user_create(
         click.echo(f"  Generated password: {generated_password}")
 
 
-@user.command("show")
-@click.argument("email")
+@user.command("create-org")
+@click.argument("name")
+@click.argument("slug")
 @di.inject
-def user_show(
-    email: str,
+def user_create_org(
+    name: str,
+    slug: str,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> None:
-    """Show details for a user by email."""
+    """Create a new organization.
+
+    NAME is the display name for the organization.
+    SLUG is a URL-friendly identifier (e.g., 'acme-corp').
+    """
+    # Check if slug already exists
+    existing = org_storage.get_by_slug(slug, session=session)
+    if existing:
+        click.echo(f"Error: Organization with slug '{slug}' already exists.", err=True)
+        raise SystemExit(1)
+
+    organization = org_storage.create({"name": name, "slug": slug}, session=session)
+    session.commit()
+
+    click.echo(f"Created organization: {organization.name}")
+    click.echo(f"  ID: {organization.organization_id}")
+    click.echo(f"  Slug: {organization.slug}")
+
+
+@user.command("show")
+@click.argument("identifier")
+@di.inject
+def user_show(
+    identifier: str,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> None:
+    """Show details for a user or organization.
+
+    IDENTIFIER can be:
+    - An email address (shows user details)
+    - An organization slug (shows organization and its members)
+    """
+    # Try as email first (contains @)
+    if "@" in identifier:
+        _show_user(identifier, session)
+    else:
+        # Try as organization slug
+        _show_organization(identifier, session)
+
+
+def _show_user(email: str, session: Session) -> None:
+    """Show user details."""
     found_user = user_storage.get_by_email(email, session=session)
     if not found_user:
         click.echo(f"Error: User '{email}' not found.", err=True)
@@ -242,6 +162,64 @@ def user_show(
             organization = org_storage.get(m.organization_id, session=session)
             org_name = organization.name if organization else "Unknown"
             click.echo(f"  - {org_name} [{m.role.value}]")
+
+
+def _show_organization(slug: str, session: Session) -> None:
+    """Show organization details."""
+    organization = org_storage.get_by_slug(slug, session=session)
+    if not organization:
+        click.echo(f"Error: Organization '{slug}' not found.", err=True)
+        raise SystemExit(1)
+
+    click.echo(f"Organization: {organization.name}")
+    click.echo(f"  ID: {organization.organization_id}")
+    click.echo(f"  Slug: {organization.slug}")
+    click.echo(f"  Created: {organization.create_time}")
+
+    # List members
+    users = user_storage.find(organization_id=organization.organization_id, session=session)
+    if users:
+        click.echo(f"\nMembers ({len(users)}):")
+        for u in users:
+            memberships = user_storage.get_memberships(u.user_id, session=session)
+            role = next(
+                (m.role for m in memberships if m.organization_id == organization.organization_id),
+                None,
+            )
+            click.echo(f"  - {u.name} ({u.email}) [{role.value if role else 'unknown'}]")
+    else:
+        click.echo("\nNo members.")
+
+
+@user.command("list")
+@click.option("--org", "-o", "org_slug", help="Filter by organization slug")
+@click.option("--role", "-r", type=click.Choice(["educator", "learner"]), help="Filter by role")
+@di.inject
+def user_list(
+    org_slug: str | None,
+    role: str | None,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> None:
+    """List users, optionally filtered by organization or role."""
+    organization_id = None
+    if org_slug:
+        organization = org_storage.get_by_slug(org_slug, session=session)
+        if not organization:
+            click.echo(f"Error: Organization '{org_slug}' not found.", err=True)
+            raise SystemExit(1)
+        organization_id = organization.organization_id
+
+    user_role = UserRole(role) if role else None
+    users = user_storage.find(organization_id=organization_id, role=user_role, session=session)
+
+    if not users:
+        click.echo("No users found.")
+        return
+
+    click.echo(f"{'ID':<30} {'Name':<25} {'Email':<30}")
+    click.echo("-" * 85)
+    for u in users:
+        click.echo(f"{str(u.user_id):<30} {u.name:<25} {u.email:<30}")
 
 
 @user.command("add-to-org")
@@ -294,4 +272,4 @@ def user_add_to_org(
     click.echo(f"Added {found_user.name} to {organization.name} as {user_role.value}")
 
 
-command = data
+command = user
