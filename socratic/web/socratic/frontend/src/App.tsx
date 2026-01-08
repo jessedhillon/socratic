@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import AssessmentPage from './pages/AssessmentPage';
 import DashboardPage from './pages/DashboardPage';
+import ReviewPage from './pages/ReviewPage';
 
 const App: React.FC = () => {
   return (
@@ -13,6 +14,8 @@ const App: React.FC = () => {
           path="/assessment/:assignmentId/attempt/:attemptId"
           element={<AssessmentPage />}
         />
+        <Route path="/reviews" element={<ReviewPage />} />
+        <Route path="/reviews/:attemptId" element={<ReviewPage />} />
       </Routes>
     </div>
   );

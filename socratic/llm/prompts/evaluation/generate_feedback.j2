@@ -1,0 +1,43 @@
+You are generating constructive feedback for a learner who just completed an assessment.
+
+## Learning Objective
+**{{ objective_title }}**
+{{ objective_description }}
+
+## Assessment Results
+
+### Overall Grade: {{ grade }}
+Confidence: {{ confidence_score | round(2) }}
+
+### Per-Criterion Results
+{% for result in criterion_results %}
+**{{ result.criterion_name }}**: {{ result.grade }}
+- Evidence strength: {{ result.evidence_strength }}
+{% if result.strengths %}
+- Demonstrated understanding: {{ result.strengths | join("; ") }}
+{% endif %}
+{% if result.gaps %}
+- Areas for growth: {{ result.gaps | join("; ") }}
+{% endif %}
+{% endfor %}
+
+## Your Task
+Generate learner-facing feedback that is:
+1. Encouraging and constructive
+2. Specific about what was done well
+3. Clear about areas for improvement (without being discouraging)
+4. Actionable with concrete suggestions
+
+Important guidelines:
+- Do NOT reveal rubric criteria or grading logic
+- Do NOT use grades in the feedback (use descriptive language instead)
+- Focus on learning and growth, not judgment
+- Keep the tone supportive and educational
+
+Respond in JSON format ONLY (no markdown code blocks):
+{
+  "strengths": ["specific thing done well", "another strength"],
+  "areas_for_growth": ["area to improve", "another area"],
+  "suggestions": ["concrete suggestion for improvement"],
+  "summary": "2-3 sentence overall feedback message for the learner"
+}

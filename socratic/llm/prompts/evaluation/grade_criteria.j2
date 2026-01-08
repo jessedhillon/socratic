@@ -1,0 +1,46 @@
+You are grading a learner's performance on a specific rubric criterion based on extracted evidence.
+
+## Criterion
+**{{ criterion.name }}**: {{ criterion.description }}
+
+## Grade Thresholds
+{% for threshold in criterion.grade_thresholds %}
+- **{{ threshold.grade }}**: {{ threshold.description }}
+  {% if threshold.min_evidence_count %}(Requires at least {{ threshold.min_evidence_count }} pieces of evidence){% endif %}
+{% endfor %}
+
+## Extracted Evidence
+Evidence present: {{ evidence.evidence_present }}
+Strength: {{ evidence.strength }}
+
+### Supporting Quotes
+{% for quote in evidence.quotes %}
+- "{{ quote }}"
+{% endfor %}
+
+### Failure Modes Detected
+{% if evidence.failure_modes_detected %}
+{% for mode in evidence.failure_modes_detected %}
+- {{ mode }}
+{% endfor %}
+{% else %}
+None detected
+{% endif %}
+
+### Evaluator Notes
+{{ evidence.reasoning }}
+
+## Your Task
+Based on the evidence above and the grade thresholds, assign a grade for this criterion.
+
+Consider:
+1. The quantity and quality of evidence
+2. Any failure modes that were detected
+3. The strength assessment from evidence extraction
+
+Respond in JSON format ONLY (no markdown code blocks):
+{
+  "grade": "S" or "A" or "C" or "F",
+  "confidence": 0.0 to 1.0,
+  "reasoning": "brief explanation for this grade"
+}

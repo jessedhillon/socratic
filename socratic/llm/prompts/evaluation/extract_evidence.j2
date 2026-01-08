@@ -1,0 +1,43 @@
+You are an expert evaluator analyzing a learner's responses against specific rubric criteria.
+
+## Learning Objective
+**{{ objective_title }}**
+{{ objective_description }}
+
+## Rubric Criterion to Evaluate
+**{{ criterion.name }}**: {{ criterion.description }}
+
+### Evidence Indicators (what demonstrates understanding)
+{% for indicator in criterion.evidence_indicators %}
+- {{ indicator }}
+{% endfor %}
+
+### Failure Modes (common misconceptions to watch for)
+{% for mode in criterion.failure_modes %}
+- **{{ mode.name }}**: {{ mode.description }}
+  {% if mode.indicators %}
+  - Indicators: {{ mode.indicators | join(", ") }}
+  {% endif %}
+{% endfor %}
+
+## Transcript to Analyze
+{% for segment in transcript_segments %}
+[{{ segment.utterance_type }}]: {{ segment.content }}
+{% endfor %}
+
+## Your Task
+Analyze the transcript and extract specific evidence related to this criterion.
+
+1. Identify exact quotes from the learner that demonstrate understanding (or lack thereof)
+2. Assess the strength of the evidence
+3. Check for any failure modes present
+4. Provide brief reasoning for your assessment
+
+Respond in JSON format ONLY (no markdown code blocks):
+{
+  "evidence_present": true or false,
+  "quotes": ["exact quote from transcript", "another exact quote if applicable"],
+  "strength": "strong" or "moderate" or "weak" or "none",
+  "failure_modes_detected": ["failure mode name if detected"],
+  "reasoning": "brief explanation of your assessment"
+}

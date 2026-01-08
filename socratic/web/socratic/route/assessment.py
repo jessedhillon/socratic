@@ -12,7 +12,7 @@ from langchain_core.language_models import BaseChatModel
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 
-from socratic.auth import AuthContext, require_learner
+from socratic.auth import AuthContext, require_educator, require_learner
 from socratic.core import di
 from socratic.llm.assessment import get_assessment_status, PostgresCheckpointer, run_assessment_turn, start_assessment
 from socratic.model import AssignmentID, AttemptID, AttemptStatus, UtteranceType
@@ -385,3 +385,109 @@ def get_transcript_route(
         completed_at=attempt.completed_at,
         messages=messages,
     )
+
+
+@router.post("/{attempt_id}/evaluate", operation_id="trigger_evaluation")
+@di.inject
+async def trigger_evaluation_route(
+    attempt_id: str,
+    auth: AuthContext = Depends(require_educator),
+    session: Session = di.Provide["storage.persistent.session"],
+    env: jinja2.Environment = di.Provide["template.llm"],
+) -> dict[str, t.Any]:
+    """Trigger AI evaluation for a completed assessment.
+
+    This endpoint is called by educators or automated systems after
+    an assessment is completed. It runs the evaluation pipeline and
+    updates the attempt status to Evaluated.
+    """
+    from socratic.llm.evaluation import EvaluationPipeline
+    from socratic.llm.factory import ModelFactory
+    from socratic.storage import evaluation as eval_storage
+
+    aid = AttemptID(attempt_id)
+
+    # Validate attempt exists
+    attempt = attempt_storage.get(aid, session=session)
+    if attempt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assessment attempt not found",
+        )
+
+    # Get assignment and validate org access
+    assignment = assignment_storage.get(attempt.assignment_id, session=session)
+    if assignment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assignment not found",
+        )
+
+    if assignment.organization_id != auth.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot evaluate attempts from other organizations",
+        )
+
+    # Validate status
+    if attempt.status != AttemptStatus.Completed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot evaluate attempt with status {attempt.status.value}",
+        )
+
+    # Get objective and rubric
+    objective = obj_storage.get(assignment.objective_id, session=session)
+    if objective is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Objective not found",
+        )
+
+    rubric_criteria = rubric_storage.find(objective_id=objective.objective_id, session=session)
+
+    # Get transcript
+    transcript = transcript_storage.find(attempt_id=aid, session=session)
+
+    # Get model factory from DI
+    model_factory: ModelFactory = di.Provide["llm.model_factory"]()
+
+    # Run evaluation pipeline
+    pipeline = EvaluationPipeline(model_factory=model_factory, env=env)
+    result = await pipeline.evaluate(
+        attempt_id=aid,
+        transcript=list(transcript),
+        rubric_criteria=list(rubric_criteria),
+        objective=objective,
+    )
+
+    # Store evaluation result
+    eval_storage.create(
+        {
+            "attempt_id": aid,
+            "evidence_mappings": result["evidence_mappings"],
+            "flags": result["flags"],
+            "strengths": result["strengths"],
+            "gaps": result["gaps"],
+            "reasoning_summary": result["reasoning_summary"],
+        },
+        session=session,
+    )
+
+    # Transition attempt to Evaluated status
+    attempt_storage.transition_to_evaluated(
+        attempt_id=aid,
+        grade=result["grade"],
+        confidence_score=result["confidence_score"],
+        session=session,
+    )
+
+    session.commit()
+
+    return {
+        "attempt_id": str(aid),
+        "status": "evaluated",
+        "grade": result["grade"].value,
+        "confidence_score": float(result["confidence_score"]),
+        "flags": [f.value for f in result["flags"]],
+    }

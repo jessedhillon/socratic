@@ -5,7 +5,8 @@ import typing as t
 from sqlalchemy import select
 
 from socratic.core import di
-from socratic.model import AssessmentFlag, AttemptID, EvaluationResult, EvaluationResultID, EvidenceMapping
+from socratic.model import AssessmentFlag, AttemptID, EvaluationResult, EvaluationResultID, EvidenceMapping, \
+    OrganizationID
 
 from . import Session
 from .table import evaluation_results
@@ -54,3 +55,35 @@ class EvaluationCreateParams(t.TypedDict, total=False):
     strengths: list[str]
     gaps: list[str]
     reasoning_summary: str | None
+
+
+def find_pending_review(
+    *,
+    organization_id: OrganizationID | None = None,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> tuple[EvaluationResult, ...]:
+    """Find evaluations for attempts that need educator review.
+
+    Returns evaluations for attempts with status='evaluated'.
+    """
+    from .table import assessment_attempts, assignments
+
+    # Join evaluations -> attempts -> assignments to filter by org
+    stmt = (
+        select(evaluation_results.__table__)
+        .join(
+            assessment_attempts,
+            evaluation_results.attempt_id == assessment_attempts.attempt_id,
+        )
+        .where(assessment_attempts.status == "evaluated")
+        .order_by(assessment_attempts.completed_at.desc())
+    )
+
+    if organization_id is not None:
+        stmt = stmt.join(
+            assignments,
+            assessment_attempts.assignment_id == assignments.assignment_id,
+        ).where(assignments.organization_id == organization_id)
+
+    rows = session.execute(stmt).mappings().all()
+    return tuple(EvaluationResult(**row) for row in rows)

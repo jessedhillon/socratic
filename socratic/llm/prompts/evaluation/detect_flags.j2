@@ -1,0 +1,64 @@
+You are analyzing an assessment transcript for potential red flags that may require educator review.
+
+## Learning Objective
+**{{ objective_title }}**
+
+## Full Transcript
+{% for segment in transcript_segments %}
+[{{ segment.utterance_type }}]: {{ segment.content }}
+{% endfor %}
+
+## Evidence Summary
+{% for mapping in evidence_mappings %}
+- **{{ mapping.criterion_name }}**: {{ mapping.strength }} evidence
+  {% if mapping.failure_modes_detected %}- Failure modes: {{ mapping.failure_modes_detected | join(", ") }}{% endif %}
+{% endfor %}
+
+## Flags to Check
+
+1. **HighFluencyLowSubstance**: The learner speaks eloquently but provides little actual evidence of understanding. Look for:
+   - Long, well-structured responses with vague or generic content
+   - Use of appropriate vocabulary without demonstrating comprehension
+   - Confident delivery but inability to provide specific examples
+
+2. **RepeatedEvasion**: The learner consistently avoids engaging with questions. Look for:
+   - Topic changes when asked direct questions
+   - Providing tangential information instead of direct answers
+   - Multiple instances of "I'm not sure" without attempting to reason through
+
+3. **VocabularyMirroring**: The learner parrots terminology without explanation. Look for:
+   - Using terms from the questions without elaboration
+   - Repeating interviewer language verbatim
+   - Inability to explain terms in their own words
+
+4. **InconsistentReasoning**: The learner contradicts themselves. Look for:
+   - Statements that conflict with earlier responses
+   - Logic that doesn't follow from premises
+   - Changing positions without acknowledgment
+
+5. **PossibleGaming**: The learner may be trying to game the assessment. Look for:
+   - Responses that seem rehearsed or scripted
+   - Overly specific answers that don't match natural conversation
+   - Attempts to probe for expected answers before responding
+
+## Your Task
+Analyze the transcript for each flag type. Be conservative - only flag issues that are clearly present.
+
+Respond in JSON format ONLY (no markdown code blocks):
+{
+  "flags": [
+    {
+      "flag_type": "flag name from list above",
+      "confidence": 0.0 to 1.0,
+      "evidence": "specific example from transcript",
+      "reasoning": "brief explanation"
+    }
+  ],
+  "overall_assessment": "brief summary of any concerns"
+}
+
+If no flags are detected, return:
+{
+  "flags": [],
+  "overall_assessment": "No significant concerns detected"
+}
