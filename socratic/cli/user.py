@@ -222,7 +222,7 @@ def user_list(
         click.echo(f"{str(u.user_id):<30} {u.name:<25} {u.email:<30}")
 
 
-@user.command("add-to-org")
+@user.command("enroll")
 @click.argument("email")
 @click.argument("org_slug")
 @click.option(
@@ -233,13 +233,13 @@ def user_list(
     help="User role in the organization",
 )
 @di.inject
-def user_add_to_org(
+def user_enroll(
     email: str,
     org_slug: str,
     role: str,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> None:
-    """Add an existing user to an organization.
+    """Enroll an existing user into an organization.
 
     EMAIL is the user's email address.
     ORG_SLUG is the organization's slug.
@@ -269,7 +269,7 @@ def user_add_to_org(
     )
 
     session.commit()
-    click.echo(f"Added {found_user.name} to {organization.name} as {user_role.value}")
+    click.echo(f"Enrolled {found_user.name} in {organization.name} as {user_role.value}")
 
 
 command = user
