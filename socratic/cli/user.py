@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 
 from sqlalchemy.orm import Session
@@ -45,45 +46,41 @@ def user_create(
     EMAIL is the user's email address (used for login).
     NAME is the user's display name.
     """
-    # Validate organization
-    organization = org_storage.get_by_slug(org_slug, session=session)
-    if not organization:
-        click.echo(f"Error: Organization '{org_slug}' not found.", err=True)
-        raise SystemExit(1)
-
-    # Check if email already exists
-    existing = user_storage.get_by_email(email, session=session)
-    if existing:
-        click.echo(f"Error: User with email '{email}' already exists.", err=True)
-        raise SystemExit(1)
-
     # Generate password if not provided
     generated_password = None
     if not password:
         generated_password = secrets.token_urlsafe(12)
         password = generated_password
 
-    # Hash the password
-    import hashlib
-
     password_hash = hashlib.sha256(password.encode()).hexdigest()
-
-    # Create user
-    new_user = user_storage.create(
-        {"email": email, "name": name, "password_hash": password_hash},
-        session=session,
-    )
-
-    # Add to organization
     user_role = UserRole(role)
-    user_storage.add_to_organization(
-        new_user.user_id,
-        organization.organization_id,
-        user_role,
-        session=session,
-    )
 
-    session.commit()
+    with session.begin():
+        # Validate organization
+        organization = org_storage.get_by_slug(org_slug, session=session)
+        if not organization:
+            click.echo(f"Error: Organization '{org_slug}' not found.", err=True)
+            raise SystemExit(1)
+
+        # Check if email already exists
+        existing = user_storage.get_by_email(email, session=session)
+        if existing:
+            click.echo(f"Error: User with email '{email}' already exists.", err=True)
+            raise SystemExit(1)
+
+        # Create user
+        new_user = user_storage.create(
+            {"email": email, "name": name, "password_hash": password_hash},
+            session=session,
+        )
+
+        # Add to organization
+        user_storage.add_to_organization(
+            new_user.user_id,
+            organization.organization_id,
+            user_role,
+            session=session,
+        )
 
     click.echo(f"Created user: {new_user.name}")
     click.echo(f"  ID: {new_user.user_id}")
@@ -107,14 +104,14 @@ def user_create_org(
     NAME is the display name for the organization.
     SLUG is a URL-friendly identifier (e.g., 'acme-corp').
     """
-    # Check if slug already exists
-    existing = org_storage.get_by_slug(slug, session=session)
-    if existing:
-        click.echo(f"Error: Organization with slug '{slug}' already exists.", err=True)
-        raise SystemExit(1)
+    with session.begin():
+        # Check if slug already exists
+        existing = org_storage.get_by_slug(slug, session=session)
+        if existing:
+            click.echo(f"Error: Organization with slug '{slug}' already exists.", err=True)
+            raise SystemExit(1)
 
-    organization = org_storage.create({"name": name, "slug": slug}, session=session)
-    session.commit()
+        organization = org_storage.create({"name": name, "slug": slug}, session=session)
 
     click.echo(f"Created organization: {organization.name}")
     click.echo(f"  ID: {organization.organization_id}")
@@ -244,31 +241,32 @@ def user_enroll(
     EMAIL is the user's email address.
     ORG_SLUG is the organization's slug.
     """
-    found_user = user_storage.get_by_email(email, session=session)
-    if not found_user:
-        click.echo(f"Error: User '{email}' not found.", err=True)
-        raise SystemExit(1)
-
-    organization = org_storage.get_by_slug(org_slug, session=session)
-    if not organization:
-        click.echo(f"Error: Organization '{org_slug}' not found.", err=True)
-        raise SystemExit(1)
-
-    # Check if already a member
-    memberships = user_storage.get_memberships(found_user.user_id, session=session)
-    if any(m.organization_id == organization.organization_id for m in memberships):
-        click.echo(f"Error: User is already a member of '{org_slug}'.", err=True)
-        raise SystemExit(1)
-
     user_role = UserRole(role)
-    user_storage.add_to_organization(
-        found_user.user_id,
-        organization.organization_id,
-        user_role,
-        session=session,
-    )
 
-    session.commit()
+    with session.begin():
+        found_user = user_storage.get_by_email(email, session=session)
+        if not found_user:
+            click.echo(f"Error: User '{email}' not found.", err=True)
+            raise SystemExit(1)
+
+        organization = org_storage.get_by_slug(org_slug, session=session)
+        if not organization:
+            click.echo(f"Error: Organization '{org_slug}' not found.", err=True)
+            raise SystemExit(1)
+
+        # Check if already a member
+        memberships = user_storage.get_memberships(found_user.user_id, session=session)
+        if any(m.organization_id == organization.organization_id for m in memberships):
+            click.echo(f"Error: User is already a member of '{org_slug}'.", err=True)
+            raise SystemExit(1)
+
+        user_storage.add_to_organization(
+            found_user.user_id,
+            organization.organization_id,
+            user_role,
+            session=session,
+        )
+
     click.echo(f"Enrolled {found_user.name} in {organization.name} as {user_role.value}")
 
 
