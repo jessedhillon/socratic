@@ -5,6 +5,7 @@ Learning evalaution and reinforcement system.
 ## Quick Reference
 
 ### Commands
+
 ```bash
 dev                              # Start all dev services (process-compose)
 generate-api-clients             # Generate TypeScript API clients from OpenAPI
@@ -214,6 +215,7 @@ user_id = UserID(key="...")  # From existing key
 The storage layer uses a functional repository pattern with SQLAlchemy for queries and Pydantic models for typed inputs/outputs.
 
 **Structure:**
+
 - `storage/table.py` - SQLAlchemy table definitions
 - `storage/{entity}.py` - Repository functions for each entity
 
@@ -243,6 +245,7 @@ def get_user(session: Session, user_id: UserID) -> User | None:
 ```
 
 **Conventions:**
+
 - Repository functions are pure functions, not methods on a class
 - Session is always the first parameter
 - Return `None` for missing entities, not exceptions
@@ -363,14 +366,14 @@ dev  # or: process-compose up
 
 ### Process Compose Services
 
-| Service | Purpose | Default |
-|---------|---------|---------|
-| `postgres` | PostgreSQL database | disabled |
-| `memcached` | Cache server | disabled |
-| `rabbitmq` | Message queue | disabled |
-| `example-api` | Production backend | disabled |
-| `example-dev` | Dev backend (reload) | enabled |
-| `example-vite` | Vite frontend | enabled |
+| Service        | Purpose              | Default  |
+| -------------- | -------------------- | -------- |
+| `postgres`     | PostgreSQL database  | disabled |
+| `memcached`    | Cache server         | disabled |
+| `rabbitmq`     | Message queue        | disabled |
+| `example-api`  | Production backend   | disabled |
+| `example-dev`  | Dev backend (reload) | enabled  |
+| `example-vite` | Vite frontend        | enabled  |
 
 Enable services: `process-compose up --enable postgres`
 
@@ -401,6 +404,7 @@ generate-api-clients
 ```
 
 Or manually:
+
 ```bash
 socratic-cli web serve example &
 cd socratic/web/example/frontend
@@ -488,6 +492,7 @@ breakpoint()  # Drops into jdbpp debugger
 ### Remote Debugging
 
 The `develop` command wraps the server in a remote debugger context:
+
 ```python
 with debug.remote_debugger():
     uvicorn.run(...)
@@ -509,6 +514,7 @@ poetry install
 ### Type errors with injected dependencies
 
 Ensure `di.as_(Type)` is used when the provider returns a different type:
+
 ```python
 config: Settings = di.Provide["config", di.as_(Settings)]
 ```
@@ -516,6 +522,7 @@ config: Settings = di.Provide["config", di.as_(Settings)]
 ### Vault password prompt hanging
 
 The vault file doesn't exist - create it first:
+
 ```bash
 ansible-vault create config/secrets.vault.yaml
 ```
@@ -523,35 +530,36 @@ ansible-vault create config/secrets.vault.yaml
 ### Frontend API types outdated
 
 Regenerate the client:
+
 ```bash
 generate-api-clients
 ```
 
 ## File Naming Conventions
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Python modules | snake_case | `user_service.py` |
-| Config files | snake_case.yaml | `storage.yaml` |
-| React components | PascalCase.tsx | `UserProfile.tsx` |
-| CSS | kebab-case.css | `user-profile.css` |
-| TypeScript | camelCase.ts | `apiClient.ts` |
+| Type             | Convention      | Example            |
+| ---------------- | --------------- | ------------------ |
+| Python modules   | snake_case      | `user_service.py`  |
+| Config files     | snake_case.yaml | `storage.yaml`     |
+| React components | PascalCase.tsx  | `UserProfile.tsx`  |
+| CSS              | kebab-case.css  | `user-profile.css` |
+| TypeScript       | camelCase.ts    | `apiClient.ts`     |
 
 ## Environment Variables
 
 Set by devshell (`flake.nix`):
 
-| Variable | Purpose |
-|----------|---------|
-| `XDG_STATE_HOME` | State directory (`.state/`) |
-| `PGDATA` | PostgreSQL data directory |
-| `PGHOST` | PostgreSQL socket directory |
-| `RABBITMQ_*` | RabbitMQ configuration |
+| Variable           | Purpose                      |
+| ------------------ | ---------------------------- |
+| `XDG_STATE_HOME`   | State directory (`.state/`)  |
+| `PGDATA`           | PostgreSQL data directory    |
+| `PGHOST`           | PostgreSQL socket directory  |
+| `RABBITMQ_*`       | RabbitMQ configuration       |
 | `PYTHONBREAKPOINT` | Debugger (`jdbpp.set_trace`) |
-| `PRE_COMMIT_HOME` | Pre-commit cache |
+| `PRE_COMMIT_HOME`  | Pre-commit cache             |
 
 Runtime (set by CLI):
 
-| Variable | Purpose |
-|----------|---------|
+| Variable          | Purpose                                |
+| ----------------- | -------------------------------------- |
 | `__Socratic_BOOT` | Serialized boot config for web workers |

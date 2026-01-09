@@ -88,7 +88,7 @@ loggers:
     level: INFO
 root:
   handlers:
-  - console
-  - file
+    - console
+    - file
   level: NOTSET
 version: 1

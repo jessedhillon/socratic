@@ -27,14 +27,14 @@ const HelloComponent: React.FC<HelloComponentProps> = ({ data }) => {
   return (
     <div className="border border-gray-300 rounded-md overflow-hidden shadow-sm">
       {/* Header section with environment */}
-      <div className={`${getEnvColor(data.env)} px-4 py-2 text-white font-medium`}>
+      <div
+        className={`${getEnvColor(data.env)} px-4 py-2 text-white font-medium`}
+      >
         Environment: {data.env}
       </div>
 
       {/* Message content */}
-      <div className="p-4 bg-white">
-        {data.message}
-      </div>
+      <div className="p-4 bg-white">{data.message}</div>
     </div>
   );
 };
