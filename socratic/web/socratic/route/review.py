@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 @di.inject
 def list_pending_reviews(
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ReviewListResponse:
     """List all attempts pending educator review."""
     # Get evaluations for attempts with status=Evaluated in educator's org
@@ -81,7 +81,7 @@ def list_pending_reviews(
 def get_review_detail(
     attempt_id: AttemptID,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ReviewDetailResponse:
     """Get full review detail for an attempt."""
     # Get the attempt
@@ -141,7 +141,7 @@ def accept_grade(
     attempt_id: AttemptID,
     request: GradeAcceptRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ReviewDetailResponse:
     """Accept the AI-assigned grade and mark as reviewed."""
     # Validate attempt and access
@@ -171,7 +171,7 @@ def override_grade(
     attempt_id: AttemptID,
     request: GradeOverrideRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ReviewDetailResponse:
     """Override the AI-assigned grade with educator's judgment."""
     # Validate attempt and access
@@ -217,7 +217,7 @@ def add_feedback(
     attempt_id: AttemptID,
     request: FeedbackRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ReviewDetailResponse:
     """Add qualitative feedback to a reviewed attempt."""
     # Validate attempt and access

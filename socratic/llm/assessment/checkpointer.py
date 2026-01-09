@@ -6,15 +6,13 @@ import typing as t
 import uuid
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from sqlalchemy.orm import Session
 
+from socratic import storage
+from socratic.core import di
 from socratic.model import AttemptID
 from socratic.storage import agent_state as agent_state_storage
 
 from .state import AgentState, InterviewPhase
-
-if t.TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 class PostgresCheckpointer:
@@ -24,20 +22,25 @@ class PostgresCheckpointer:
     by loading and saving state from the database.
     """
 
-    def __init__(self, session_factory: Callable[[], Session]) -> None:
-        self._session_factory = session_factory
-
-    def get(self, attempt_id: AttemptID) -> AgentState | None:
+    @di.inject
+    def get(
+        self, attempt_id: AttemptID, session: storage.Session = di.Provide["storage.persistent.session"]
+    ) -> AgentState | None:
         """Load agent state from database."""
-        with self._session_factory() as session:
+        with session.begin():
             record = agent_state_storage.get(attempt_id, session=session)
             if record is None:
                 return None
             return self._deserialize_state(record.checkpoint_data)
 
-    def put(self, attempt_id: AttemptID, state: AgentState) -> None:
+    def put(
+        self,
+        attempt_id: AttemptID,
+        state: AgentState,
+        session: storage.Session = di.Provide["storage.persistent.session"],
+    ) -> None:
         """Save agent state to database."""
-        with self._session_factory() as session:
+        with session.begin():
             checkpoint_data = self._serialize_state(state)
             thread_id = state.get("attempt_id", str(uuid.uuid4()))
             agent_state_storage.upsert(
@@ -48,9 +51,11 @@ class PostgresCheckpointer:
             )
             session.commit()
 
-    def delete(self, attempt_id: AttemptID) -> bool:
+    def delete(
+        self, attempt_id: AttemptID, session: storage.Session = di.Provide["storage.persistent.session"]
+    ) -> bool:
         """Delete agent state from database."""
-        with self._session_factory() as session:
+        with session.begin():
             result = agent_state_storage.delete(attempt_id, session=session)
             session.commit()
             return result

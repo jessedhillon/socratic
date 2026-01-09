@@ -82,7 +82,7 @@ def _build_objective_response(
 def create_objective(
     request: ObjectiveCreateRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ObjectiveResponse:
     """Create a new objective with optional rubric criteria.
 
@@ -142,7 +142,7 @@ def create_objective(
 def list_objectives(
     auth: AuthContext = Depends(require_educator),
     status_filter: ObjectiveStatus | None = None,
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ObjectiveListResponse:
     """List objectives for the educator's organization.
 
@@ -168,7 +168,7 @@ def list_objectives(
 def get_objective(
     objective_id: ObjectiveID,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ObjectiveResponse:
     """Get objective details.
 
@@ -197,7 +197,7 @@ def update_objective(
     objective_id: ObjectiveID,
     request: ObjectiveUpdateRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ObjectiveResponse:
     """Update an objective.
 
@@ -247,7 +247,7 @@ def update_objective(
 def archive_objective(
     objective_id: ObjectiveID,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ObjectiveResponse:
     """Archive an objective (soft delete).
 
@@ -287,7 +287,7 @@ def add_rubric_criterion(
     objective_id: ObjectiveID,
     request: RubricCriterionCreateRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> RubricCriterionResponse:
     """Add a rubric criterion to an objective.
 

@@ -93,7 +93,7 @@ def _build_assignment_with_attempts_response(
 def create_assignment(
     request: AssignmentCreateRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AssignmentResponse:
     """Create a new assignment for a learner.
 
@@ -150,7 +150,7 @@ def create_assignment(
 def create_bulk_assignments(
     request: BulkAssignmentCreateRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AssignmentListResponse:
     """Create assignments for multiple learners at once.
 
@@ -216,7 +216,7 @@ def list_assignments(
     objective_id: ObjectiveID | None = None,
     assigned_to: UserID | None = None,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AssignmentListResponse:
     """List assignments.
 
@@ -258,7 +258,7 @@ def list_assignments(
 def get_assignment(
     assignment_id: AssignmentID,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AssignmentWithAttemptsResponse:
     """Get assignment details with attempts.
 
@@ -286,7 +286,7 @@ def update_assignment(
     assignment_id: AssignmentID,
     request: AssignmentUpdateRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AssignmentResponse:
     """Update an assignment.
 
@@ -329,12 +329,14 @@ def update_assignment(
     return _build_assignment_response(assignment_id, session)
 
 
-@router.delete("/{assignment_id}", operation_id="cancel_assignment", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{assignment_id}", operation_id="cancel_assignment", status_code=status.HTTP_204_NO_CONTENT, response_model=None
+)
 @di.inject
 def cancel_assignment(
     assignment_id: AssignmentID,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> None:
     """Cancel (delete) an assignment.
 
