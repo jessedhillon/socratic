@@ -270,4 +270,45 @@ def user_enroll(
     click.echo(f"Enrolled {found_user.name} in {organization.name} as {user_role.value}")
 
 
+@user.command("reset-password")
+@click.argument("email")
+@click.option("--password", "-p", help="New password (if not provided, a random one is generated)")
+@di.inject
+def user_reset_password(
+    email: str,
+    password: str | None,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> None:
+    """Reset a user's password.
+
+    EMAIL is the user's email address.
+    """
+    # Generate password if not provided
+    generated_password = None
+    if not password:
+        generated_password = secrets.token_urlsafe(12)
+        password = generated_password
+
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+
+    with session.begin():
+        found_user = user_storage.get_by_email(email, session=session)
+        if not found_user:
+            click.echo(f"Error: User '{email}' not found.", err=True)
+            raise SystemExit(1)
+
+        updated_user = user_storage.update(
+            found_user.user_id,
+            {"password_hash": password_hash},
+            session=session,
+        )
+        if not updated_user:
+            click.echo("Error: Failed to update password.", err=True)
+            raise SystemExit(1)
+
+    click.echo(f"Password reset for {updated_user.name} ({updated_user.email})")
+    if generated_password:
+        click.echo(f"  New password: {generated_password}")
+
+
 command = user
