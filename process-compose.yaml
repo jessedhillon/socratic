@@ -1,4 +1,4 @@
-version: "0.1"
+version: '0.1'
 
 processes:
   postgres:
@@ -6,44 +6,43 @@ processes:
     is_daemon: false
     readiness_probe:
       exec:
-        command: "pg_isready -h ${XDG_STATE_HOME} -p5432"
+        command: 'pg_isready -h ${XDG_STATE_HOME} -p5432'
       period_seconds: 5
     environment:
       - PGDATA=${PGDATA}
       - PGHOST=${PGHOST}
     availability:
-      restart: "always"
+      restart: 'always'
     shutdown:
-      command: "pg_ctl stop -D ${PGDATA} -m fast"
-      signal: 2  # INT
+      command: 'pg_ctl stop -D ${PGDATA} -m fast'
+      signal: 2 # INT
       timeout_seconds: 30
 
   memcached:
-    command: "memcached -u nobody -m 64 -p 11211"
+    command: 'memcached -u nobody -m 64 -p 11211'
     disabled: true
     shutdown:
-      signal: 15  # TERM
+      signal: 15 # TERM
       timeout_Seconds: 10s
     readiness_probe:
       exec:
-        command: "ss -tanl | grep 11211"
+        command: 'ss -tanl | grep 11211'
       period_seconds: 5
 
   rabbitmq:
-    command: "rabbitmq-server"
+    command: 'rabbitmq-server'
     disabled: true
     shutdown:
-      command: "rabbitmqctl stop"
+      command: 'rabbitmqctl stop'
       timeout: 20s
     readiness_probe:
       exec:
-        command: "rabbitmqctl -n ${RABBITMQ_NODENAME} status"
+        command: 'rabbitmqctl -n ${RABBITMQ_NODENAME} status'
       initial_delay_seconds: 10
       period_seconds: 5
 
-
   socratic-api:
-    command: "socratic-cli web serve socratic"
+    command: 'socratic-cli web serve socratic'
     disabled: true
     depends_on:
       postgres:
@@ -55,11 +54,11 @@ processes:
         path: /openapi.json
       period_seconds: 5
     shutdown:
-      signal: 15  # TERM
+      signal: 15 # TERM
       timeout_seconds: 10
 
   socratic-dev:
-    command: "socratic-cli web develop socratic"
+    command: 'socratic-cli web develop socratic'
     depends_on:
       postgres:
         condition: process_healthy
@@ -70,11 +69,11 @@ processes:
         path: /openapi.json
       period_seconds: 5
     shutdown:
-      signal: 15  # TERM
+      signal: 15 # TERM
       timeout_seconds: 10
 
   socratic-vite:
-    command: "npm run dev --prefix socratic/web/socratic/frontend -- --host 127.0.0.1 --port 5173"
+    command: 'npm run dev --prefix socratic/web/socratic/frontend -- --host 127.0.0.1 --port 5173'
     working_dir: .
     readiness_probe:
       http_get:
@@ -83,5 +82,5 @@ processes:
         path: /static
       period_seconds: 5
     shutdown:
-      signal: 15  # TERM
+      signal: 15 # TERM
       timeout_seconds: 10

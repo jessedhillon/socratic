@@ -34,7 +34,9 @@ const App: React.FC = () => {
 
         // If less than 500ms has passed, wait until 500ms total has elapsed
         if (elapsedTime < 500) {
-          await new Promise(resolve => setTimeout(resolve, 500 - elapsedTime));
+          await new Promise((resolve) =>
+            setTimeout(resolve, 500 - elapsedTime)
+          );
         }
       } catch (err) {
         console.error('Failed to fetch hello data:', err);
@@ -60,7 +62,9 @@ const App: React.FC = () => {
           ) : helloData ? (
             <HelloComponent data={helloData} />
           ) : (
-            <div className="py-4 text-center text-gray-500">No data available</div>
+            <div className="py-4 text-center text-gray-500">
+              No data available
+            </div>
           )}
         </div>
       </div>
