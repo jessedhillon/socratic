@@ -44,13 +44,16 @@ processes:
       timeout: 3s
 
 
-  example-api:
-    command: "poetry run python -m socratic.cli web serve example"
+  socratic-api:
+    command: "socratic-cli web serve socratic"
     disabled: true
+    depends_on:
+      postgres:
+        condition: process_healthy
     readiness_probe:
       http_get:
         host: 127.0.0.1
-        port: 8081
+        port: 8080
         path: /openapi.json
       interval: 5s
       timeout: 2s
@@ -58,13 +61,16 @@ processes:
       signal: 15  # TERM
       timeout: 10s
 
-  example-dev:
-    command: "poetry run python -m socratic.cli web develop example"
+  socratic-dev:
+    command: "socratic-cli web develop socratic"
     disabled: false
+    depends_on:
+      postgres:
+        condition: process_healthy
     readiness_probe:
       http_get:
         host: 127.0.0.1
-        port: 8081
+        port: 8080
         path: /openapi.json
       interval: 5s
       timeout: 2s
@@ -72,14 +78,15 @@ processes:
       signal: 15  # TERM
       timeout: 10s
 
-  example-vite:
-    command: "npm run dev --prefix socratic/web/example/frontend -- --port 9091"
+  socratic-vite:
+    command: "npm run dev --prefix socratic/web/socratic/frontend -- --port 5173"
     disabled: false
+    working_dir: .
     readiness_probe:
       http_get:
         host: 127.0.0.1
-        port: 9091
-        path: /
+        port: 5173
+        path: /static
       interval: 5s
       timeout: 2s
     shutdown:
