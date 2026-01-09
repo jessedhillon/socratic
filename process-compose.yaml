@@ -73,12 +73,12 @@ processes:
       timeout_seconds: 10
 
   socratic-vite:
-    command: 'npm run dev --prefix socratic/web/socratic/frontend -- --host 127.0.0.1 --port 5173'
+    command: 'npm run dev --prefix socratic/web/socratic/frontend -- --host 127.0.0.1 --port 9099'
     working_dir: .
     readiness_probe:
       http_get:
         host: 127.0.0.1
-        port: 5173
+        port: 9099
         path: /static
       period_seconds: 5
     shutdown:
