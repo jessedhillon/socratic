@@ -9,10 +9,10 @@ example:
 socratic:
   backend:
     host: 127.0.0.1
-    port: 8080
+    port: 8089
   frontend:
     host: 127.0.0.1
-    port: 9090
+    port: 9099
   auth:
     jwt_algorithm: HS256
     access_token_expire_minutes: 30
