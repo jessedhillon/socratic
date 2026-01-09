@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/learners", tags=["learners"])
 @di.inject
 def list_learners(
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> LearnerListResponse:
     """List all learners in the organization.
 
@@ -65,7 +65,7 @@ def list_learners(
 def get_learner_assignments(
     learner_id: UserID,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> list[AssignmentWithAttemptsResponse]:
     """Get all assignments for a specific learner.
 
@@ -137,7 +137,7 @@ def get_learner_assignments(
 @di.inject
 def get_learner_dashboard(
     auth: AuthContext = Depends(require_learner),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> LearnerDashboardResponse:
     """Get the current learner's dashboard with all assignments.
 
@@ -250,7 +250,7 @@ def get_learner_dashboard(
 def get_my_assignment(
     assignment_id: str,
     auth: AuthContext = Depends(require_learner),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AssignmentWithAttemptsResponse:
     """Get details of a specific assignment for the current learner."""
     from socratic.model import AssignmentID

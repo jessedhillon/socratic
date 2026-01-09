@@ -28,14 +28,9 @@ from ..view.assessment import AssessmentStatusResponse, CompleteAssessmentReques
     SendMessageRequest, TranscriptMessageResponse, TranscriptResponse
 
 if t.TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncIterator
 
 router = APIRouter(prefix="/api/assessments", tags=["assessments"])
-
-
-def _get_checkpointer(session_factory: Callable[[], Session]) -> PostgresCheckpointer:
-    """Create a checkpointer with the session factory."""
-    return PostgresCheckpointer(session_factory)
 
 
 @router.post("/{assignment_id}/start", operation_id="start_assessment")
@@ -43,10 +38,9 @@ def _get_checkpointer(session_factory: Callable[[], Session]) -> PostgresCheckpo
 async def start_assessment_route(
     assignment_id: str,
     auth: AuthContext = Depends(require_learner),
-    session: Session = di.Provide["storage.persistent.session"],
-    model: BaseChatModel = di.Provide["llm.dialogue_model"],
-    env: jinja2.Environment = di.Provide["template.llm"],
-    session_factory: Callable[[], Session] = di.Provide["storage.persistent.session_factory"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+    model: BaseChatModel = Depends(di.Provide["llm.dialogue_model"]),
+    env: jinja2.Environment = Depends(di.Provide["template.llm"]),
 ) -> EventSourceResponse:
     """Start a new assessment attempt.
 
@@ -119,7 +113,7 @@ async def start_assessment_route(
     session.commit()
 
     attempt_id = attempt.attempt_id
-    checkpointer = _get_checkpointer(session_factory)
+    checkpointer = PostgresCheckpointer()
 
     async def event_generator() -> AsyncIterator[dict[str, t.Any]]:
         """Generate SSE events for the orientation message."""
@@ -143,15 +137,14 @@ async def start_assessment_route(
             yield {"event": "token", "data": json.dumps({"content": token})}
 
         # Store transcript segment
-        with session_factory() as tx_session:
+        with session:
             transcript_params: TranscriptSegmentCreateParams = {
                 "attempt_id": attempt_id,
                 "utterance_type": UtteranceType.Interviewer,
                 "content": full_message,
                 "start_time": datetime.datetime.now(datetime.UTC),
             }
-            transcript_storage.create(transcript_params, session=tx_session)
-            tx_session.commit()
+            transcript_storage.create(transcript_params, session=session)
 
         # Send completion event with metadata
         yield {
@@ -173,10 +166,9 @@ async def send_message_route(
     attempt_id: str,
     request: SendMessageRequest,
     auth: AuthContext = Depends(require_learner),
-    session: Session = di.Provide["storage.persistent.session"],
-    model: BaseChatModel = di.Provide["llm.dialogue_model"],
-    env: jinja2.Environment = di.Provide["template.llm"],
-    session_factory: Callable[[], Session] = di.Provide["storage.persistent.session_factory"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+    model: BaseChatModel = Depends(di.Provide["llm.dialogue_model"]),
+    env: jinja2.Environment = Depends(di.Provide["template.llm"]),
 ) -> EventSourceResponse:
     """Send a learner message and receive AI response via SSE stream."""
     aid = AttemptID(attempt_id)
@@ -201,18 +193,17 @@ async def send_message_route(
             detail="Assessment is not in progress",
         )
 
-    checkpointer = _get_checkpointer(session_factory)
+    checkpointer = PostgresCheckpointer()
 
     # Store learner message in transcript
-    with session_factory() as tx_session:
-        learner_params: TranscriptSegmentCreateParams = {
-            "attempt_id": aid,
-            "utterance_type": UtteranceType.Learner,
-            "content": request.content,
-            "start_time": datetime.datetime.now(datetime.UTC),
-        }
-        transcript_storage.create(learner_params, session=tx_session)
-        tx_session.commit()
+    learner_params: TranscriptSegmentCreateParams = {
+        "attempt_id": aid,
+        "utterance_type": UtteranceType.Learner,
+        "content": request.content,
+        "start_time": datetime.datetime.now(datetime.UTC),
+    }
+    transcript_storage.create(learner_params, session=session)
+    session.commit()
 
     async def event_generator() -> AsyncIterator[dict[str, t.Any]]:
         """Generate SSE events for the AI response."""
@@ -228,15 +219,14 @@ async def send_message_route(
             yield {"event": "token", "data": json.dumps({"content": token})}
 
         # Store AI response in transcript
-        with session_factory() as tx_session:
+        with session:
             ai_params: TranscriptSegmentCreateParams = {
                 "attempt_id": aid,
                 "utterance_type": UtteranceType.Interviewer,
                 "content": full_response,
                 "start_time": datetime.datetime.now(datetime.UTC),
             }
-            transcript_storage.create(ai_params, session=tx_session)
-            tx_session.commit()
+            transcript_storage.create(ai_params, session=session)
 
         yield {"event": "done", "data": ""}
 
@@ -248,8 +238,7 @@ async def send_message_route(
 def get_status_route(
     attempt_id: str,
     auth: AuthContext = Depends(require_learner),
-    session: Session = di.Provide["storage.persistent.session"],
-    session_factory: Callable[[], Session] = di.Provide["storage.persistent.session_factory"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AssessmentStatusResponse:
     """Get the current status of an assessment attempt."""
     aid = AttemptID(attempt_id)
@@ -268,7 +257,7 @@ def get_status_route(
             detail="This assessment is not yours",
         )
 
-    checkpointer = _get_checkpointer(session_factory)
+    checkpointer = PostgresCheckpointer()
     status_data = get_assessment_status(aid, checkpointer)
 
     if "error" in status_data:
@@ -293,7 +282,7 @@ def complete_assessment_route(
     attempt_id: str,
     request: CompleteAssessmentRequest,
     auth: AuthContext = Depends(require_learner),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> CompleteAssessmentResponse:
     """Complete an assessment attempt."""
     aid = AttemptID(attempt_id)
@@ -339,7 +328,7 @@ def complete_assessment_route(
 def get_transcript_route(
     attempt_id: str,
     auth: AuthContext = Depends(require_learner),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> TranscriptResponse:
     """Get the full transcript of an assessment attempt."""
     aid = AttemptID(attempt_id)
@@ -392,8 +381,8 @@ def get_transcript_route(
 async def trigger_evaluation_route(
     attempt_id: str,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
-    env: jinja2.Environment = di.Provide["template.llm"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+    env: jinja2.Environment = Depends(di.Provide["template.llm"]),
 ) -> dict[str, t.Any]:
     """Trigger AI evaluation for a completed assessment.
 

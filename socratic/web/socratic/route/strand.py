@@ -72,7 +72,7 @@ def _build_strand_with_objectives_response(strand_id: StrandID, session: Session
 def create_strand(
     request: StrandCreateRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> StrandResponse:
     """Create a new strand.
 
@@ -96,7 +96,7 @@ def create_strand(
 @di.inject
 def list_strands(
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> StrandListResponse:
     """List strands for the educator's organization.
 
@@ -131,7 +131,7 @@ def list_strands(
 def get_strand(
     strand_id: StrandID,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> StrandWithObjectivesResponse:
     """Get strand details with ordered objectives.
 
@@ -160,7 +160,7 @@ def update_strand(
     strand_id: StrandID,
     request: StrandUpdateRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> StrandResponse:
     """Update a strand.
 
@@ -209,7 +209,7 @@ def add_objective_to_strand(
     strand_id: StrandID,
     request: ObjectiveInStrandRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ObjectiveInStrandResponse:
     """Add an objective to a strand at a specific position.
 
@@ -266,7 +266,7 @@ def reorder_objectives(
     strand_id: StrandID,
     request: ReorderObjectivesRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> StrandWithObjectivesResponse:
     """Reorder objectives in a strand.
 
@@ -317,7 +317,7 @@ def add_objective_dependency(
     objective_id: ObjectiveID,
     request: ObjectiveDependencyRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ObjectiveDependencyResponse:
     """Add a dependency between objectives in a strand.
 
@@ -380,7 +380,7 @@ def get_objective_dependencies(
     strand_id: StrandID,
     objective_id: ObjectiveID,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> list[ObjectiveDependencyResponse]:
     """Get dependencies for an objective.
 

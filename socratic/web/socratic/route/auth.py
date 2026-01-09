@@ -26,7 +26,7 @@ def login(
     request: LoginRequest,
     auth_provider: LocalAuthProvider = Depends(get_auth_provider),
     jwt_manager: JWTManager = Depends(get_jwt_manager),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> LoginResponse:
     """Authenticate a user and return access token."""
     result = auth_provider.authenticate(request.email, request.password)
@@ -81,7 +81,7 @@ def register(
     request: RegisterRequest,
     auth_provider: LocalAuthProvider = Depends(get_auth_provider),
     jwt_manager: JWTManager = Depends(get_jwt_manager),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> LoginResponse:
     """Register a new user with an invite token."""
     # Decode and validate invite token

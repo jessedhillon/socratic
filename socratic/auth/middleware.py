@@ -29,7 +29,7 @@ class AuthContext(t.NamedTuple):
 
 @di.inject
 def get_jwt_manager(
-    jwt_manager: JWTManager = di.Provide["auth.jwt_manager"],
+    jwt_manager: JWTManager = Depends(di.Provide["auth.jwt_manager"]),
 ) -> JWTManager:
     """Get JWT manager from DI container."""
     return jwt_manager
@@ -37,7 +37,7 @@ def get_jwt_manager(
 
 @di.inject
 def get_auth_provider(
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> LocalAuthProvider:
     """Get auth provider with injected session."""
     return LocalAuthProvider(session)
