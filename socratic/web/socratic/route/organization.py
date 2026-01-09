@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/organizations", tags=["organizations"])
 @di.inject
 def create_organization(
     request: OrganizationCreateRequest,
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
     jwt_manager: JWTManager = Depends(get_jwt_manager),
 ) -> OrganizationResponse:
     """Create a new organization with an initial admin user.
@@ -90,7 +90,7 @@ def create_organization(
 def get_organization(
     organization_id: OrganizationID,
     auth: AuthContext = Depends(get_current_user),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> OrganizationResponse:
     """Get organization details.
 
@@ -123,7 +123,7 @@ def invite_user(
     organization_id: OrganizationID,
     request: InviteRequest,
     auth: AuthContext = Depends(require_educator),
-    session: Session = di.Provide["storage.persistent.session"],
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
     jwt_manager: JWTManager = Depends(get_jwt_manager),
 ) -> InviteResponse:
     """Generate an invite token for a new user.
