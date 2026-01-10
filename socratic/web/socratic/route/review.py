@@ -57,7 +57,7 @@ def list_pending_reviews(
                 continue
 
             # Get learner name
-            learner = user_storage.get(attempt.learner_id, session=session)
+            learner = user_storage.get(user_id=attempt.learner_id, session=session)
             learner_name = learner.name if learner else None
 
             reviews.append(
@@ -121,7 +121,7 @@ def get_review_detail(
         overrides = override_storage.find(attempt_id=attempt_id, session=session)
 
         # Get learner name
-        learner = user_storage.get(attempt.learner_id, session=session)
+        learner = user_storage.get(user_id=attempt.learner_id, session=session)
         learner_name = learner.name if learner else None
 
         # Build response
@@ -335,7 +335,7 @@ def _build_review_detail(
     # Build override history
     override_history: list[OverrideResponse] = []
     for override in overrides:
-        educator = user_storage.get(override.educator_id, session=session)
+        educator = user_storage.get(user_id=override.educator_id, session=session)
         educator_name = educator.name if educator else None
         override_history.append(
             OverrideResponse(

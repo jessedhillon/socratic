@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import secrets
 
-import bcrypt
+import pydantic as p
 from sqlalchemy.orm import Session
 
 import socratic.lib.cli as click
@@ -12,6 +12,7 @@ from socratic.core import di
 from socratic.model import UserRole
 from socratic.storage import organization as org_storage
 from socratic.storage import user as user_storage
+from socratic.storage.user import MembershipCreateParams
 
 
 @click.group("user")
@@ -52,7 +53,6 @@ def user_create(
         generated_password = secrets.token_urlsafe(12)
         password = generated_password
 
-    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     user_role = UserRole(role)
 
     with session.begin():
@@ -63,22 +63,23 @@ def user_create(
             raise SystemExit(1)
 
         # Check if email already exists
-        existing = user_storage.get_by_email(email, session=session)
+        existing = user_storage.get(email=email, session=session)
         if existing:
             click.echo(f"Error: User with email '{email}' already exists.", err=True)
             raise SystemExit(1)
 
-        # Create user
+        # Create user (password is hashed internally)
         new_user = user_storage.create(
-            {"email": email, "name": name, "password_hash": password_hash},
+            email=email,
+            name=name,
+            password=p.Secret(password),
             session=session,
         )
 
         # Add to organization
-        user_storage.add_to_organization(
+        user_storage.update(
             new_user.user_id,
-            organization.organization_id,
-            user_role,
+            add_memberships={MembershipCreateParams(organization_id=organization.organization_id, role=user_role)},
             session=session,
         )
 
@@ -141,7 +142,7 @@ def user_show(
 
 def _show_user(email: str, session: Session) -> None:
     """Show user details."""
-    found_user = user_storage.get_by_email(email, session=session)
+    found_user = user_storage.get(email=email, with_memberships=True, session=session)
     if not found_user:
         click.echo(f"Error: User '{email}' not found.", err=True)
         raise SystemExit(1)
@@ -152,10 +153,9 @@ def _show_user(email: str, session: Session) -> None:
     click.echo(f"  Created: {found_user.create_time}")
 
     # List memberships
-    memberships = user_storage.get_memberships(found_user.user_id, session=session)
-    if memberships:
+    if found_user.memberships:
         click.echo("\nOrganizations:")
-        for m in memberships:
+        for m in found_user.memberships:
             organization = org_storage.get(m.organization_id, session=session)
             org_name = organization.name if organization else "Unknown"
             click.echo(f"  - {org_name} [{m.role.value}]")
@@ -174,16 +174,21 @@ def _show_organization(slug: str, session: Session) -> None:
     click.echo(f"  Created: {organization.create_time}")
 
     # List members
-    users = user_storage.find(organization_id=organization.organization_id, session=session)
-    if users:
-        click.echo(f"\nMembers ({len(users)}):")
-        for u in users:
-            memberships = user_storage.get_memberships(u.user_id, session=session)
-            role = next(
-                (m.role for m in memberships if m.organization_id == organization.organization_id),
-                None,
-            )
-            click.echo(f"  - {u.name} ({u.email}) [{role.value if role else 'unknown'}]")
+    found_users = user_storage.find(organization_id=organization.organization_id, session=session)
+    if found_users:
+        click.echo(f"\nMembers ({len(found_users)}):")
+        for u in found_users:
+            user_with_memberships = user_storage.get(user_id=u.user_id, with_memberships=True, session=session)
+            if user_with_memberships:
+                role = next(
+                    (
+                        m.role
+                        for m in user_with_memberships.memberships
+                        if m.organization_id == organization.organization_id
+                    ),
+                    None,
+                )
+                click.echo(f"  - {u.name} ({u.email}) [{role.value if role else 'unknown'}]")
     else:
         click.echo("\nNo members.")
 
@@ -244,7 +249,7 @@ def user_enroll(
     user_role = UserRole(role)
 
     with session.begin():
-        found_user = user_storage.get_by_email(email, session=session)
+        found_user = user_storage.get(email=email, with_memberships=True, session=session)
         if not found_user:
             click.echo(f"Error: User '{email}' not found.", err=True)
             raise SystemExit(1)
@@ -255,15 +260,13 @@ def user_enroll(
             raise SystemExit(1)
 
         # Check if already a member
-        memberships = user_storage.get_memberships(found_user.user_id, session=session)
-        if any(m.organization_id == organization.organization_id for m in memberships):
+        if any(m.organization_id == organization.organization_id for m in found_user.memberships):
             click.echo(f"Error: User is already a member of '{org_slug}'.", err=True)
             raise SystemExit(1)
 
-        user_storage.add_to_organization(
+        user_storage.update(
             found_user.user_id,
-            organization.organization_id,
-            user_role,
+            add_memberships={MembershipCreateParams(organization_id=organization.organization_id, role=user_role)},
             session=session,
         )
 
@@ -289,22 +292,22 @@ def user_reset_password(
         generated_password = secrets.token_urlsafe(12)
         password = generated_password
 
-    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
     with session.begin():
-        found_user = user_storage.get_by_email(email, session=session)
+        found_user = user_storage.get(email=email, session=session)
         if not found_user:
             click.echo(f"Error: User '{email}' not found.", err=True)
             raise SystemExit(1)
 
-        updated_user = user_storage.update(
-            found_user.user_id,
-            {"password_hash": password_hash},
-            session=session,
-        )
-        if not updated_user:
+        try:
+            updated_user = user_storage.update(
+                found_user.user_id,
+                password=p.Secret(password),
+                with_memberships=False,
+                session=session,
+            )
+        except KeyError as e:
             click.echo("Error: Failed to update password.", err=True)
-            raise SystemExit(1)
+            raise SystemExit(1) from e
 
     click.echo(f"Password reset for {updated_user.name} ({updated_user.email})")
     if generated_password:
