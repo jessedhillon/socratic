@@ -11,8 +11,6 @@ class TemplateContainer(DeclarativeContainer):
     @staticmethod
     @di.inject
     def provide_jinja_env(template_path: str, root_path: pathlib.Path = di.Provide["root"]) -> jinja2.Environment:
-        import jinja2
-
         import socratic.lib.json
 
         env = jinja2.Environment(
@@ -32,8 +30,6 @@ class TemplateContainer(DeclarativeContainer):
         Unlike HTML templates, prompts use no autoescape and have additional
         filters useful for prompt formatting.
         """
-        import jinja2
-
         import socratic.lib.json
 
         env = jinja2.Environment(

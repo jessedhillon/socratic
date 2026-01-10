@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 
+import bcrypt
 import jwt as pyjwt
 import pydantic as p
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -55,8 +56,6 @@ def create_organization(
     )
 
     # Create admin user with hashed password
-    import bcrypt
-
     password_hash = bcrypt.hashpw(request.admin_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     admin_user = user_storage.create(

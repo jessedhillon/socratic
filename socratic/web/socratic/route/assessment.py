@@ -15,9 +15,12 @@ from sse_starlette.sse import EventSourceResponse
 from socratic.auth import AuthContext, require_educator, require_learner
 from socratic.core import di
 from socratic.llm.assessment import get_assessment_status, PostgresCheckpointer, run_assessment_turn, start_assessment
+from socratic.llm.evaluation import EvaluationPipeline
+from socratic.llm.factory import ModelFactory
 from socratic.model import AssignmentID, AttemptID, AttemptStatus, UtteranceType
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
+from socratic.storage import evaluation as eval_storage
 from socratic.storage import objective as obj_storage
 from socratic.storage import rubric as rubric_storage
 from socratic.storage import transcript as transcript_storage
@@ -390,10 +393,6 @@ async def trigger_evaluation_route(
     an assessment is completed. It runs the evaluation pipeline and
     updates the attempt status to Evaluated.
     """
-    from socratic.llm.evaluation import EvaluationPipeline
-    from socratic.llm.factory import ModelFactory
-    from socratic.storage import evaluation as eval_storage
-
     aid = AttemptID(attempt_id)
 
     # Validate attempt exists

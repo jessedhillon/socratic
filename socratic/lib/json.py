@@ -62,13 +62,6 @@ def encode_uuid(obj: uuid.UUID) -> str:
 
 @functools.cache  # noqa: E302
 def _encoder_map() -> dict[type, t.Callable[[t.Any], JSONValue]]:
-    import datetime
-    import decimal
-    import enum
-    import pathlib
-
-    import socratic.lib.uuid as uuid
-
     return {
         bytes: encode_bytes,
         datetime.date: encode_date,
