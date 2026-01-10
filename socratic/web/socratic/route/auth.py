@@ -51,14 +51,12 @@ def login(
         membership = memberships[0]
 
     # Create access token
-    expires_delta = datetime.timedelta(minutes=expire_minutes)
-    expires_at = datetime.datetime.now(datetime.UTC) + expires_delta
+    expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=expire_minutes)
 
     access_token = jwt.create_access_token(
         user_id=result.user.user_id,
         organization_id=membership.organization_id,
         role=membership.role.value,
-        expires_delta=expires_delta,
     )
 
     return LoginResponse(
@@ -147,14 +145,12 @@ def register(
             )
 
     # Create access token
-    expires_delta = datetime.timedelta(minutes=expire_minutes)
-    expires_at = datetime.datetime.now(datetime.UTC) + expires_delta
+    expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=expire_minutes)
 
     access_token = jwt.create_access_token(
         user_id=result.user.user_id,
         organization_id=organization_id,
         role=role,
-        expires_delta=expires_delta,
     )
 
     return LoginResponse(
