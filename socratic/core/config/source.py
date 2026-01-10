@@ -165,8 +165,12 @@ class AnsibleVaultSecretsSource(SettingsSource):
 
     def get_field_value(self, field: p.fields.FieldInfo, field_name: str) -> tuple[t.Any, str, bool]:
         skip_keys = {"env", "root", "override"}
+        # Check skip_keys before accessing self.secrets to avoid circular dependency
+        # (self.secrets needs current_state["root"] to compute load_path)
+        if field_name in skip_keys:
+            raise KeyError(field_name)
         val = self.secrets.get(field_name)
-        if field_name in self.secrets and field_name not in skip_keys:
+        if field_name in self.secrets:
             if isinstance(val, dict):
                 merged = util.deep_update(t.cast(dict[t.Any, t.Any], val), self.secrets[field_name])
                 return merged, field_name, True

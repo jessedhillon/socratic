@@ -135,7 +135,9 @@ class SocraticContainer(DeclarativeContainer):
         if debug:
             ct.logging().capture_warnings(True)
 
-        if secrets_path is None and env is not DeploymentEnvironment.Local:
+        # Use AWS secrets for production-like environments, file-based for Local/Test
+        use_aws_secrets = env not in (DeploymentEnvironment.Local, DeploymentEnvironment.Test)
+        if secrets_path is None and use_aws_secrets:
             secrets_path = p.AnyUrl(f"aws:///{env.value}/secrets")
             secrets = Secrets(env=env, root=secrets_path or config_root)
         else:
