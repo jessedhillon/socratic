@@ -14,14 +14,15 @@ from .table import organizations
 
 @t.overload
 def get(
-    *,
     organization_id: OrganizationID,
+    *,
     session: Session = ...,
 ) -> Organization | None: ...
 
 
 @t.overload
 def get(
+    organization_id: None = ...,
     *,
     slug: str,
     session: Session = ...,
@@ -29,8 +30,8 @@ def get(
 
 
 def get(
-    *,
     organization_id: OrganizationID | None = None,
+    *,
     slug: str | None = None,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> Organization | None:

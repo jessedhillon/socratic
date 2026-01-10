@@ -44,8 +44,8 @@ class MembershipRemoveParams(p.BaseModel):
 
 @t.overload
 def get(
-    *,
     user_id: UserID,
+    *,
     with_memberships: t.Literal[False] = ...,
     session: Session = ...,
 ) -> User | None: ...
@@ -53,8 +53,8 @@ def get(
 
 @t.overload
 def get(
-    *,
     user_id: UserID,
+    *,
     with_memberships: t.Literal[True],
     session: Session = ...,
 ) -> UserWithMemberships | None: ...
@@ -62,6 +62,7 @@ def get(
 
 @t.overload
 def get(
+    user_id: None = ...,
     *,
     email: str,
     with_memberships: t.Literal[False] = ...,
@@ -71,6 +72,7 @@ def get(
 
 @t.overload
 def get(
+    user_id: None = ...,
     *,
     email: str,
     with_memberships: t.Literal[True],
@@ -79,8 +81,8 @@ def get(
 
 
 def get(
-    *,
     user_id: UserID | None = None,
+    *,
     email: str | None = None,
     with_memberships: bool = False,
     session: Session = di.Provide["storage.persistent.session"],
