@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch } from '../api';
 
 interface Assignment {
   assignment_id: string;
@@ -34,9 +35,7 @@ const DashboardPage: React.FC = () => {
 
   const fetchDashboard = async () => {
     try {
-      const response = await fetch('/api/learners/me/dashboard', {
-        credentials: 'include',
-      });
+      const response = await apiFetch('/api/learners/me/dashboard');
       if (!response.ok) {
         if (response.status === 401) {
           setError('Please log in to view your assignments');
