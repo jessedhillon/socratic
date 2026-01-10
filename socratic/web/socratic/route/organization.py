@@ -34,7 +34,7 @@ def create_organization(
     The admin user will be created with the educator role.
     """
     # Check if slug is already taken
-    existing = org_storage.get_by_slug(request.slug, session=session)
+    existing = org_storage.get(slug=request.slug, session=session)
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -50,10 +50,7 @@ def create_organization(
         )
 
     # Create organization
-    org = org_storage.create(
-        {"name": request.name, "slug": request.slug},
-        session=session,
-    )
+    org = org_storage.create(name=request.name, slug=request.slug, session=session)
 
     # Create admin user (password is hashed internally)
     admin_user = user_storage.create(
@@ -92,7 +89,7 @@ def get_organization_by_slug(
     organization info for use on login pages.
     """
     with session.begin():
-        org = org_storage.get_by_slug(slug, session=session)
+        org = org_storage.get(slug=slug, session=session)
         if org is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -123,7 +120,7 @@ def get_organization(
             detail="Cannot access other organizations",
         )
 
-    org = org_storage.get(organization_id, session=session)
+    org = org_storage.get(organization_id=organization_id, session=session)
     if org is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -46,7 +46,7 @@ def register(
         return AuthResult(success=False, error="Email already registered")
 
     # Verify organization exists
-    org = org_storage.get(organization_id, session=session)
+    org = org_storage.get(organization_id=organization_id, session=session)
     if org is None:
         return AuthResult(success=False, error="Organization not found")
 
