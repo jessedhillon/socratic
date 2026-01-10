@@ -1,20 +1,12 @@
 import React from 'react';
-
-interface EvidenceMapping {
-  criterion_id: string;
-  criterion_name: string | null;
-  segment_ids: string[];
-  evidence_summary: string | null;
-  strength: string | null;
-  failure_modes_detected: string[];
-}
+import type { EvidenceMappingResponse, AssessmentFlag } from '../api';
 
 interface EvidencePanelProps {
-  evidenceMappings: EvidenceMapping[];
+  evidenceMappings: EvidenceMappingResponse[];
   strengths: string[];
   gaps: string[];
   reasoningSummary: string | null;
-  flags: string[];
+  flags: AssessmentFlag[];
   onCriterionHover?: (criterionId: string | null) => void;
   highlightedCriterion?: string;
 }
@@ -26,19 +18,26 @@ const strengthBadgeColors: Record<string, string> = {
   none: 'bg-gray-100 text-gray-600 border-gray-300',
 };
 
-const flagDescriptions: Record<string, string> = {
-  HighFluencyLowSubstance:
+const flagDescriptions: Record<AssessmentFlag, string> = {
+  high_fluency_low_substance:
     'The learner spoke fluently but provided limited substantive evidence of understanding.',
-  RepeatedEvasion:
+  repeated_evasion:
     'The learner repeatedly avoided directly answering questions.',
-  VocabularyMirroring:
+  vocabulary_mirroring:
     'The learner used terminology from questions without demonstrating comprehension.',
-  InconsistentReasoning:
+  inconsistent_reasoning:
     'The learner made contradictory statements during the assessment.',
-  PossibleGaming:
+  possible_gaming:
     'Patterns suggest the learner may have been trying to game the assessment.',
-  LowConfidence:
+  low_confidence:
     'The evaluation system has low confidence in this assessment result.',
+};
+
+const formatFlagName = (flag: AssessmentFlag): string => {
+  return flag
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 };
 
 /**
@@ -63,7 +62,7 @@ const EvidencePanel: React.FC<EvidencePanelProps> = ({
             {flags.map((flag) => (
               <li key={flag} className="text-sm">
                 <span className="font-medium text-red-700">
-                  {flag.replace(/([A-Z])/g, ' $1').trim()}:
+                  {formatFlagName(flag)}:
                 </span>{' '}
                 <span className="text-red-600">
                   {flagDescriptions[flag] || 'Flag detected'}

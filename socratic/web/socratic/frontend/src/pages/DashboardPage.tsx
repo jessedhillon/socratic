@@ -1,30 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { apiFetch, getLoginUrl } from '../api';
-
-interface Assignment {
-  assignment_id: string;
-  objective_id: string;
-  objective_title: string;
-  status: string;
-  attempts_used: number;
-  attempts_remaining: number;
-  is_available: boolean;
-  is_locked: boolean;
-}
-
-interface DashboardData {
-  assignments: Assignment[];
-  total_completed: number;
-  total_in_progress: number;
-  total_pending: number;
-}
+import { getLearnerDashboard, getLoginUrl } from '../api';
+import type { LearnerDashboardResponse } from '../api';
 
 /**
  * Learner dashboard page showing available assignments.
  */
 const DashboardPage: React.FC = () => {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<LearnerDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -36,7 +19,7 @@ const DashboardPage: React.FC = () => {
 
   const fetchDashboard = async () => {
     try {
-      const response = await apiFetch('/api/learners/me/dashboard');
+      const { data: dashboardData, response } = await getLearnerDashboard();
       if (!response.ok) {
         if (response.status === 401) {
           navigate(getLoginUrl(location.pathname));
@@ -45,8 +28,7 @@ const DashboardPage: React.FC = () => {
         setError('Failed to load dashboard');
         return;
       }
-      const dashboardData = await response.json();
-      setData(dashboardData);
+      setData(dashboardData ?? null);
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
       setError('Failed to load dashboard');

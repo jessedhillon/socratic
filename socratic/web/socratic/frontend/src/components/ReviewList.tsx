@@ -1,16 +1,5 @@
 import React from 'react';
-
-interface ReviewSummary {
-  attempt_id: string;
-  learner_id: string;
-  learner_name: string | null;
-  objective_id: string;
-  objective_title: string;
-  grade: string | null;
-  confidence_score: number | null;
-  flags: string[];
-  completed_at: string | null;
-}
+import type { ReviewSummary } from '../api';
 
 interface ReviewListProps {
   reviews: ReviewSummary[];
@@ -26,12 +15,19 @@ const gradeColors: Record<string, string> = {
 };
 
 const flagColors: Record<string, string> = {
-  HighFluencyLowSubstance: 'bg-orange-100 text-orange-800',
-  RepeatedEvasion: 'bg-red-100 text-red-800',
-  VocabularyMirroring: 'bg-purple-100 text-purple-800',
-  InconsistentReasoning: 'bg-pink-100 text-pink-800',
-  PossibleGaming: 'bg-red-200 text-red-900',
-  LowConfidence: 'bg-gray-100 text-gray-800',
+  high_fluency_low_substance: 'bg-orange-100 text-orange-800',
+  repeated_evasion: 'bg-red-100 text-red-800',
+  vocabulary_mirroring: 'bg-purple-100 text-purple-800',
+  inconsistent_reasoning: 'bg-pink-100 text-pink-800',
+  possible_gaming: 'bg-red-200 text-red-900',
+  low_confidence: 'bg-gray-100 text-gray-800',
+};
+
+const formatFlagName = (flag: string): string => {
+  return flag
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 };
 
 /**
@@ -81,7 +77,7 @@ const ReviewList: React.FC<ReviewListProps> = ({
               )}
               {review.confidence_score !== null && (
                 <span className="text-xs text-gray-500">
-                  {Math.round(review.confidence_score * 100)}%
+                  {Math.round(parseFloat(review.confidence_score) * 100)}%
                 </span>
               )}
             </div>
@@ -96,7 +92,7 @@ const ReviewList: React.FC<ReviewListProps> = ({
                     flagColors[flag] || 'bg-gray-100 text-gray-700'
                   }`}
                 >
-                  {flag.replace(/([A-Z])/g, ' $1').trim()}
+                  {formatFlagName(flag)}
                 </span>
               ))}
             </div>

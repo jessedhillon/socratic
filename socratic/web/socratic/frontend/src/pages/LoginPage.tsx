@@ -1,12 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { setLoginContext } from '../api';
-
-interface Organization {
-  organization_id: string;
-  name: string;
-  slug: string;
-}
+import { login, getOrganizationBySlug, setLoginContext } from '../api';
+import type { OrganizationPublicResponse } from '../api';
 
 const VALID_ROLES = ['instructor', 'learner'] as const;
 type UserRole = (typeof VALID_ROLES)[number];
@@ -23,7 +18,8 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirect');
-  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [organization, setOrganization] =
+    useState<OrganizationPublicResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +49,9 @@ const LoginPage: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/organizations/by-slug/${orgSlug}`);
+      const { data, response } = await getOrganizationBySlug({
+        path: { slug: orgSlug },
+      });
       if (!response.ok) {
         if (response.status === 404) {
           setError('Organization not found');
@@ -62,8 +60,7 @@ const LoginPage: React.FC = () => {
         }
         return;
       }
-      const data = await response.json();
-      setOrganization(data);
+      setOrganization(data ?? null);
     } catch (err) {
       console.error('Failed to fetch organization:', err);
       setError('Failed to load organization');
@@ -78,21 +75,22 @@ const LoginPage: React.FC = () => {
     setLoginError(null);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      const {
+        data,
+        response,
+        error: apiError,
+      } = await login({
+        body: { email, password },
       });
 
-      if (!response.ok) {
-        const data = await response.json();
-        setLoginError(data.detail || 'Invalid credentials');
+      if (!response.ok || !data) {
+        const errorDetail =
+          apiError && 'detail' in apiError
+            ? String(apiError.detail)
+            : 'Invalid credentials';
+        setLoginError(errorDetail);
         return;
       }
-
-      const data = await response.json();
 
       // Store token and login context
       localStorage.setItem('access_token', data.token.access_token);

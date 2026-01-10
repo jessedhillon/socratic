@@ -1,6 +1,7 @@
 /**
- * API utilities for authenticated requests.
+ * API client configuration with auth interceptor.
  */
+import { client } from './client.gen';
 
 /**
  * Get the stored auth token.
@@ -44,23 +45,14 @@ export function getLoginUrl(redirectTo?: string): string {
   return base;
 }
 
-/**
- * Make an authenticated fetch request.
- * Automatically includes the Authorization header if a token exists.
- */
-export async function apiFetch(
-  url: string,
-  options: RequestInit = {}
-): Promise<Response> {
+// Configure the client with auth interceptor
+client.interceptors.request.use((request) => {
   const token = getAuthToken();
-  const headers = new Headers(options.headers);
-
   if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+    request.headers.set('Authorization', `Bearer ${token}`);
   }
+  return request;
+});
 
-  return fetch(url, {
-    ...options,
-    headers,
-  });
-}
+// Re-export the configured client
+export { client };

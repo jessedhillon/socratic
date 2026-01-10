@@ -1,70 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { apiFetch, getLoginUrl } from '../api';
+import {
+  listPendingReviews,
+  getReviewDetail,
+  acceptGrade,
+  overrideGrade,
+  getLoginUrl,
+} from '../api';
+import type { ReviewSummary, ReviewDetailResponse, Grade } from '../api';
 import ReviewList from '../components/ReviewList';
 import TranscriptViewer from '../components/TranscriptViewer';
 import EvidencePanel from '../components/EvidencePanel';
-
-interface ReviewSummary {
-  attempt_id: string;
-  learner_id: string;
-  learner_name: string | null;
-  objective_id: string;
-  objective_title: string;
-  grade: string | null;
-  confidence_score: number | null;
-  flags: string[];
-  completed_at: string | null;
-}
-
-interface ReviewDetail {
-  attempt: {
-    attempt_id: string;
-    learner_id: string;
-    learner_name: string | null;
-    status: string;
-    started_at: string | null;
-    completed_at: string | null;
-    grade: string | null;
-    confidence_score: number | null;
-  };
-  evaluation: {
-    evaluation_id: string;
-    evidence_mappings: Array<{
-      criterion_id: string;
-      criterion_name: string | null;
-      segment_ids: string[];
-      evidence_summary: string | null;
-      strength: string | null;
-      failure_modes_detected: string[];
-    }>;
-    flags: string[];
-    strengths: string[];
-    gaps: string[];
-    reasoning_summary: string | null;
-    create_time: string;
-  } | null;
-  transcript: Array<{
-    segment_id: string;
-    utterance_type: string;
-    content: string;
-    start_time: string;
-    prompt_index: number | null;
-  }>;
-  override_history: Array<{
-    override_id: string;
-    educator_id: string;
-    educator_name: string | null;
-    original_grade: string | null;
-    new_grade: string;
-    reason: string;
-    feedback: string | null;
-    create_time: string;
-  }>;
-  objective_id: string;
-  objective_title: string;
-  objective_description: string;
-}
 
 const gradeColors: Record<string, string> = {
   S: 'bg-green-500',
@@ -82,16 +28,15 @@ const ReviewPage: React.FC = () => {
   const location = useLocation();
 
   const [reviews, setReviews] = useState<ReviewSummary[]>([]);
-  const [selectedReview, setSelectedReview] = useState<ReviewDetail | null>(
-    null
-  );
+  const [selectedReview, setSelectedReview] =
+    useState<ReviewDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [highlightedCriterion, setHighlightedCriterion] = useState<
     string | null
   >(null);
 
-  const [overrideGrade, setOverrideGrade] = useState<string>('');
+  const [overrideGradeValue, setOverrideGradeValue] = useState<string>('');
   const [overrideReason, setOverrideReason] = useState<string>('');
   const [showOverrideForm, setShowOverrideForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -104,7 +49,7 @@ const ReviewPage: React.FC = () => {
   // Fetch selected review detail
   useEffect(() => {
     if (attemptId) {
-      fetchReviewDetail(attemptId);
+      fetchReviewDetailData(attemptId);
     } else {
       setSelectedReview(null);
     }
@@ -112,7 +57,7 @@ const ReviewPage: React.FC = () => {
 
   const fetchReviews = async () => {
     try {
-      const response = await apiFetch('/api/reviews');
+      const { data, response } = await listPendingReviews();
       if (!response.ok) {
         if (response.status === 401) {
           navigate(getLoginUrl(location.pathname));
@@ -120,8 +65,7 @@ const ReviewPage: React.FC = () => {
         }
         throw new Error('Failed to fetch reviews');
       }
-      const data = await response.json();
-      setReviews(data.reviews);
+      setReviews(data?.reviews ?? []);
     } catch (err) {
       console.error('Failed to fetch reviews:', err);
       setError('Failed to load reviews');
@@ -130,14 +74,15 @@ const ReviewPage: React.FC = () => {
     }
   };
 
-  const fetchReviewDetail = async (id: string) => {
+  const fetchReviewDetailData = async (id: string) => {
     try {
-      const response = await apiFetch(`/api/reviews/${id}`);
+      const { data, response } = await getReviewDetail({
+        path: { attempt_id: id },
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch review detail');
       }
-      const data = await response.json();
-      setSelectedReview(data);
+      setSelectedReview(data ?? null);
     } catch (err) {
       console.error('Failed to fetch review detail:', err);
     }
@@ -152,20 +97,16 @@ const ReviewPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const response = await apiFetch(
-        `/api/reviews/${selectedReview.attempt.attempt_id}/accept`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        }
-      );
+      const { response } = await acceptGrade({
+        path: { attempt_id: selectedReview.attempt.attempt_id },
+        body: {},
+      });
       if (!response.ok) {
         throw new Error('Failed to accept grade');
       }
       // Refresh reviews and detail
       await fetchReviews();
-      await fetchReviewDetail(selectedReview.attempt.attempt_id);
+      await fetchReviewDetailData(selectedReview.attempt.attempt_id);
     } catch (err) {
       console.error('Failed to accept grade:', err);
       alert('Failed to accept grade');
@@ -175,29 +116,25 @@ const ReviewPage: React.FC = () => {
   };
 
   const handleOverrideGrade = async () => {
-    if (!selectedReview || !overrideGrade || !overrideReason) return;
+    if (!selectedReview || !overrideGradeValue || !overrideReason) return;
 
     setSubmitting(true);
     try {
-      const response = await apiFetch(
-        `/api/reviews/${selectedReview.attempt.attempt_id}/override`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            new_grade: overrideGrade,
-            reason: overrideReason,
-          }),
-        }
-      );
+      const { response } = await overrideGrade({
+        path: { attempt_id: selectedReview.attempt.attempt_id },
+        body: {
+          new_grade: overrideGradeValue as Grade,
+          reason: overrideReason,
+        },
+      });
       if (!response.ok) {
         throw new Error('Failed to override grade');
       }
       // Refresh and reset form
       await fetchReviews();
-      await fetchReviewDetail(selectedReview.attempt.attempt_id);
+      await fetchReviewDetailData(selectedReview.attempt.attempt_id);
       setShowOverrideForm(false);
-      setOverrideGrade('');
+      setOverrideGradeValue('');
       setOverrideReason('');
     } catch (err) {
       console.error('Failed to override grade:', err);
@@ -268,7 +205,9 @@ const ReviewPage: React.FC = () => {
                         <span className="text-sm text-gray-500">
                           (
                           {Math.round(
-                            selectedReview.attempt.confidence_score * 100
+                            parseFloat(
+                              selectedReview.attempt.confidence_score
+                            ) * 100
                           )}
                           % confidence)
                         </span>
@@ -391,9 +330,9 @@ const ReviewPage: React.FC = () => {
                                   New Grade
                                 </label>
                                 <select
-                                  value={overrideGrade}
+                                  value={overrideGradeValue}
                                   onChange={(e) =>
-                                    setOverrideGrade(e.target.value)
+                                    setOverrideGradeValue(e.target.value)
                                   }
                                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                                 >
@@ -423,7 +362,7 @@ const ReviewPage: React.FC = () => {
                                   onClick={handleOverrideGrade}
                                   disabled={
                                     submitting ||
-                                    !overrideGrade ||
+                                    !overrideGradeValue ||
                                     overrideReason.length < 10
                                   }
                                   className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
@@ -435,7 +374,7 @@ const ReviewPage: React.FC = () => {
                                 <button
                                   onClick={() => {
                                     setShowOverrideForm(false);
-                                    setOverrideGrade('');
+                                    setOverrideGradeValue('');
                                     setOverrideReason('');
                                   }}
                                   disabled={submitting}
