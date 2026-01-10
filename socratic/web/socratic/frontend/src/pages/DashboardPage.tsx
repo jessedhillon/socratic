@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { apiFetch } from '../api';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { apiFetch, getLoginUrl } from '../api';
 
 interface Assignment {
   assignment_id: string;
@@ -28,6 +28,7 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     fetchDashboard();
@@ -38,10 +39,10 @@ const DashboardPage: React.FC = () => {
       const response = await apiFetch('/api/learners/me/dashboard');
       if (!response.ok) {
         if (response.status === 401) {
-          setError('Please log in to view your assignments');
-        } else {
-          setError('Failed to load dashboard');
+          navigate(getLoginUrl(location.pathname));
+          return;
         }
+        setError('Failed to load dashboard');
         return;
       }
       const dashboardData = await response.json();
@@ -71,9 +72,6 @@ const DashboardPage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
-          <a href="/login" className="text-blue-600 hover:underline">
-            Go to Login
-          </a>
         </div>
       </div>
     );
