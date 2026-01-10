@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator
@@ -13,7 +12,6 @@ from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
 from socratic.storage import objective as obj_storage
 from socratic.storage import user as user_storage
-from socratic.storage.table import assignments as assignments_table
 
 from ..view.assignment import AssignmentCreateRequest, AssignmentListResponse, AssignmentResponse, \
     AssignmentUpdateRequest, AssignmentWithAttemptsResponse, AttemptResponse, BulkAssignmentCreateRequest
@@ -307,21 +305,18 @@ def update_assignment(
             detail="Cannot update assignments from other organizations",
         )
 
-    # Update directly since we don't have an update function in storage
-    stmt = select(assignments_table).where(assignments_table.assignment_id == assignment_id)
-    assignment_row = session.execute(stmt).scalar_one_or_none()
-    if assignment_row:
-        if request.available_from is not None:
-            assignment_row.available_from = request.available_from
-        if request.available_until is not None:
-            assignment_row.available_until = request.available_until
-        if request.max_attempts is not None:
-            assignment_row.max_attempts = request.max_attempts
-        if request.retake_policy is not None:
-            assignment_row.retake_policy = request.retake_policy.value
-        if request.retake_delay_hours is not None:
-            assignment_row.retake_delay_hours = request.retake_delay_hours
-        session.flush()
+    update_params: assignment_storage.AssignmentUpdateParams = {}
+    if request.available_from is not None:
+        update_params["available_from"] = request.available_from
+    if request.available_until is not None:
+        update_params["available_until"] = request.available_until
+    if request.max_attempts is not None:
+        update_params["max_attempts"] = request.max_attempts
+    if request.retake_policy is not None:
+        update_params["retake_policy"] = request.retake_policy
+    if request.retake_delay_hours is not None:
+        update_params["retake_delay_hours"] = request.retake_delay_hours
+    assignment_storage.update(assignment_id, update_params, session=session)
 
     session.commit()
     return _build_assignment_response(assignment_id, session)
@@ -361,11 +356,5 @@ def cancel_assignment(
             detail="Cannot cancel assignment with existing attempts",
         )
 
-    # Delete the assignment
-    from sqlalchemy import delete
-
-    from socratic.storage.table import assignments as assignments_table
-
-    stmt = delete(assignments_table).where(assignments_table.assignment_id == assignment_id)
-    session.execute(stmt)
+    assignment_storage.delete(assignment_id, session=session)
     session.commit()

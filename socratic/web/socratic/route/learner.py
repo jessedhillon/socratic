@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator, require_learner
@@ -16,7 +15,6 @@ from socratic.storage import attempt as attempt_storage
 from socratic.storage import objective as obj_storage
 from socratic.storage import strand as strand_storage
 from socratic.storage import user as user_storage
-from socratic.storage.table import organization_memberships, users
 
 from ..view.assignment import AssignmentWithAttemptsResponse, AttemptResponse, LearnerAssignmentSummary, \
     LearnerDashboardResponse, LearnerListResponse, LearnerResponse
@@ -35,22 +33,19 @@ def list_learners(
     Only educators can list learners.
     """
     with session.begin():
-        # Get all users in the organization with learner role
-        stmt = (
-            select(users)
-            .join(organization_memberships, users.user_id == organization_memberships.user_id)
-            .where(organization_memberships.organization_id == auth.organization_id)
-            .where(organization_memberships.role == UserRole.Learner.value)
+        users = user_storage.find(
+            organization_id=auth.organization_id,
+            role=UserRole.Learner,
+            session=session,
         )
-        rows = session.execute(stmt).scalars().all()
 
         learners = [
             LearnerResponse(
-                user_id=row.user_id,
-                email=row.email,
-                name=row.name,
+                user_id=user.user_id,
+                email=user.email,
+                name=user.name,
             )
-            for row in rows
+            for user in users
         ]
 
         return LearnerListResponse(

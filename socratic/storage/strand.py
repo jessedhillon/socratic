@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from sqlalchemy import select
+from sqlalchemy import update as sql_update
 
 from socratic.core import di
 from socratic.model import DependencyType, ObjectiveDependency, ObjectiveID, ObjectiveInStrand, OrganizationID, \
@@ -96,10 +97,46 @@ def add_dependency(
     return ObjectiveDependency(**params)
 
 
+def update(
+    key: StrandID,
+    params: StrandUpdateParams,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> Strand | None:
+    stmt = select(strands).where(strands.strand_id == key)
+    strand = session.execute(stmt).scalar_one_or_none()
+    if strand is None:
+        return None
+    for field, value in params.items():
+        if value is not None:
+            setattr(strand, field, value)
+    session.flush()
+    return get(key, session=session)
+
+
+def reorder_objectives_in_strand(
+    strand_id: StrandID,
+    objective_ids: list[ObjectiveID],
+    session: Session = di.Provide["storage.persistent.session"],
+) -> None:
+    for position, objective_id in enumerate(objective_ids):
+        stmt = (
+            sql_update(objectives_in_strands)
+            .where(objectives_in_strands.strand_id == strand_id)
+            .where(objectives_in_strands.objective_id == objective_id)
+            .values(position=position)
+        )
+        session.execute(stmt)
+
+
 class StrandCreateParams(t.TypedDict, total=False):
     organization_id: t.Required[OrganizationID]
     created_by: t.Required[UserID]
     name: t.Required[str]
+    description: str | None
+
+
+class StrandUpdateParams(t.TypedDict, total=False):
+    name: str
     description: str | None
 
 

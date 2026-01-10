@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator
@@ -11,8 +10,6 @@ from socratic.core import di
 from socratic.model import ObjectiveID, StrandID
 from socratic.storage import objective as obj_storage
 from socratic.storage import strand as strand_storage
-from socratic.storage.table import objectives_in_strands
-from socratic.storage.table import strands as strands_table
 
 from ..view.strand import ObjectiveDependencyRequest, ObjectiveDependencyResponse, ObjectiveInStrandRequest, \
     ObjectiveInStrandResponse, ReorderObjectivesRequest, StrandCreateRequest, StrandListResponse, StrandResponse, \
@@ -183,16 +180,12 @@ def update_strand(
             detail="Cannot update strands from other organizations",
         )
 
-    # For now, we'll update directly since we don't have an update function
-    # This should be added to the storage layer
-    stmt = select(strands_table).where(strands_table.strand_id == strand_id)
-    strand_row = session.execute(stmt).scalar_one_or_none()
-    if strand_row:
-        if request.name is not None:
-            strand_row.name = request.name
-        if request.description is not None:
-            strand_row.description = request.description
-        session.flush()
+    update_params: strand_storage.StrandUpdateParams = {}
+    if request.name is not None:
+        update_params["name"] = request.name
+    if request.description is not None:
+        update_params["description"] = request.description
+    strand_storage.update(strand_id, update_params, session=session)
 
     session.commit()
     return _build_strand_response(strand_id, session)
@@ -286,16 +279,7 @@ def reorder_objectives(
             detail="Cannot modify strands from other organizations",
         )
 
-    # Update positions
-    for position, objective_id in enumerate(request.objective_ids):
-        stmt = (
-            update(objectives_in_strands)
-            .where(objectives_in_strands.strand_id == strand_id)
-            .where(objectives_in_strands.objective_id == objective_id)
-            .values(position=position)
-        )
-        session.execute(stmt)
-
+    strand_storage.reorder_objectives_in_strand(strand_id, request.objective_ids, session=session)
     session.commit()
 
     return _build_strand_with_objectives_response(strand_id, session)
