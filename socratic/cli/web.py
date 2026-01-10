@@ -68,4 +68,11 @@ def develop(
 
     os.environ["__Socratic_BOOT"] = boot_cf.model_dump_json()
     with debug.remote_debugger():
-        uvicorn.run(spec, factory=True, reload=True, workers=workers, log_config=logging_cf.model_dump(), **uvi_cf)
+        uvicorn.run(
+            spec,
+            factory=True,
+            reload=True,
+            reload_includes=["socratic/**/*.py", "config/**/*.yaml"],
+            log_config=logging_cf.model_dump(),
+            **uvi_cf,
+        )
