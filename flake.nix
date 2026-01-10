@@ -111,6 +111,7 @@
 
         packages = with pkgs; [
           claude-code
+          fzf
           gh
           isort
           poetry
@@ -171,6 +172,31 @@
             name = "dev";
             command = "process-compose up";
             help = "start development services";
+          }
+          {
+            name = "copy-creds";
+            command = ''
+              set -euo pipefail
+              CREDS_FILE="$PRJ_ROOT/.credentials"
+              if [[ ! -f "$CREDS_FILE" ]]; then
+                echo "No .credentials file found. Run 'socratic-cli user reset-password' to generate credentials."
+                exit 1
+              fi
+
+              # Parse credentials (skip comments and empty lines)
+              SELECTION=$(grep -E '^[^#].*:' "$CREDS_FILE" | fzf --prompt="Select user: " --height=10)
+              if [[ -z "$SELECTION" ]]; then
+                echo "No selection made"
+                exit 0
+              fi
+
+              EMAIL=$(echo "$SELECTION" | cut -d: -f1 | xargs)
+              PASSWORD=$(echo "$SELECTION" | cut -d: -f2 | xargs)
+
+              echo -n "$PASSWORD" | gpaste-client
+              echo "Password for $EMAIL copied to clipboard"
+            '';
+            help = "copy dev credentials to clipboard";
           }
         ];
       };
