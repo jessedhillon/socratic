@@ -121,7 +121,7 @@ def register(
 
     with session.begin():
         # Verify organization exists
-        org = org_storage.get(organization_id, session=session)
+        org = org_storage.get(organization_id=organization_id, session=session)
         if org is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

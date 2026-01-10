@@ -57,7 +57,7 @@ def user_create(
 
     with session.begin():
         # Validate organization
-        organization = org_storage.get_by_slug(org_slug, session=session)
+        organization = org_storage.get(slug=org_slug, session=session)
         if not organization:
             click.echo(f"Error: Organization '{org_slug}' not found.", err=True)
             raise SystemExit(1)
@@ -107,12 +107,12 @@ def user_create_org(
     """
     with session.begin():
         # Check if slug already exists
-        existing = org_storage.get_by_slug(slug, session=session)
+        existing = org_storage.get(slug=slug, session=session)
         if existing:
             click.echo(f"Error: Organization with slug '{slug}' already exists.", err=True)
             raise SystemExit(1)
 
-        organization = org_storage.create({"name": name, "slug": slug}, session=session)
+        organization = org_storage.create(name=name, slug=slug, session=session)
 
     click.echo(f"Created organization: {organization.name}")
     click.echo(f"  ID: {organization.organization_id}")
@@ -156,14 +156,14 @@ def _show_user(email: str, session: Session) -> None:
     if found_user.memberships:
         click.echo("\nOrganizations:")
         for m in found_user.memberships:
-            organization = org_storage.get(m.organization_id, session=session)
+            organization = org_storage.get(organization_id=m.organization_id, session=session)
             org_name = organization.name if organization else "Unknown"
             click.echo(f"  - {org_name} [{m.role.value}]")
 
 
 def _show_organization(slug: str, session: Session) -> None:
     """Show organization details."""
-    organization = org_storage.get_by_slug(slug, session=session)
+    organization = org_storage.get(slug=slug, session=session)
     if not organization:
         click.echo(f"Error: Organization '{slug}' not found.", err=True)
         raise SystemExit(1)
@@ -205,7 +205,7 @@ def user_list(
     """List users, optionally filtered by organization or role."""
     organization_id = None
     if org_slug:
-        organization = org_storage.get_by_slug(org_slug, session=session)
+        organization = org_storage.get(slug=org_slug, session=session)
         if not organization:
             click.echo(f"Error: Organization '{org_slug}' not found.", err=True)
             raise SystemExit(1)
@@ -254,7 +254,7 @@ def user_enroll(
             click.echo(f"Error: User '{email}' not found.", err=True)
             raise SystemExit(1)
 
-        organization = org_storage.get_by_slug(org_slug, session=session)
+        organization = org_storage.get(slug=org_slug, session=session)
         if not organization:
             click.echo(f"Error: Organization '{org_slug}' not found.", err=True)
             raise SystemExit(1)
