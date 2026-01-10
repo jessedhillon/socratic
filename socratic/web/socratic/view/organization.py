@@ -28,6 +28,17 @@ class OrganizationResponse(BaseModel):
     create_time: datetime.datetime
 
 
+class OrganizationPublicResponse(BaseModel):
+    """Public response containing minimal organization information.
+
+    Used for unauthenticated endpoints like login page validation.
+    """
+
+    organization_id: OrganizationID
+    name: str
+    slug: str
+
+
 class InviteRequest(BaseModel):
     """Request body for inviting a user to an organization."""
 

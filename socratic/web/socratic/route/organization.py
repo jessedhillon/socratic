@@ -14,7 +14,8 @@ from socratic.model import OrganizationID, UserRole
 from socratic.storage import organization as org_storage
 from socratic.storage import user as user_storage
 
-from ..view.organization import InviteRequest, InviteResponse, OrganizationCreateRequest, OrganizationResponse
+from ..view.organization import InviteRequest, InviteResponse, OrganizationCreateRequest, OrganizationPublicResponse, \
+    OrganizationResponse
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
 
@@ -83,6 +84,32 @@ def create_organization(
         slug=org.slug,
         create_time=org.create_time,
     )
+
+
+@router.get("/by-slug/{slug}", operation_id="get_organization_by_slug")
+@di.inject
+def get_organization_by_slug(
+    slug: str,
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+) -> OrganizationPublicResponse:
+    """Get public organization information by slug.
+
+    This endpoint does not require authentication and returns minimal
+    organization info for use on login pages.
+    """
+    with session.begin():
+        org = org_storage.get_by_slug(slug, session=session)
+        if org is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found",
+            )
+
+        return OrganizationPublicResponse(
+            organization_id=org.organization_id,
+            name=org.name,
+            slug=org.slug,
+        )
 
 
 @router.get("/{organization_id}", operation_id="get_organization")
