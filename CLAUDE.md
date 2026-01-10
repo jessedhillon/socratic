@@ -218,50 +218,158 @@ The storage layer uses a functional repository pattern with SQLAlchemy for queri
 
 - `storage/table.py` - SQLAlchemy table definitions
 - `storage/{entity}.py` - Repository functions for each entity
+- `lib/sentinel.py` - Sentinel types (`NotSet`) for update operations
 
-**Repository Functions:**
+**Core Functions:**
 
-Functions take either direct attributes or structured Pydantic parameter models, and return Pydantic models:
+Each entity module provides three core functions: `get()`, `create()`, and `update()`.
+
+**get() - Unified Lookup with Overloads:**
+
+Use `@t.overload` decorators to provide type-safe return values based on parameters. All `typing` members must be accessed through the `t` alias:
 
 ```python
-# storage/user.py
-from socratic.model.user import User, UserCreateParams, UserWithOrg
+import typing as t
+import sqlalchemy as sqla
 
-def create_user(session: Session, params: UserCreateParams) -> User:
-    """Create a new user from structured params."""
-    row = users(
-        user_id=UserID(),
-        email=params.email,
-        name=params.name,
-    )
+@t.overload
+def get(*, user_id: UserID, with_memberships: t.Literal[False] = ..., session: Session = ...) -> User | None: ...
+@t.overload
+def get(*, user_id: UserID, with_memberships: t.Literal[True], session: Session = ...) -> UserWithMemberships | None: ...
+@t.overload
+def get(*, email: str, with_memberships: t.Literal[False] = ..., session: Session = ...) -> User | None: ...
+@t.overload
+def get(*, email: str, with_memberships: t.Literal[True], session: Session = ...) -> UserWithMemberships | None: ...
+
+def get(
+    *,
+    user_id: UserID | None = None,
+    email: str | None = None,
+    with_memberships: bool = False,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> User | UserWithMemberships | None:
+    """Get a user by ID or email. Exactly one lookup key must be provided."""
+    stmt = sqla.select(users.__table__).where(users.user_id == user_id)
+    # ...
+```
+
+**create() - Explicit Keyword Arguments:**
+
+Use explicit keyword arguments instead of TypedDict params. Handle any internal transformations (like password hashing):
+
+```python
+def create(
+    *,
+    email: str,
+    name: str,
+    password: p.Secret[str] | None = None,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> User:
+    """Create a new user. Password is hashed internally using bcrypt."""
+    password_hash = None
+    if password is not None:
+        password_hash = bcrypt.hashpw(
+            password.get_secret_value().encode("utf-8"),
+            bcrypt.gensalt(),
+        ).decode("utf-8")
+
+    row = users(user_id=UserID(), email=email, name=name, password_hash=password_hash)
     session.add(row)
     session.flush()
     return User.model_validate(row)
+```
 
-def get_user(session: Session, user_id: UserID) -> User | None:
-    """Get user by ID with direct attribute."""
-    row = session.get(users, user_id)
-    return User.model_validate(row) if row else None
+**update() - NotSet Sentinel Pattern:**
+
+Use `NotSet` sentinel to distinguish "not provided" from `None`. Raise `KeyError` if entity not found. Use `isinstance()` for type narrowing (not `is not NotSet()`):
+
+```python
+from socratic.lib import NotSet
+
+def update(
+    user_id: UserID,
+    *,
+    email: str | NotSet = NotSet(),
+    name: str | NotSet = NotSet(),
+    password: p.Secret[str] | None | NotSet = NotSet(),
+    add_memberships: set[MembershipParams] | None = None,
+    remove_memberships: set[OrganizationID] | None = None,
+    with_memberships: bool | None = None,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> User | UserWithMemberships:
+    """Update a user. Raises KeyError if user_id not found."""
+    # Build update dict only for non-NotSet values (use isinstance for type narrowing)
+    update_values: dict[str, t.Any] = {}
+    if not isinstance(email, NotSet):
+        update_values["email"] = email
+    if not isinstance(name, NotSet):
+        update_values["name"] = name
+    # ... handle password hashing ...
+
+    # Always issue SQL UPDATE (even if empty) to verify entity exists
+    result = session.execute(
+        sqla.update(users).where(users.user_id == user_id).values(**update_values)
+    )
+    if result.rowcount == 0:
+        raise KeyError(user_id)
+
+    # Handle relation changes (add_memberships, remove_memberships)
+    # ...
+
+    # Return with optional relation loading based on with_memberships
 ```
 
 **Conventions:**
 
 - Repository functions are pure functions, not methods on a class
-- Session is always the first parameter
-- Return `None` for missing entities, not exceptions
-- Use `*Params` suffix for input models (e.g., `UserCreateParams`)
-- Use `*With{Relation}` suffix for joined return models (e.g., `UserWithOrg`)
+- Use keyword-only arguments (`*,`) for clarity
+- Session is a keyword argument with DI default (last parameter)
+- `get()` returns `None` for missing entities
+- `update()` raises `KeyError` for missing entities (must exist to update)
+- Use `*With{Relation}` suffix for joined return models (e.g., `UserWithMemberships`)
+- Use `p.BaseModel` with `frozen=True` and explicit `__hash__` for hashable parameter types used in sets:
+
+  ```python
+  class MembershipCreateParams(p.BaseModel):
+      """For adding memberships - both fields required."""
+      model_config = p.ConfigDict(frozen=True)
+      organization_id: OrganizationID
+      role: UserRole
+
+      def __hash__(self) -> int:
+          return hash((self.organization_id, self.role))
+
+  class MembershipRemoveParams(p.BaseModel):
+      """For removing memberships - role is optional.
+
+      If role is None, removes all memberships for the organization.
+      If role is specified, only removes the membership with that role.
+      """
+      model_config = p.ConfigDict(frozen=True)
+      organization_id: OrganizationID
+      role: UserRole | None = None
+
+      def __hash__(self) -> int:
+          return hash((self.organization_id, self.role))
+  ```
+
+- Access all `typing` members through the `t` alias (e.g., `t.Literal`, `t.overload`)
+- Import sqlalchemy as `sqla` (e.g., `sqla.select()`, `sqla.update()`)
 - Flush after writes to get generated values (IDs, timestamps)
 
 **Design Rationale:**
 
-1. **Functional over OOP** - Pure functions with session as the first parameter is cleaner than repository classes with injected sessions. No instance state to manage, easier to test, and the dependency is explicit at the call site.
+1. **Functional over OOP** - Pure functions with explicit dependencies are cleaner than repository classes. No instance state to manage, easier to test, and the dependency is explicit at the call site.
 
 2. **Clear data boundaries** - SQLAlchemy models stay internal to the storage layer while Pydantic models define the API contract. This prevents ORM implementation details from leaking into the rest of the application.
 
-3. **Explicit loading** - The `*WithRelation` variants make it obvious when you're doing a joined query vs. a simple fetch. No magic lazy loading that triggers N+1 queries unexpectedly.
+3. **Explicit loading** - The `with_memberships` parameter and `*WithRelation` return types make it obvious when you're doing a joined query vs. a simple fetch. No magic lazy loading that triggers N+1 queries.
 
-4. **None over exceptions** - Returning `None` for missing entities is more Pythonic for expected "not found" cases and composes better with Optional handling.
+4. **NotSet over None** - The sentinel pattern allows distinguishing "set this field to None" from "don't change this field", which is essential for nullable fields in update operations.
+
+5. **KeyError for updates** - Updates should fail explicitly if the entity doesn't exist. This catches bugs where code assumes an entity exists but it was deleted.
+
+6. **Overloads for type safety** - Using `@overload` with `Literal` types lets pyright infer the correct return type based on how the function is called.
 
 ## Code Style Guide
 
@@ -272,6 +380,17 @@ def get_user(session: Session, user_id: UserID) -> User | None:
 - **Formatting**: `nix fmt` runs ruff format + isort
 - **Imports**: isort with black profile, deterministic ordering (`--dt`)
 - **Docstrings**: Only where logic isn't self-evident
+- **Explicit inheritance**: Class inheritance must be explicit, even when ancestor is `object`:
+
+```python
+# Good: Explicit inheritance
+class TestGet(object):
+    ...
+
+# Bad: Implicit inheritance
+class TestGet:
+    ...
+```
 
 ```bash
 # Format all files

@@ -67,15 +67,14 @@ def get_learner_assignments(
     """
     with session.begin():
         # Verify learner exists and belongs to organization
-        learner = user_storage.get(learner_id, session=session)
+        learner = user_storage.get(user_id=learner_id, with_memberships=True, session=session)
         if learner is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Learner not found",
             )
 
-        memberships = user_storage.get_memberships(learner_id, session=session)
-        if not any(m.organization_id == auth.organization_id for m in memberships):
+        if not any(m.organization_id == auth.organization_id for m in learner.memberships):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Learner is not in your organization",

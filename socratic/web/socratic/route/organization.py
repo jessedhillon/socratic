@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime
 
-import bcrypt
 import jwt as pyjwt
 import pydantic as p
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,6 +14,7 @@ from socratic.core import di
 from socratic.model import OrganizationID, UserRole
 from socratic.storage import organization as org_storage
 from socratic.storage import user as user_storage
+from socratic.storage.user import MembershipCreateParams
 
 from ..view.organization import InviteRequest, InviteResponse, OrganizationCreateRequest, OrganizationPublicResponse, \
     OrganizationResponse
@@ -42,7 +42,7 @@ def create_organization(
         )
 
     # Check if admin email is already registered
-    existing_user = user_storage.get_by_email(request.admin_email, session=session)
+    existing_user = user_storage.get(email=request.admin_email, session=session)
     if existing_user is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -55,23 +55,18 @@ def create_organization(
         session=session,
     )
 
-    # Create admin user with hashed password
-    password_hash = bcrypt.hashpw(request.admin_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
+    # Create admin user (password is hashed internally)
     admin_user = user_storage.create(
-        {
-            "email": request.admin_email,
-            "name": request.admin_name,
-            "password_hash": password_hash,
-        },
+        email=request.admin_email,
+        name=request.admin_name,
+        password=p.Secret(request.admin_password),
         session=session,
     )
 
     # Add admin to organization with educator role
-    user_storage.add_to_organization(
+    user_storage.update(
         admin_user.user_id,
-        org.organization_id,
-        UserRole.Educator,
+        add_memberships={MembershipCreateParams(organization_id=org.organization_id, role=UserRole.Educator)},
         session=session,
     )
 
@@ -171,7 +166,7 @@ def invite_user(
         )
 
     # Check if email is already registered
-    existing = user_storage.get_by_email(request.email, session=session)
+    existing = user_storage.get(email=request.email, session=session)
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

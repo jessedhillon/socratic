@@ -40,15 +40,15 @@ def login(
             )
 
         # Get user's organization membership
-        memberships = user_storage.get_memberships(result.user.user_id, session=session)
-        if not memberships:
+        user_with_memberships = user_storage.get(user_id=result.user.user_id, with_memberships=True, session=session)
+        if not user_with_memberships or not user_with_memberships.memberships:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User has no organization membership",
             )
 
         # Use first membership (users could have multiple in future)
-        membership = memberships[0]
+        membership = user_with_memberships.memberships[0]
 
     # Create access token
     expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=expire_minutes)

@@ -59,9 +59,9 @@ class users(base):
     user_id: Mapped[UserID] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(unique=True)
     name: Mapped[str]
+    password_hash: Mapped[str]
     create_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now())
     update_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now(), onupdate=func.now())
-    password_hash: Mapped[str | None] = mapped_column(default=None)
 
 
 class organization_memberships(base):
