@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator
@@ -12,6 +13,7 @@ from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
 from socratic.storage import objective as obj_storage
 from socratic.storage import user as user_storage
+from socratic.storage.table import assignments as assignments_table
 
 from ..view.assignment import AssignmentCreateRequest, AssignmentListResponse, AssignmentResponse, \
     AssignmentUpdateRequest, AssignmentWithAttemptsResponse, AttemptResponse, BulkAssignmentCreateRequest
@@ -306,10 +308,6 @@ def update_assignment(
         )
 
     # Update directly since we don't have an update function in storage
-    from sqlalchemy import select
-
-    from socratic.storage.table import assignments as assignments_table
-
     stmt = select(assignments_table).where(assignments_table.assignment_id == assignment_id)
     assignment_row = session.execute(stmt).scalar_one_or_none()
     if assignment_row:

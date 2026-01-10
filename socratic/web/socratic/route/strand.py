@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator
@@ -10,6 +11,8 @@ from socratic.core import di
 from socratic.model import ObjectiveID, StrandID
 from socratic.storage import objective as obj_storage
 from socratic.storage import strand as strand_storage
+from socratic.storage.table import objectives_in_strands
+from socratic.storage.table import strands as strands_table
 
 from ..view.strand import ObjectiveDependencyRequest, ObjectiveDependencyResponse, ObjectiveInStrandRequest, \
     ObjectiveInStrandResponse, ReorderObjectivesRequest, StrandCreateRequest, StrandListResponse, StrandResponse, \
@@ -182,10 +185,6 @@ def update_strand(
 
     # For now, we'll update directly since we don't have an update function
     # This should be added to the storage layer
-    from sqlalchemy import select
-
-    from socratic.storage.table import strands as strands_table
-
     stmt = select(strands_table).where(strands_table.strand_id == strand_id)
     strand_row = session.execute(stmt).scalar_one_or_none()
     if strand_row:
@@ -288,10 +287,6 @@ def reorder_objectives(
         )
 
     # Update positions
-    from sqlalchemy import update
-
-    from socratic.storage.table import objectives_in_strands
-
     for position, objective_id in enumerate(request.objective_ids):
         stmt = (
             update(objectives_in_strands)

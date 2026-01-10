@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re as regex
 import typing as t
 
 import jinja2
@@ -192,10 +193,8 @@ async def analyze_response_node(
 def _extract_quote(text: str, keyword: str) -> str | None:
     """Extract a quoted phrase near a keyword from analysis text."""
     # Simple heuristic - look for quoted text near keyword
-    import re
-
     pattern = rf'{keyword}[^"]*"([^"]+)"'
-    match = re.search(pattern, text, re.IGNORECASE)
+    match = regex.search(pattern, text, regex.IGNORECASE)
     return match.group(1) if match else None
 
 

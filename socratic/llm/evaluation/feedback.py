@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re as regex
 import typing as t
 
 import jinja2
@@ -144,10 +145,8 @@ def _get_content_str(content: t.Any) -> str:
 
 def _extract_json_from_response(text: str) -> dict[str, t.Any]:
     """Try to extract JSON from a response that may contain markdown."""
-    import re
-
     # Try to find JSON in code blocks
-    json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    json_match = regex.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, regex.DOTALL)
     if json_match:
         try:
             return json.loads(json_match.group(1))
@@ -155,7 +154,7 @@ def _extract_json_from_response(text: str) -> dict[str, t.Any]:
             pass
 
     # Try to find raw JSON
-    json_match = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.DOTALL)
+    json_match = regex.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, regex.DOTALL)
     if json_match:
         try:
             return json.loads(json_match.group(0))
