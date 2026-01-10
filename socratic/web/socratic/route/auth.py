@@ -8,8 +8,9 @@ import jwt as pyjwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from socratic.auth import AuthContext, get_current_user, JWTManager, LocalAuthProvider
-from socratic.auth.middleware import get_auth_provider, get_jwt_manager
+from socratic.auth import AuthContext, get_current_user, JWTManager
+from socratic.auth import local as local_auth
+from socratic.auth.middleware import get_jwt_manager
 from socratic.core import di
 from socratic.model import OrganizationID
 from socratic.storage import organization as org_storage
@@ -24,30 +25,30 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @di.inject
 def login(
     request: LoginRequest,
-    auth_provider: LocalAuthProvider = Depends(get_auth_provider),
     jwt_manager: JWTManager = Depends(get_jwt_manager),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> LoginResponse:
     """Authenticate a user and return access token."""
-    result = auth_provider.authenticate(request.email, request.password)
+    with session.begin():
+        result = local_auth.authenticate(request.email, request.password, session=session)
 
-    if not result.success or result.user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=result.error or "Invalid credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        if not result.success or result.user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=result.error or "Invalid credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
-    # Get user's organization membership
-    memberships = user_storage.get_memberships(result.user.user_id, session=session)
-    if not memberships:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User has no organization membership",
-        )
+        # Get user's organization membership
+        memberships = user_storage.get_memberships(result.user.user_id, session=session)
+        if not memberships:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User has no organization membership",
+            )
 
-    # Use first membership (users could have multiple in future)
-    membership = memberships[0]
+        # Use first membership (users could have multiple in future)
+        membership = memberships[0]
 
     # Create access token
     expires_delta = datetime.timedelta(minutes=jwt_manager.access_token_expire_minutes)
@@ -79,7 +80,6 @@ def login(
 @di.inject
 def register(
     request: RegisterRequest,
-    auth_provider: LocalAuthProvider = Depends(get_auth_provider),
     jwt_manager: JWTManager = Depends(get_jwt_manager),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> LoginResponse:
@@ -119,30 +119,30 @@ def register(
     organization_id = OrganizationID(payload["org"])
     role = payload["role"]
 
-    # Verify organization exists
-    org = org_storage.get(organization_id, session=session)
-    if org is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization not found",
+    with session.begin():
+        # Verify organization exists
+        org = org_storage.get(organization_id, session=session)
+        if org is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Organization not found",
+            )
+
+        # Register user
+        result = local_auth.register(
+            email=request.email,
+            password=request.password,
+            name=request.name,
+            organization_id=organization_id,
+            role=role,
+            session=session,
         )
 
-    # Register user
-    result = auth_provider.register(
-        email=request.email,
-        password=request.password,
-        name=request.name,
-        organization_id=organization_id,
-        role=role,
-    )
-
-    if not result.success or result.user is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=result.error or "Registration failed",
-        )
-
-    session.commit()
+        if not result.success or result.user is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.error or "Registration failed",
+            )
 
     # Create access token
     expires_delta = datetime.timedelta(minutes=jwt_manager.access_token_expire_minutes)

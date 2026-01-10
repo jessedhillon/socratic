@@ -16,6 +16,7 @@ import os
 import typing as t
 from pathlib import Path
 
+import bcrypt
 import pydantic as p
 import pytest
 from fastapi import FastAPI
@@ -24,8 +25,8 @@ from sqlalchemy.orm import Session
 
 import socratic
 from socratic.core import SocraticContainer
-from socratic.model import DeploymentEnvironment, Organization, OrganizationID
-from socratic.storage.table import organizations
+from socratic.model import DeploymentEnvironment, Organization, OrganizationID, User, UserID, UserRole
+from socratic.storage.table import organization_memberships, organizations, users
 
 
 @pytest.fixture(scope="session")
@@ -52,18 +53,34 @@ def container() -> t.Generator[SocraticContainer]:
     ct.shutdown_resources()
 
 
+TEST_JWT_SECRET = "test-jwt-secret-for-integration-tests"
+
+
 @pytest.fixture(scope="session")
 def app(container: SocraticContainer) -> FastAPI:
     """Create the FastAPI application for testing.
 
     Uses the booted container to create the app with proper wiring.
+    Overrides JWT manager with test credentials since test env has no secrets file.
     """
+    import pydantic as p
+
+    from socratic.auth.jwt import JWTManager
     from socratic.core.config.web import SocraticWebSettings
     from socratic.web.socratic.main import _create_app  # pyright: ignore[reportPrivateUsage]
+
+    # Override JWT manager with test secret
+    test_jwt_manager = JWTManager(
+        secret_key=p.Secret(TEST_JWT_SECRET),
+        algorithm="HS256",
+        access_token_expire_minutes=30,
+    )
+    container.auth().jwt_manager.override(test_jwt_manager)
 
     container.wire(
         modules=[
             "socratic.web.socratic.main",
+            "socratic.web.socratic.route.auth",
             "socratic.web.socratic.route.organization",
             "socratic.auth.middleware",
         ]
@@ -174,3 +191,89 @@ def test_org(org_factory: t.Callable[..., Organization]) -> Organization:
     Convenience fixture for tests that just need a single organization.
     """
     return org_factory(name="Acme School")
+
+
+@pytest.fixture
+def user_factory(
+    db_session: Session,
+) -> t.Callable[..., User]:
+    """Factory fixture for creating test users with optional organization membership.
+
+    Returns a callable that creates users with sensible defaults.
+    Created users are automatically cleaned up via transaction rollback.
+
+    Usage:
+        def test_something(user_factory, test_org):
+            user = user_factory(
+                email="test@example.com",
+                password="password123",
+                organization_id=test_org.organization_id,
+                role=UserRole.Learner,
+            )
+    """
+
+    def create_user(
+        email: str = "test@example.com",
+        name: str = "Test User",
+        password: str = "password123",
+        organization_id: OrganizationID | None = None,
+        role: UserRole = UserRole.Learner,
+    ) -> User:
+        from sqlalchemy import select
+
+        user_id = UserID()
+        password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+        with db_session.begin():
+            user = users(
+                user_id=user_id,
+                email=email,
+                name=name,
+                password_hash=password_hash,
+            )
+            db_session.add(user)
+            db_session.flush()
+
+            # Add to organization if specified
+            if organization_id is not None:
+                membership = organization_memberships(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    role=role.value,
+                )
+                db_session.add(membership)
+                db_session.flush()
+
+            # Re-fetch to construct pydantic model
+            stmt = select(users.__table__).where(users.user_id == user_id)
+            row = db_session.execute(stmt).mappings().one()
+            return User(**row)
+
+    return create_user
+
+
+@pytest.fixture
+def test_user(
+    user_factory: t.Callable[..., User],
+    test_org: Organization,
+) -> User:
+    """Provide a pre-created test user in the test organization.
+
+    Convenience fixture for tests that just need a single user.
+    """
+    return user_factory(
+        email="learner@test.com",
+        name="Test Learner",
+        password="password123",
+        organization_id=test_org.organization_id,
+        role=UserRole.Learner,
+    )
+
+
+@pytest.fixture
+def jwt_manager(app: FastAPI, container: SocraticContainer) -> t.Any:
+    """Provide the JWT manager for creating test tokens.
+
+    Depends on app fixture to ensure JWT manager override is in place.
+    """
+    return container.auth().jwt_manager()

@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 from socratic.core import di
 from socratic.model import OrganizationID, User
 
+from . import local as local_auth
 from .jwt import JWTManager, TokenData
-from .local import LocalAuthProvider
 
 # Security scheme for JWT bearer tokens
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -35,18 +35,10 @@ def get_jwt_manager(
     return jwt_manager
 
 
-@di.inject
-def get_auth_provider(
-    session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> LocalAuthProvider:
-    """Get auth provider with injected session."""
-    return LocalAuthProvider(session)
-
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     jwt_manager: JWTManager = Depends(get_jwt_manager),
-    auth_provider: LocalAuthProvider = Depends(get_auth_provider),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AuthContext:
     """Dependency to get the current authenticated user.
 
@@ -69,7 +61,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = auth_provider.get_user(token_data.user_id)
+    user = local_auth.get_user(token_data.user_id, session=session)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -88,7 +80,7 @@ async def get_current_user(
 async def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     jwt_manager: JWTManager = Depends(get_jwt_manager),
-    auth_provider: LocalAuthProvider = Depends(get_auth_provider),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AuthContext | None:
     """Dependency to optionally get the current user.
 
@@ -101,7 +93,7 @@ async def get_optional_user(
     if token_data is None:
         return None
 
-    user = auth_provider.get_user(token_data.user_id)
+    user = local_auth.get_user(token_data.user_id, session=session)
     if user is None:
         return None
 

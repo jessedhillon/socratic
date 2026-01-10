@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import secrets
 
+import bcrypt
 from sqlalchemy.orm import Session
 
 import socratic.lib.cli as click
@@ -52,7 +52,7 @@ def user_create(
         generated_password = secrets.token_urlsafe(12)
         password = generated_password
 
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     user_role = UserRole(role)
 
     with session.begin():
@@ -289,7 +289,7 @@ def user_reset_password(
         generated_password = secrets.token_urlsafe(12)
         password = generated_password
 
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     with session.begin():
         found_user = user_storage.get_by_email(email, session=session)

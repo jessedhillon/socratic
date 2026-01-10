@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 
+import jwt as pyjwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -179,21 +180,8 @@ def invite_user(
         )
 
     # Create invite token (valid for 7 days)
-    expires_delta = datetime.timedelta(days=7)
-    expires_at = datetime.datetime.now(datetime.UTC) + expires_delta
-
-    # Use a special "invite" user_id placeholder
-    invite_token = jwt_manager.create_access_token(
-        user_id=auth.user.user_id,  # Inviter's ID for audit
-        organization_id=organization_id,
-        role=request.role,
-        expires_delta=expires_delta,
-    )
-
-    # Encode additional invite data in the token
     # Note: In production, you might want to store invites in DB for tracking
-    import jwt as pyjwt
-
+    expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=7)
     invite_payload = {
         "type": "invite",
         "email": request.email,

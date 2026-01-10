@@ -69,12 +69,11 @@ class SocraticContainer(DeclarativeContainer):
     template: Provider[TemplateContainer] = Container(TemplateContainer, config=config.template)
     vendor: Provider[VendorContainer] = Container(VendorContainer, config=config.vendor, secrets=secrets)
 
-    # Auth container - config comes from web.socratic.auth, session from storage
+    # Auth container - config comes from web.socratic.auth
     auth: Provider[AuthContainer] = Container(
         AuthContainer,
         config=config.web.socratic.auth,
         secrets=secrets.auth,
-        session=storage.provided.persistent.session,
     )
 
     # LLM container for AI model access

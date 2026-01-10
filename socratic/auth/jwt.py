@@ -5,7 +5,9 @@ from __future__ import annotations
 import datetime
 import typing as t
 
+import annotated_types as ant
 import jwt
+import pydantic as p
 
 from socratic.model import OrganizationID, UserID
 
@@ -30,14 +32,18 @@ class TokenData(t.NamedTuple):
     issued_at: datetime.datetime
 
 
-class JWTManager:
+class JWTManager(object):
     """Manages JWT token creation and validation."""
+
+    _secret_key: p.Secret[str]
+    _algorithm: t.Literal["HS256"]
+    _access_token_expire_minutes: t.Annotated[int, ant.Gt(1)]
 
     def __init__(
         self,
-        secret_key: str,
-        algorithm: str = "HS256",
-        access_token_expire_minutes: int = 30,
+        secret_key: p.Secret[str],
+        algorithm: t.Literal["HS256"] = "HS256",
+        access_token_expire_minutes: t.Annotated[int, ant.Gt(1)] = 30,
     ) -> None:
         self._secret_key = secret_key
         self._algorithm = algorithm
@@ -46,7 +52,7 @@ class JWTManager:
     @property
     def secret_key(self) -> str:
         """Get the JWT secret key."""
-        return self._secret_key
+        return self._secret_key.get_secret_value()
 
     @property
     def algorithm(self) -> str:
@@ -90,7 +96,7 @@ class JWTManager:
             "iat": int(now.timestamp()),
         }
 
-        return jwt.encode(payload, self._secret_key, algorithm=self._algorithm)
+        return jwt.encode(payload, self.secret_key, algorithm=self._algorithm)
 
     def decode_token(self, token: str) -> TokenData | None:
         """Decode and validate a token.
@@ -104,7 +110,7 @@ class JWTManager:
         try:
             payload = jwt.decode(
                 token,
-                self._secret_key,
+                self.secret_key,
                 algorithms=[self._algorithm],
             )
 

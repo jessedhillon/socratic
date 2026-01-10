@@ -17,7 +17,7 @@ class PostgresqlSecrets(BaseSecrets):
 class AuthSecrets(BaseSecrets):
     """Authentication secrets."""
 
-    jwt_secret: p.Secret[str]
+    jwt: p.Secret[str]
 
 
 class LLMSecrets(BaseSecrets):
