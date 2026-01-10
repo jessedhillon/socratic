@@ -43,7 +43,7 @@ class UserResponse(BaseModel):
     role: str
 
 
-class LoginResponse(BaseModel):
+class LoginOkResponse(BaseModel):
     """Response for successful login."""
 
     user: UserResponse

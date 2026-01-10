@@ -49,7 +49,7 @@ class CompleteAssessmentRequest(p.BaseModel):
     feedback: str | None = None
 
 
-class CompleteAssessmentResponse(p.BaseModel):
+class CompleteAssessmentOkResponse(p.BaseModel):
     """Response after completing an assessment."""
 
     attempt_id: AttemptID

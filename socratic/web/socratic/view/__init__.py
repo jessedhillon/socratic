@@ -3,7 +3,7 @@
 __all__ = [
     # Auth views
     "LoginRequest",
-    "LoginResponse",
+    "LoginOkResponse",
     "RegisterRequest",
     "UserResponse",
     "TokenResponse",
@@ -52,7 +52,7 @@ __all__ = [
 from .assignment import AssignmentCreateRequest, AssignmentListResponse, AssignmentResponse, AssignmentUpdateRequest, \
     AssignmentWithAttemptsResponse, AttemptResponse, BulkAssignmentCreateRequest, LearnerAssignmentSummary, \
     LearnerDashboardResponse, LearnerListResponse, LearnerResponse
-from .auth import LoginRequest, LoginResponse, RegisterRequest, TokenResponse, UserResponse
+from .auth import LoginOkResponse, LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from .objective import FailureModeRequest, FailureModeResponse, GradeThresholdRequest, GradeThresholdResponse, \
     ObjectiveCreateRequest, ObjectiveListResponse, ObjectiveResponse, ObjectiveUpdateRequest, \
     RubricCriterionCreateRequest, RubricCriterionRequest, RubricCriterionResponse

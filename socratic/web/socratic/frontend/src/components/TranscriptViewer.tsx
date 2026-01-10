@@ -1,34 +1,14 @@
 import React from 'react';
-
-interface TranscriptSegment {
-  segment_id: string;
-  utterance_type: string;
-  content: string;
-  start_time: string;
-  prompt_index: number | null;
-}
-
-interface EvidenceMapping {
-  criterion_id: string;
-  criterion_name: string | null;
-  segment_ids: string[];
-  evidence_summary: string | null;
-  strength: string | null;
-  failure_modes_detected: string[];
-}
+import type {
+  TranscriptSegmentResponse,
+  EvidenceMappingResponse,
+} from '../api';
 
 interface TranscriptViewerProps {
-  segments: TranscriptSegment[];
-  evidenceMappings?: EvidenceMapping[];
+  segments: TranscriptSegmentResponse[];
+  evidenceMappings?: EvidenceMappingResponse[];
   highlightedCriterion?: string;
 }
-
-const strengthColors: Record<string, string> = {
-  strong: 'border-l-green-500 bg-green-50',
-  moderate: 'border-l-blue-500 bg-blue-50',
-  weak: 'border-l-yellow-500 bg-yellow-50',
-  none: 'border-l-gray-300',
-};
 
 /**
  * Transcript viewer with evidence highlighting.
@@ -64,7 +44,7 @@ const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
   return (
     <div className="space-y-4">
       {segments.map((segment) => {
-        const isInterviewer = segment.utterance_type === 'Interviewer';
+        const isInterviewer = segment.utterance_type === 'interviewer';
         const evidence = segmentEvidence[segment.segment_id] || [];
         const isHighlighted =
           highlightedCriterion &&
@@ -86,7 +66,7 @@ const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
             >
               <div className="text-xs opacity-70 mb-1">
                 {isInterviewer ? 'Interviewer' : 'Learner'}
-                {segment.prompt_index !== null &&
+                {segment.prompt_index != null &&
                   ` (Prompt ${segment.prompt_index + 1})`}
               </div>
               <p className="whitespace-pre-wrap">{segment.content}</p>
