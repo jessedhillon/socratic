@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getLearnerDashboard, getLoginUrl } from '../api';
+import { getLearnerDashboard } from '../api';
 import type { LearnerDashboardResponse } from '../api';
+import { getLoginUrl } from '../auth';
 
 /**
  * Learner dashboard page showing available assignments.

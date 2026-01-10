@@ -24,7 +24,7 @@ from socratic.storage import transcript as transcript_storage
 from socratic.storage.attempt import AttemptCreateParams, AttemptUpdateParams
 from socratic.storage.transcript import TranscriptSegmentCreateParams
 
-from ..view.assessment import AssessmentStatusResponse, CompleteAssessmentRequest, CompleteAssessmentResponse, \
+from ..view.assessment import AssessmentStatusResponse, CompleteAssessmentOkResponse, CompleteAssessmentRequest, \
     SendMessageRequest, TranscriptMessageResponse, TranscriptResponse
 
 if t.TYPE_CHECKING:
@@ -283,7 +283,7 @@ def complete_assessment_route(
     request: CompleteAssessmentRequest,
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> CompleteAssessmentResponse:
+) -> CompleteAssessmentOkResponse:
     """Complete an assessment attempt."""
     aid = AttemptID(attempt_id)
 
@@ -316,7 +316,7 @@ def complete_assessment_route(
     attempt_storage.update(aid, update_params, session=session)
     session.commit()
 
-    return CompleteAssessmentResponse(
+    return CompleteAssessmentOkResponse(
         attempt_id=aid,
         status=AttemptStatus.Completed.value,
         completed_at=now,

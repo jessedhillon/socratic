@@ -7,7 +7,7 @@ import type {
 } from '@hey-api/client-fetch';
 import type {
   LoginData,
-  LoginResponse2,
+  LoginResponse,
   LoginError,
   RegisterData,
   RegisterResponse,
@@ -105,7 +105,7 @@ import type {
   GetAssessmentStatusResponse,
   GetAssessmentStatusError,
   CompleteAssessmentData,
-  CompleteAssessmentResponse2,
+  CompleteAssessmentResponse,
   CompleteAssessmentError,
   GetAssessmentTranscriptData,
   GetAssessmentTranscriptResponse,
@@ -155,7 +155,7 @@ export const login = <ThrowOnError extends boolean = false>(
   options: Options<LoginData, ThrowOnError>
 ) => {
   return (options.client ?? _heyApiClient).post<
-    LoginResponse2,
+    LoginResponse,
     LoginError,
     ThrowOnError
   >({
@@ -1063,7 +1063,7 @@ export const completeAssessment = <ThrowOnError extends boolean = false>(
   options: Options<CompleteAssessmentData, ThrowOnError>
 ) => {
   return (options.client ?? _heyApiClient).post<
-    CompleteAssessmentResponse2,
+    CompleteAssessmentResponse,
     CompleteAssessmentError,
     ThrowOnError
   >({

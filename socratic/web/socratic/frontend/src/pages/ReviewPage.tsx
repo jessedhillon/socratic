@@ -5,9 +5,9 @@ import {
   getReviewDetail,
   acceptGrade,
   overrideGrade,
-  getLoginUrl,
 } from '../api';
 import type { ReviewSummary, ReviewDetailResponse, Grade } from '../api';
+import { getLoginUrl } from '../auth';
 import ReviewList from '../components/ReviewList';
 import TranscriptViewer from '../components/TranscriptViewer';
 import EvidencePanel from '../components/EvidencePanel';

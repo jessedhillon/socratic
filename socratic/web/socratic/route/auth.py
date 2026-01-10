@@ -16,7 +16,7 @@ from socratic.model import OrganizationID
 from socratic.storage import organization as org_storage
 from socratic.storage import user as user_storage
 
-from ..view.auth import LoginRequest, LoginResponse, RegisterRequest, TokenResponse, UserResponse
+from ..view.auth import LoginOkResponse, LoginRequest, RegisterRequest, TokenResponse, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -27,7 +27,7 @@ def login(
     request: LoginRequest,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
     expire_minutes: int = Depends(di.Provide["config.web.socratic.auth.access_token_expire_minutes"]),
-) -> LoginResponse:
+) -> LoginOkResponse:
     """Authenticate a user and return access token."""
     with session.begin():
         result = local_auth.authenticate(request.email, request.password, session=session)
@@ -59,7 +59,7 @@ def login(
         role=membership.role.value,
     )
 
-    return LoginResponse(
+    return LoginOkResponse(
         user=UserResponse(
             user_id=result.user.user_id,
             email=result.user.email,
@@ -82,7 +82,7 @@ def register(
     secret: p.Secret[str] = Depends(di.Provide["secrets.auth.jwt"]),
     algorithm: str = Depends(di.Provide["config.web.socratic.auth.jwt_algorithm"]),
     expire_minutes: int = Depends(di.Provide["config.web.socratic.auth.access_token_expire_minutes"]),
-) -> LoginResponse:
+) -> LoginOkResponse:
     """Register a new user with an invite token."""
     # Decode and validate invite token
     try:
@@ -153,7 +153,7 @@ def register(
         role=role,
     )
 
-    return LoginResponse(
+    return LoginOkResponse(
         user=UserResponse(
             user_id=result.user.user_id,
             email=result.user.email,

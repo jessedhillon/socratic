@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { login, getOrganizationBySlug, setLoginContext } from '../api';
+import { login, getOrganizationBySlug } from '../api';
 import type { OrganizationPublicResponse } from '../api';
+import { setLoginContext } from '../auth';
 
 const VALID_ROLES = ['instructor', 'learner'] as const;
 type UserRole = (typeof VALID_ROLES)[number];

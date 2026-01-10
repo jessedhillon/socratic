@@ -111,19 +111,19 @@ export type BulkAssignmentCreateRequest = {
 };
 
 /**
+ * Response after completing an assessment.
+ */
+export type CompleteAssessmentOkResponse = {
+  attempt_id: string;
+  status: string;
+  completed_at: string;
+};
+
+/**
  * Request to complete an assessment.
  */
 export type CompleteAssessmentRequest = {
   feedback?: string | null;
-};
-
-/**
- * Response after completing an assessment.
- */
-export type CompleteAssessmentResponse = {
-  attempt_id: string;
-  status: string;
-  completed_at: string;
 };
 
 export type DependencyType = 'hard' | 'soft';
@@ -284,19 +284,19 @@ export type LearnerResponse = {
 };
 
 /**
+ * Response for successful login.
+ */
+export type LoginOkResponse = {
+  user: UserResponse;
+  token: TokenResponse;
+};
+
+/**
  * Request body for login.
  */
 export type LoginRequest = {
   email: string;
   password: string;
-};
-
-/**
- * Response for successful login.
- */
-export type LoginResponse = {
-  user: UserResponse;
-  token: TokenResponse;
 };
 
 /**
@@ -697,10 +697,10 @@ export type LoginResponses = {
   /**
    * Successful Response
    */
-  200: LoginResponse;
+  200: LoginOkResponse;
 };
 
-export type LoginResponse2 = LoginResponses[keyof LoginResponses];
+export type LoginResponse = LoginResponses[keyof LoginResponses];
 
 export type RegisterData = {
   body: RegisterRequest;
@@ -722,7 +722,7 @@ export type RegisterResponses = {
   /**
    * Successful Response
    */
-  201: LoginResponse;
+  201: LoginOkResponse;
 };
 
 export type RegisterResponse = RegisterResponses[keyof RegisterResponses];
@@ -1627,10 +1627,10 @@ export type CompleteAssessmentResponses = {
   /**
    * Successful Response
    */
-  200: CompleteAssessmentResponse;
+  200: CompleteAssessmentOkResponse;
 };
 
-export type CompleteAssessmentResponse2 =
+export type CompleteAssessmentResponse =
   CompleteAssessmentResponses[keyof CompleteAssessmentResponses];
 
 export type GetAssessmentTranscriptData = {
