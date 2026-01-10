@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { apiFetch } from '../api';
 import ReviewList from '../components/ReviewList';
 import TranscriptViewer from '../components/TranscriptViewer';
 import EvidencePanel from '../components/EvidencePanel';
@@ -110,7 +111,7 @@ const ReviewPage: React.FC = () => {
 
   const fetchReviews = async () => {
     try {
-      const response = await fetch('/api/reviews', { credentials: 'include' });
+      const response = await apiFetch('/api/reviews');
       if (!response.ok) {
         if (response.status === 401) {
           setError('Please log in as an educator');
@@ -130,9 +131,7 @@ const ReviewPage: React.FC = () => {
 
   const fetchReviewDetail = async (id: string) => {
     try {
-      const response = await fetch(`/api/reviews/${id}`, {
-        credentials: 'include',
-      });
+      const response = await apiFetch(`/api/reviews/${id}`);
       if (!response.ok) {
         throw new Error('Failed to fetch review detail');
       }
@@ -152,11 +151,10 @@ const ReviewPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/reviews/${selectedReview.attempt.attempt_id}/accept`,
         {
           method: 'POST',
-          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         }
@@ -180,11 +178,10 @@ const ReviewPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/reviews/${selectedReview.attempt.attempt_id}/override`,
         {
           method: 'POST',
-          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             new_grade: overrideGrade,
