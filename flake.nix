@@ -179,11 +179,24 @@
               set -euo pipefail
               CREDS_FILE="$PRJ_ROOT/.credentials"
               if [[ ! -f "$CREDS_FILE" ]]; then
-                echo "No .credentials file found. Run 'socratic-cli user reset-password' to generate credentials."
+                echo "No .credentials file found. Run 'socratic-cli user reset-password' to generate credentials." >&2
                 exit 1
               fi
 
-              # Parse credentials (skip comments and empty lines)
+              if [[ -n "''${1:-}" ]]; then
+                # Direct lookup by username
+                MATCH=$(grep -E "^$1:" "$CREDS_FILE" || true)
+                if [[ -z "$MATCH" ]]; then
+                  echo "User '$1' not found in .credentials" >&2
+                  exit 1
+                fi
+                PASSWORD=$(echo "$MATCH" | cut -d: -f2 | xargs)
+                echo -n "$PASSWORD" | gpaste-client
+                echo "Password for $1 copied to clipboard"
+                exit 0
+              fi
+
+              # Interactive selection via fzf
               SELECTION=$(grep -E '^[^#].*:' "$CREDS_FILE" | fzf --prompt="Select user: " --height=10)
               if [[ -z "$SELECTION" ]]; then
                 echo "No selection made"
