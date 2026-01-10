@@ -97,18 +97,19 @@ def get_organization_by_slug(
     This endpoint does not require authentication and returns minimal
     organization info for use on login pages.
     """
-    org = org_storage.get_by_slug(slug, session=session)
-    if org is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found",
-        )
+    with session.begin():
+        org = org_storage.get_by_slug(slug, session=session)
+        if org is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found",
+            )
 
-    return OrganizationPublicResponse(
-        organization_id=org.organization_id,
-        name=org.name,
-        slug=org.slug,
-    )
+        return OrganizationPublicResponse(
+            organization_id=org.organization_id,
+            name=org.name,
+            slug=org.slug,
+        )
 
 
 @router.get("/{organization_id}", operation_id="get_organization")
