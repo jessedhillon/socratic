@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import typing as t
 
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import select
 
 from socratic.core import di
@@ -57,11 +58,47 @@ def create(params: AssignmentCreateParams, session: Session = di.Provide["storag
     return get(assignment.assignment_id, session=session)  # type: ignore
 
 
+def update(
+    key: AssignmentID,
+    params: AssignmentUpdateParams,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> Assignment | None:
+    stmt = select(assignments).where(assignments.assignment_id == key)
+    assignment = session.execute(stmt).scalar_one_or_none()
+    if assignment is None:
+        return None
+    for field, value in params.items():
+        if value is not None:
+            if field == "retake_policy" and isinstance(value, RetakePolicy):
+                setattr(assignment, field, value.value)
+            else:
+                setattr(assignment, field, value)
+    session.flush()
+    return get(key, session=session)
+
+
+def delete(
+    key: AssignmentID,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> bool:
+    stmt = sql_delete(assignments).where(assignments.assignment_id == key)
+    result = session.execute(stmt)
+    return bool(result.rowcount)  # pyright: ignore [reportAttributeAccessIssue, reportUnknownArgumentType]
+
+
 class AssignmentCreateParams(t.TypedDict, total=False):
     organization_id: t.Required[OrganizationID]
     objective_id: t.Required[ObjectiveID]
     assigned_by: t.Required[UserID]
     assigned_to: t.Required[UserID]
+    available_from: datetime.datetime | None
+    available_until: datetime.datetime | None
+    max_attempts: int
+    retake_policy: RetakePolicy
+    retake_delay_hours: int | None
+
+
+class AssignmentUpdateParams(t.TypedDict, total=False):
     available_from: datetime.datetime | None
     available_until: datetime.datetime | None
     max_attempts: int

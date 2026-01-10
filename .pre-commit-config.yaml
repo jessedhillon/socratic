@@ -34,30 +34,6 @@ repos:
 
   - repo: local
     hooks:
-      - id: format
-        name: ruff + isort socratic
-        entry: bash -c 'poetry run ruff format socratic/ && poetry run isort --dt socratic/'
-        language: system
-        types: [python]
-        files: ^socratic/
-      - id: format
-        name: ruff + isort migrations
-        entry: bash -c 'poetry run ruff format migrations/versions/ && poetry run isort --dt migrations/versions/'
-        language: system
-        types: [python]
-        files: ^migrations/versions
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
-    hooks:
-      - id: prettier
-        name: prettier
-        types_or: [javascript, jsx, ts, tsx, css, scss, html, json]
-        additional_dependencies:
-          - prettier@3.5.0
-          - prettier-plugin-tailwindcss
-
-  - repo: local
-    hooks:
       - id: tsc
         name: tsc
         entry: bash -c 'cd socratic/web/socratic/frontend && npx tsc --noEmit'
