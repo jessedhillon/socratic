@@ -61,21 +61,16 @@ def app(container: SocraticContainer) -> FastAPI:
     """Create the FastAPI application for testing.
 
     Uses the booted container to create the app with proper wiring.
-    Overrides JWT manager with test credentials since test env has no secrets file.
+    Overrides JWT secrets and config since test env has no secrets file.
     """
-    import pydantic as p
-
-    from socratic.auth.jwt import JWTManager
     from socratic.core.config.web import SocraticWebSettings
     from socratic.web.socratic.main import _create_app  # pyright: ignore[reportPrivateUsage]
 
-    # Override JWT manager with test secret
-    test_jwt_manager = JWTManager(
-        secret_key=p.Secret(TEST_JWT_SECRET),
-        algorithm="HS256",
-        access_token_expire_minutes=30,
-    )
-    container.auth().jwt_manager.override(test_jwt_manager)
+    # Override JWT secret and config for testing
+    # Use dict for nested override since secrets.auth may be None in test env
+    container.secrets.override({"auth": {"jwt": p.Secret(TEST_JWT_SECRET)}})
+    container.config.web.socratic.auth.jwt_algorithm.override("HS256")
+    container.config.web.socratic.auth.access_token_expire_minutes.override(30)
 
     container.wire(
         modules=[
@@ -83,6 +78,7 @@ def app(container: SocraticContainer) -> FastAPI:
             "socratic.web.socratic.route.auth",
             "socratic.web.socratic.route.organization",
             "socratic.auth.middleware",
+            "socratic.auth.jwt",
         ]
     )
 
@@ -270,10 +266,18 @@ def test_user(
     )
 
 
-@pytest.fixture
-def jwt_manager(app: FastAPI, container: SocraticContainer) -> t.Any:
-    """Provide the JWT manager for creating test tokens.
+class JWTConfig(t.NamedTuple):
+    """JWT configuration for tests."""
 
-    Depends on app fixture to ensure JWT manager override is in place.
+    secret_key: str
+    algorithm: str
+
+
+@pytest.fixture
+def jwt_manager(app: FastAPI) -> JWTConfig:
+    """Provide JWT configuration for creating test tokens.
+
+    Depends on app fixture to ensure JWT config overrides are in place.
+    Returns an object with secret_key and algorithm for test token creation.
     """
-    return container.auth().jwt_manager()
+    return JWTConfig(secret_key=TEST_JWT_SECRET, algorithm="HS256")

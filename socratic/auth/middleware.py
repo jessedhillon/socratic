@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typing as t
 
+import pydantic as p
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -11,8 +12,9 @@ from sqlalchemy.orm import Session
 from socratic.core import di
 from socratic.model import OrganizationID, User
 
+from . import jwt as jwt_auth
 from . import local as local_auth
-from .jwt import JWTManager, TokenData
+from .jwt import TokenData
 
 # Security scheme for JWT bearer tokens
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -27,18 +29,11 @@ class AuthContext(t.NamedTuple):
     token_data: TokenData
 
 
-@di.inject
-def get_jwt_manager(
-    jwt_manager: JWTManager = Depends(di.Provide["auth.jwt_manager"]),
-) -> JWTManager:
-    """Get JWT manager from DI container."""
-    return jwt_manager
-
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    jwt_manager: JWTManager = Depends(get_jwt_manager),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
+    secret: p.Secret[str] = Depends(di.Provide["secrets.auth.jwt"]),
+    algorithm: str = Depends(di.Provide["config.web.socratic.auth.jwt_algorithm"]),
 ) -> AuthContext:
     """Dependency to get the current authenticated user.
 
@@ -53,7 +48,7 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token_data = jwt_manager.decode_token(credentials.credentials)
+    token_data = jwt_auth.decode_token(credentials.credentials, secret=secret, algorithm=algorithm)
     if token_data is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -79,8 +74,9 @@ async def get_current_user(
 
 async def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    jwt_manager: JWTManager = Depends(get_jwt_manager),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
+    secret: p.Secret[str] = Depends(di.Provide["secrets.auth.jwt"]),
+    algorithm: str = Depends(di.Provide["config.web.socratic.auth.jwt_algorithm"]),
 ) -> AuthContext | None:
     """Dependency to optionally get the current user.
 
@@ -89,7 +85,7 @@ async def get_optional_user(
     if credentials is None:
         return None
 
-    token_data = jwt_manager.decode_token(credentials.credentials)
+    token_data = jwt_auth.decode_token(credentials.credentials, secret=secret, algorithm=algorithm)
     if token_data is None:
         return None
 

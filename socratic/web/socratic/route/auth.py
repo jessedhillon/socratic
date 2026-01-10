@@ -5,12 +5,12 @@ from __future__ import annotations
 import datetime
 
 import jwt as pyjwt
+import pydantic as p
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from socratic.auth import AuthContext, get_current_user, JWTManager
+from socratic.auth import AuthContext, get_current_user, jwt
 from socratic.auth import local as local_auth
-from socratic.auth.middleware import get_jwt_manager
 from socratic.core import di
 from socratic.model import OrganizationID
 from socratic.storage import organization as org_storage
@@ -25,8 +25,8 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @di.inject
 def login(
     request: LoginRequest,
-    jwt_manager: JWTManager = Depends(get_jwt_manager),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
+    expire_minutes: int = Depends(di.Provide["config.web.socratic.auth.access_token_expire_minutes"]),
 ) -> LoginResponse:
     """Authenticate a user and return access token."""
     with session.begin():
@@ -51,10 +51,10 @@ def login(
         membership = memberships[0]
 
     # Create access token
-    expires_delta = datetime.timedelta(minutes=jwt_manager.access_token_expire_minutes)
+    expires_delta = datetime.timedelta(minutes=expire_minutes)
     expires_at = datetime.datetime.now(datetime.UTC) + expires_delta
 
-    access_token = jwt_manager.create_access_token(
+    access_token = jwt.create_access_token(
         user_id=result.user.user_id,
         organization_id=membership.organization_id,
         role=membership.role.value,
@@ -80,16 +80,18 @@ def login(
 @di.inject
 def register(
     request: RegisterRequest,
-    jwt_manager: JWTManager = Depends(get_jwt_manager),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
+    secret: p.Secret[str] = Depends(di.Provide["secrets.auth.jwt"]),
+    algorithm: str = Depends(di.Provide["config.web.socratic.auth.jwt_algorithm"]),
+    expire_minutes: int = Depends(di.Provide["config.web.socratic.auth.access_token_expire_minutes"]),
 ) -> LoginResponse:
     """Register a new user with an invite token."""
     # Decode and validate invite token
     try:
         payload = pyjwt.decode(
             request.invite_token,
-            jwt_manager.secret_key,
-            algorithms=[jwt_manager.algorithm],
+            secret.get_secret_value(),
+            algorithms=[algorithm],
         )
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(
@@ -145,10 +147,10 @@ def register(
             )
 
     # Create access token
-    expires_delta = datetime.timedelta(minutes=jwt_manager.access_token_expire_minutes)
+    expires_delta = datetime.timedelta(minutes=expire_minutes)
     expires_at = datetime.datetime.now(datetime.UTC) + expires_delta
 
-    access_token = jwt_manager.create_access_token(
+    access_token = jwt.create_access_token(
         user_id=result.user.user_id,
         organization_id=organization_id,
         role=role,

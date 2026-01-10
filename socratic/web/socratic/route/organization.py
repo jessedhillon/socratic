@@ -5,11 +5,11 @@ from __future__ import annotations
 import datetime
 
 import jwt as pyjwt
+import pydantic as p
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from socratic.auth import AuthContext, get_current_user, JWTManager, require_educator
-from socratic.auth.middleware import get_jwt_manager
+from socratic.auth import AuthContext, get_current_user, require_educator
 from socratic.core import di
 from socratic.model import OrganizationID, UserRole
 from socratic.storage import organization as org_storage
@@ -26,7 +26,6 @@ router = APIRouter(prefix="/api/organizations", tags=["organizations"])
 def create_organization(
     request: OrganizationCreateRequest,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-    jwt_manager: JWTManager = Depends(get_jwt_manager),
 ) -> OrganizationResponse:
     """Create a new organization with an initial admin user.
 
@@ -152,7 +151,8 @@ def invite_user(
     request: InviteRequest,
     auth: AuthContext = Depends(require_educator),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-    jwt_manager: JWTManager = Depends(get_jwt_manager),
+    secret: p.Secret[str] = Depends(di.Provide["secrets.auth.jwt"]),
+    algorithm: str = Depends(di.Provide["config.web.socratic.auth.jwt_algorithm"]),
 ) -> InviteResponse:
     """Generate an invite token for a new user.
 
@@ -190,7 +190,7 @@ def invite_user(
         "inviter": str(auth.user.user_id),
         "exp": int(expires_at.timestamp()),
     }
-    invite_token = pyjwt.encode(invite_payload, jwt_manager.secret_key, algorithm=jwt_manager.algorithm)
+    invite_token = pyjwt.encode(invite_payload, secret.get_secret_value(), algorithm=algorithm)
 
     return InviteResponse(
         invite_token=invite_token,
