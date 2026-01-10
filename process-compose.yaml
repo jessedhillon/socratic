@@ -7,7 +7,8 @@ processes:
     readiness_probe:
       exec:
         command: 'pg_isready -h ${XDG_STATE_HOME} -p5432'
-      period_seconds: 5
+      initial_delay_seconds: 2
+      period_seconds: 30
     environment:
       - PGDATA=${PGDATA}
       - PGHOST=${PGHOST}
@@ -52,7 +53,8 @@ processes:
         host: 127.0.0.1
         port: 8089
         path: /openapi.json
-      period_seconds: 5
+      period_seconds: 30
+      initial_delay_seconds: 4
     shutdown:
       signal: 15 # TERM
       timeout_seconds: 10
@@ -67,7 +69,8 @@ processes:
         host: 127.0.0.1
         port: 8089
         path: /openapi.json
-      period_seconds: 5
+      period_seconds: 30
+      initial_delay_seconds: 4
     shutdown:
       signal: 15 # TERM
       timeout_seconds: 10
@@ -75,12 +78,18 @@ processes:
   socratic-vite:
     command: 'npm run dev --prefix socratic/web/socratic/frontend -- --host 127.0.0.1 --port 9099'
     working_dir: .
+    environment:
+      - 'VITE_API_URL=http://127.0.0.1:8089'
+    depends_on:
+      socratic-dev:
+        condition: process_healthy
     readiness_probe:
       http_get:
         host: 127.0.0.1
         port: 9099
         path: /static
-      period_seconds: 5
+      period_seconds: 30
+      initial_delay_seconds: 2
     shutdown:
       signal: 15 # TERM
       timeout_seconds: 10
