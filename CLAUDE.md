@@ -424,6 +424,126 @@ socratic-cli schema upgrade
 socratic-cli schema downgrade -1
 ```
 
+## Testing
+
+### Running Tests
+
+```bash
+# Ensure PostgreSQL is running and test database exists
+pg_isready
+createdb socratic_test 2>/dev/null || true
+socratic-cli -E test schema upgrade
+
+# Run all tests
+poetry run pytest
+
+# Run specific test file
+poetry run pytest tests/test_organization_api.py -v
+```
+
+### Test Database
+
+Tests use a separate `socratic_test` database configured in `config/env.d/test/storage.yaml`. The test environment uses `DeploymentEnvironment.Test` which loads file-based secrets (no AWS).
+
+### Transaction Rollback Pattern
+
+API integration tests use transaction rollback for isolation. Each test runs within a transaction that is rolled back after the test completes, ensuring:
+
+- Tests don't pollute the database
+- Tests are isolated from each other
+- No manual cleanup required
+
+**How it works:**
+
+1. `db_session` fixture creates a connection with an outer transaction
+2. Session uses `join_transaction_mode="create_savepoint"` so `session.begin()` creates savepoints instead of failing
+3. `client` fixture overrides the DI container's session provider
+4. After test completion, the outer transaction is rolled back
+
+```python
+# tests/conftest.py pattern
+@pytest.fixture
+def db_session(container: SocraticContainer) -> t.Generator[Session]:
+    engine = container.storage().persistent().engine()
+    connection = engine.connect()
+    transaction = connection.begin()
+
+    session = Session(
+        bind=connection,
+        autobegin=False,
+        join_transaction_mode="create_savepoint",
+    )
+
+    yield session
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+```
+
+### Factory Fixtures
+
+Use factory fixtures to create test data with sensible defaults:
+
+```python
+@pytest.fixture
+def org_factory(db_session: Session) -> t.Callable[..., Organization]:
+    def create_organization(
+        name: str = "Test Organization",
+        slug: str | None = None,
+    ) -> Organization:
+        # Generate unique slug if not provided
+        org_id = OrganizationID()
+        if slug is None:
+            slug = f"test-org-{org_id.key[:8]}"
+
+        with db_session.begin():
+            org = organizations(organization_id=org_id, name=name, slug=slug)
+            db_session.add(org)
+            db_session.flush()
+
+            stmt = select(organizations.__table__).where(...)
+            row = db_session.execute(stmt).mappings().one()
+            return Organization(**row)
+
+    return create_organization
+
+# Usage in tests
+def test_something(org_factory):
+    org = org_factory(name="My Org", slug="my-org")
+```
+
+### Writing API Tests
+
+```python
+class TestGetOrganizationBySlug:
+    def test_returns_organization_for_valid_slug(
+        self,
+        client: TestClient,
+        test_org: Organization,
+    ) -> None:
+        response = client.get(f"/api/organizations/by-slug/{test_org.slug}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["organization_id"] == str(test_org.organization_id)
+
+    def test_returns_404_for_nonexistent_slug(
+        self,
+        client: TestClient,
+    ) -> None:
+        response = client.get("/api/organizations/by-slug/nonexistent")
+
+        assert response.status_code == 404
+```
+
+**Conventions:**
+
+- Group related tests in classes named `Test{Endpoint}`
+- Use descriptive test names: `test_{expected_behavior}_for_{condition}`
+- Use `test_org` fixture for simple cases, `org_factory` for multiple entities
+- Assert both status codes and response body content
+
 ## Secrets Management
 
 ### Vault File Structure

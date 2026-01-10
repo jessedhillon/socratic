@@ -66,7 +66,8 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "--strict-markers -svx --pdbcls=jdbpp:Pdb"
 filterwarnings = [
-  "ignore:.*type_params.*ForwardRef._evaluate.*:DeprecationWarning:pydantic\\.v1\\.typing"
+  "ignore:.*type_params.*ForwardRef._evaluate.*:DeprecationWarning:pydantic\\.v1\\.typing",
+  "ignore::DeprecationWarning:httplib2\\.auth",
 ]
 
 [tool.pyright]

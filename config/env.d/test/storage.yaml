@@ -1,0 +1,4 @@
+persistent:
+  postgresql:
+    database: socratic_test
+    port: 5432
