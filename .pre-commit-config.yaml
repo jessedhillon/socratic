@@ -58,6 +58,15 @@ repos:
 
   - repo: local
     hooks:
+      - id: tsc
+        name: tsc
+        entry: bash -c 'cd socratic/web/socratic/frontend && npx tsc --noEmit'
+        language: system
+        files: ^socratic/web/socratic/frontend/.*\.tsx?$
+        pass_filenames: false
+
+  - repo: local
+    hooks:
       - id: pytest
         name: pytest
         entry: poetry run pytest
