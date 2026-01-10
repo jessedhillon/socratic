@@ -3,6 +3,7 @@ default_language_version:
 
 default_install_hook_types:
   - pre-commit
+  - pre-push
   - commit-msg
 
 repos:
@@ -54,3 +55,13 @@ repos:
         additional_dependencies:
           - prettier@3.5.0
           - prettier-plugin-tailwindcss
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: poetry run pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
