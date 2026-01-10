@@ -5,16 +5,18 @@ from __future__ import annotations
 import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator, require_learner
 from socratic.core import di
-from socratic.model import AttemptStatus, UserID, UserRole
+from socratic.model import AssignmentID, AttemptStatus, UserID, UserRole
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
 from socratic.storage import objective as obj_storage
 from socratic.storage import strand as strand_storage
 from socratic.storage import user as user_storage
+from socratic.storage.table import organization_memberships, users
 
 from ..view.assignment import AssignmentWithAttemptsResponse, AttemptResponse, LearnerAssignmentSummary, \
     LearnerDashboardResponse, LearnerListResponse, LearnerResponse
@@ -34,10 +36,6 @@ def list_learners(
     """
     with session.begin():
         # Get all users in the organization with learner role
-        from sqlalchemy import select
-
-        from socratic.storage.table import organization_memberships, users
-
         stmt = (
             select(users)
             .join(organization_memberships, users.user_id == organization_memberships.user_id)
@@ -256,8 +254,6 @@ def get_my_assignment(
     session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AssignmentWithAttemptsResponse:
     """Get details of a specific assignment for the current learner."""
-    from socratic.model import AssignmentID
-
     with session.begin():
         aid = AssignmentID(assignment_id)
         assignment = assignment_storage.get(aid, session=session)
