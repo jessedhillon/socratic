@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { setLoginContext } from '../api';
 
 interface Organization {
   organization_id: string;
@@ -20,6 +21,8 @@ const LoginPage: React.FC = () => {
     role: string;
   }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,11 +94,16 @@ const LoginPage: React.FC = () => {
 
       const data = await response.json();
 
-      // Store token
+      // Store token and login context
       localStorage.setItem('access_token', data.token.access_token);
+      if (orgSlug && role) {
+        setLoginContext(orgSlug, role);
+      }
 
-      // Redirect based on role
-      if (data.user.role === 'educator') {
+      // Redirect to original destination or default based on role
+      if (redirectTo) {
+        navigate(redirectTo);
+      } else if (data.user.role === 'educator') {
         navigate('/reviews');
       } else {
         navigate('/');

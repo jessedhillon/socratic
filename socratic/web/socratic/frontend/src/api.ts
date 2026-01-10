@@ -24,6 +24,27 @@ export function clearAuthToken(): void {
 }
 
 /**
+ * Store the last login context (org slug and role) for redirects.
+ */
+export function setLoginContext(orgSlug: string, role: string): void {
+  localStorage.setItem('login_org', orgSlug);
+  localStorage.setItem('login_role', role);
+}
+
+/**
+ * Get the login URL with optional redirect parameter.
+ */
+export function getLoginUrl(redirectTo?: string): string {
+  const orgSlug = localStorage.getItem('login_org') || 'default';
+  const role = localStorage.getItem('login_role') || 'learner';
+  const base = `/${orgSlug}/${role}`;
+  if (redirectTo) {
+    return `${base}?redirect=${encodeURIComponent(redirectTo)}`;
+  }
+  return base;
+}
+
+/**
  * Make an authenticated fetch request.
  * Automatically includes the Authorization header if a token exists.
  */

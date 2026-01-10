@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { apiFetch } from '../api';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { apiFetch, getLoginUrl } from '../api';
 import ReviewList from '../components/ReviewList';
 import TranscriptViewer from '../components/TranscriptViewer';
 import EvidencePanel from '../components/EvidencePanel';
@@ -79,6 +79,7 @@ const gradeColors: Record<string, string> = {
 const ReviewPage: React.FC = () => {
   const { attemptId } = useParams<{ attemptId?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [reviews, setReviews] = useState<ReviewSummary[]>([]);
   const [selectedReview, setSelectedReview] = useState<ReviewDetail | null>(
@@ -114,7 +115,7 @@ const ReviewPage: React.FC = () => {
       const response = await apiFetch('/api/reviews');
       if (!response.ok) {
         if (response.status === 401) {
-          setError('Please log in as an educator');
+          navigate(getLoginUrl(location.pathname));
           return;
         }
         throw new Error('Failed to fetch reviews');
@@ -219,9 +220,6 @@ const ReviewPage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
-          <a href="/login" className="text-blue-600 hover:underline">
-            Go to Login
-          </a>
         </div>
       </div>
     );
