@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import typing as t
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -90,17 +92,15 @@ def create_objective(
     """
     # Create the objective
     obj = obj_storage.create(
-        {
-            "organization_id": auth.organization_id,
-            "created_by": auth.user.user_id,
-            "title": request.title,
-            "description": request.description,
-            "scope_boundaries": request.scope_boundaries,
-            "time_expectation_minutes": request.time_expectation_minutes,
-            "initial_prompts": request.initial_prompts,
-            "challenge_prompts": request.challenge_prompts,
-            "extension_policy": request.extension_policy,
-        },
+        organization_id=auth.organization_id,
+        created_by=auth.user.user_id,
+        title=request.title,
+        description=request.description,
+        scope_boundaries=request.scope_boundaries,
+        time_expectation_minutes=request.time_expectation_minutes,
+        initial_prompts=request.initial_prompts,
+        challenge_prompts=request.challenge_prompts,
+        extension_policy=request.extension_policy,
         session=session,
     )
 
@@ -217,26 +217,26 @@ def update_objective(
             detail="Cannot update objectives from other organizations",
         )
 
-    # Build update params from request
-    update_params: obj_storage.ObjectiveUpdateParams = {}
+    # Build update kwargs from request (only include fields that are set)
+    update_kwargs: dict[str, t.Any] = {}
     if request.title is not None:
-        update_params["title"] = request.title
+        update_kwargs["title"] = request.title
     if request.description is not None:
-        update_params["description"] = request.description
+        update_kwargs["description"] = request.description
     if request.scope_boundaries is not None:
-        update_params["scope_boundaries"] = request.scope_boundaries
+        update_kwargs["scope_boundaries"] = request.scope_boundaries
     if request.time_expectation_minutes is not None:
-        update_params["time_expectation_minutes"] = request.time_expectation_minutes
+        update_kwargs["time_expectation_minutes"] = request.time_expectation_minutes
     if request.initial_prompts is not None:
-        update_params["initial_prompts"] = request.initial_prompts
+        update_kwargs["initial_prompts"] = request.initial_prompts
     if request.challenge_prompts is not None:
-        update_params["challenge_prompts"] = request.challenge_prompts
+        update_kwargs["challenge_prompts"] = request.challenge_prompts
     if request.extension_policy is not None:
-        update_params["extension_policy"] = request.extension_policy
+        update_kwargs["extension_policy"] = request.extension_policy
     if request.status is not None:
-        update_params["status"] = request.status
+        update_kwargs["status"] = request.status
 
-    obj_storage.update(objective_id, update_params, session=session)
+    obj_storage.update(objective_id, **update_kwargs, session=session)
     session.commit()
 
     return _build_objective_response(objective_id, session)
@@ -267,11 +267,7 @@ def archive_objective(
             detail="Cannot archive objectives from other organizations",
         )
 
-    obj_storage.update(
-        objective_id,
-        {"status": ObjectiveStatus.Archived},
-        session=session,
-    )
+    obj_storage.update(objective_id, status=ObjectiveStatus.Archived, session=session)
     session.commit()
 
     return _build_objective_response(objective_id, session)

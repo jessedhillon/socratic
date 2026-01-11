@@ -2,17 +2,23 @@ from __future__ import annotations
 
 import typing as t
 
-from sqlalchemy import select
+import sqlalchemy as sqla
 
 from socratic.core import di
+from socratic.lib import NotSet
 from socratic.model import ExtensionPolicy, Objective, ObjectiveID, ObjectiveStatus, OrganizationID, UserID
 
 from . import Session
 from .table import objectives
 
 
-def get(key: ObjectiveID, session: Session = di.Provide["storage.persistent.session"]) -> Objective | None:
-    stmt = select(objectives.__table__).where(objectives.objective_id == key)
+def get(
+    objective_id: ObjectiveID,
+    *,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> Objective | None:
+    """Get an objective by ID."""
+    stmt = sqla.select(objectives.__table__).where(objectives.objective_id == objective_id)
     row = session.execute(stmt).mappings().one_or_none()
     return Objective(**row) if row else None
 
@@ -24,7 +30,8 @@ def find(
     status: ObjectiveStatus | None = None,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> tuple[Objective, ...]:
-    stmt = select(objectives.__table__)
+    """Find objectives matching criteria."""
+    stmt = sqla.select(objectives.__table__)
     if organization_id is not None:
         stmt = stmt.where(objectives.organization_id == organization_id)
     if created_by is not None:
@@ -35,63 +42,91 @@ def find(
     return tuple(Objective(**row) for row in rows)
 
 
-def create(params: ObjectiveCreateParams, session: Session = di.Provide["storage.persistent.session"]) -> Objective:
-    obj = objectives(
-        objective_id=ObjectiveID(),
-        organization_id=params["organization_id"],
-        created_by=params["created_by"],
-        title=params["title"],
-        description=params["description"],
-        scope_boundaries=params.get("scope_boundaries"),
-        time_expectation_minutes=params.get("time_expectation_minutes"),
-        initial_prompts=params.get("initial_prompts", []),
-        challenge_prompts=params.get("challenge_prompts", []),
-        extension_policy=params.get("extension_policy", ExtensionPolicy.Disallowed).value,
-        status=params.get("status", ObjectiveStatus.Draft).value,
+def create(
+    *,
+    organization_id: OrganizationID,
+    created_by: UserID,
+    title: str,
+    description: str,
+    scope_boundaries: str | None = None,
+    time_expectation_minutes: int | None = None,
+    initial_prompts: list[str] | None = None,
+    challenge_prompts: list[str] | None = None,
+    extension_policy: ExtensionPolicy = ExtensionPolicy.Disallowed,
+    status: ObjectiveStatus = ObjectiveStatus.Draft,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> Objective:
+    """Create a new objective."""
+    objective_id = ObjectiveID()
+    stmt = sqla.insert(objectives).values(
+        objective_id=objective_id,
+        organization_id=organization_id,
+        created_by=created_by,
+        title=title,
+        description=description,
+        scope_boundaries=scope_boundaries,
+        time_expectation_minutes=time_expectation_minutes,
+        initial_prompts=initial_prompts if initial_prompts is not None else [],
+        challenge_prompts=challenge_prompts if challenge_prompts is not None else [],
+        extension_policy=extension_policy.value,
+        status=status.value,
     )
-    session.add(obj)
+    session.execute(stmt)
     session.flush()
-    return get(obj.objective_id, session=session)  # type: ignore
+    obj = get(objective_id, session=session)
+    assert obj is not None
+    return obj
 
 
 def update(
-    key: ObjectiveID,
-    params: ObjectiveUpdateParams,
+    objective_id: ObjectiveID,
+    *,
+    title: str | NotSet = NotSet(),
+    description: str | NotSet = NotSet(),
+    scope_boundaries: str | None | NotSet = NotSet(),
+    time_expectation_minutes: int | None | NotSet = NotSet(),
+    initial_prompts: list[str] | NotSet = NotSet(),
+    challenge_prompts: list[str] | NotSet = NotSet(),
+    extension_policy: ExtensionPolicy | NotSet = NotSet(),
+    status: ObjectiveStatus | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
-) -> Objective | None:
-    stmt = select(objectives).where(objectives.objective_id == key)
-    obj = session.execute(stmt).scalar_one_or_none()
-    if obj is None:
-        return None
-    for field, value in params.items():
-        if value is not None:
-            actual_value: t.Any = value
-            if field in ("extension_policy", "status") and hasattr(value, "value"):
-                actual_value = value.value  # type: ignore[union-attr]
-            setattr(obj, field, actual_value)
+) -> Objective:
+    """Update an objective.
+
+    Uses NotSet sentinel for parameters where None may be a valid value.
+
+    Raises:
+        KeyError: If objective_id does not correspond to an objective
+    """
+    values: dict[str, t.Any] = {}
+    if not isinstance(title, NotSet):
+        values["title"] = title
+    if not isinstance(description, NotSet):
+        values["description"] = description
+    if not isinstance(scope_boundaries, NotSet):
+        values["scope_boundaries"] = scope_boundaries
+    if not isinstance(time_expectation_minutes, NotSet):
+        values["time_expectation_minutes"] = time_expectation_minutes
+    if not isinstance(initial_prompts, NotSet):
+        values["initial_prompts"] = initial_prompts
+    if not isinstance(challenge_prompts, NotSet):
+        values["challenge_prompts"] = challenge_prompts
+    if not isinstance(extension_policy, NotSet):
+        values["extension_policy"] = extension_policy.value
+    if not isinstance(status, NotSet):
+        values["status"] = status.value
+
+    if values:
+        stmt = sqla.update(objectives).where(objectives.objective_id == objective_id).values(**values)
+    else:
+        # No-op update to verify objective exists
+        stmt = sqla.update(objectives).where(objectives.objective_id == objective_id).values(objective_id=objective_id)
+
+    result = session.execute(stmt)
+    if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue]
+        raise KeyError(f"Objective {objective_id} not found")
+
     session.flush()
-    return get(key, session=session)
-
-
-class ObjectiveCreateParams(t.TypedDict, total=False):
-    organization_id: t.Required[OrganizationID]
-    created_by: t.Required[UserID]
-    title: t.Required[str]
-    description: t.Required[str]
-    scope_boundaries: str | None
-    time_expectation_minutes: int | None
-    initial_prompts: list[str]
-    challenge_prompts: list[str]
-    extension_policy: ExtensionPolicy
-    status: ObjectiveStatus
-
-
-class ObjectiveUpdateParams(t.TypedDict, total=False):
-    title: str
-    description: str
-    scope_boundaries: str | None
-    time_expectation_minutes: int | None
-    initial_prompts: list[str]
-    challenge_prompts: list[str]
-    extension_policy: ExtensionPolicy
-    status: ObjectiveStatus
+    obj = get(objective_id, session=session)
+    assert obj is not None
+    return obj
