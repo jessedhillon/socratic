@@ -155,15 +155,16 @@ def create(
         bcrypt.gensalt(),
     ).decode("utf-8")
 
-    user = users(
-        user_id=UserID(),
+    user_id = UserID()
+    stmt = sqla.insert(users).values(
+        user_id=user_id,
         email=email,
         name=name,
         password_hash=password_hash,
     )
-    session.add(user)
+    session.execute(stmt)
     session.flush()
-    return get(user_id=user.user_id, session=session)  # type: ignore[return-value]
+    return get(user_id=user_id, session=session)  # type: ignore[return-value]
 
 
 @t.overload
@@ -267,12 +268,12 @@ def update(
     # Handle membership additions
     if add_memberships:
         for membership in add_memberships:
-            m = organization_memberships(
+            membership_stmt = sqla.insert(organization_memberships).values(
                 user_id=user_id,
                 organization_id=membership.organization_id,
                 role=membership.role.value,
             )
-            session.add(m)
+            session.execute(membership_stmt)
 
     # Handle membership removals
     if remove_memberships:

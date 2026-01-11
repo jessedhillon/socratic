@@ -57,8 +57,9 @@ def create(
     session: Session = di.Provide["storage.persistent.session"],
 ) -> Objective:
     """Create a new objective."""
-    obj = objectives(
-        objective_id=ObjectiveID(),
+    objective_id = ObjectiveID()
+    stmt = sqla.insert(objectives).values(
+        objective_id=objective_id,
         organization_id=organization_id,
         created_by=created_by,
         title=title,
@@ -70,9 +71,9 @@ def create(
         extension_policy=extension_policy.value,
         status=status.value,
     )
-    session.add(obj)
+    session.execute(stmt)
     session.flush()
-    return get(obj.objective_id, session=session)  # type: ignore[return-value]
+    return get(objective_id, session=session)  # type: ignore[return-value]
 
 
 def update(

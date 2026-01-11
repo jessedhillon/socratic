@@ -67,14 +67,15 @@ def create(
     session: Session = di.Provide["storage.persistent.session"],
 ) -> Organization:
     """Create a new organization."""
-    org = organizations(
-        organization_id=OrganizationID(),
+    organization_id = OrganizationID()
+    stmt = sqla.insert(organizations).values(
+        organization_id=organization_id,
         name=name,
         slug=slug,
     )
-    session.add(org)
+    session.execute(stmt)
     session.flush()
-    return get(organization_id=org.organization_id, session=session)  # type: ignore[return-value]
+    return get(organization_id=organization_id, session=session)  # type: ignore[return-value]
 
 
 def update(
