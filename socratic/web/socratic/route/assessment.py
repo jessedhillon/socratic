@@ -24,7 +24,6 @@ from socratic.storage import evaluation as eval_storage
 from socratic.storage import objective as obj_storage
 from socratic.storage import rubric as rubric_storage
 from socratic.storage import transcript as transcript_storage
-from socratic.storage.attempt import AttemptCreateParams, AttemptUpdateParams
 from socratic.storage.transcript import TranscriptSegmentCreateParams
 
 from ..view.assessment import AssessmentStatusResponse, CompleteAssessmentOkResponse, CompleteAssessmentRequest, \
@@ -107,12 +106,12 @@ async def start_assessment_route(
     ]
 
     # Create new attempt record
-    create_params: AttemptCreateParams = {
-        "assignment_id": aid,
-        "learner_id": auth.user.user_id,
-        "status": AttemptStatus.InProgress,
-    }
-    attempt = attempt_storage.create(create_params, session=session)
+    attempt = attempt_storage.create(
+        assignment_id=aid,
+        learner_id=auth.user.user_id,
+        status=AttemptStatus.InProgress,
+        session=session,
+    )
     session.commit()
 
     attempt_id = attempt.attempt_id
@@ -312,11 +311,12 @@ def complete_assessment_route(
 
     # Update attempt status to completed
     now = datetime.datetime.now(datetime.UTC)
-    update_params: AttemptUpdateParams = {
-        "status": AttemptStatus.Completed,
-        "completed_at": now,
-    }
-    attempt_storage.update(aid, update_params, session=session)
+    attempt_storage.update(
+        aid,
+        status=AttemptStatus.Completed,
+        completed_at=now,
+        session=session,
+    )
     session.commit()
 
     return CompleteAssessmentOkResponse(

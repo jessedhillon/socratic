@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator
 from socratic.core import di
-from socratic.model import FailureMode, GradeThreshold, ObjectiveID, ObjectiveStatus
+from socratic.model import ObjectiveID, ObjectiveStatus
 from socratic.storage import objective as obj_storage
 from socratic.storage import rubric as rubric_storage
+from socratic.storage.rubric import FailureModeCreateParams, GradeThresholdCreateParams
 
 from ..view.objective import FailureModeResponse, GradeThresholdResponse, ObjectiveCreateRequest, \
     ObjectiveListResponse, ObjectiveResponse, ObjectiveUpdateRequest, RubricCriterionCreateRequest, \
@@ -107,29 +108,27 @@ def create_objective(
     # Create rubric criteria if provided
     for criterion_req in request.rubric_criteria:
         rubric_storage.create(
-            {
-                "objective_id": obj.objective_id,
-                "name": criterion_req.name,
-                "description": criterion_req.description,
-                "evidence_indicators": criterion_req.evidence_indicators,
-                "failure_modes": [
-                    FailureMode(
-                        name=fm.name,
-                        description=fm.description,
-                        indicators=fm.indicators,
-                    )
-                    for fm in criterion_req.failure_modes
-                ],
-                "grade_thresholds": [
-                    GradeThreshold(
-                        grade=gt.grade,
-                        description=gt.description,
-                        min_evidence_count=gt.min_evidence_count,
-                    )
-                    for gt in criterion_req.grade_thresholds
-                ],
-                "weight": criterion_req.weight,
-            },
+            objective_id=obj.objective_id,
+            name=criterion_req.name,
+            description=criterion_req.description,
+            evidence_indicators=criterion_req.evidence_indicators,
+            failure_modes=[
+                FailureModeCreateParams(
+                    name=fm.name,
+                    description=fm.description,
+                    indicators=fm.indicators,
+                )
+                for fm in criterion_req.failure_modes
+            ],
+            grade_thresholds=[
+                GradeThresholdCreateParams(
+                    grade=gt.grade,
+                    description=gt.description,
+                    min_evidence_count=gt.min_evidence_count,
+                )
+                for gt in criterion_req.grade_thresholds
+            ],
+            weight=criterion_req.weight,
             session=session,
         )
 
@@ -304,29 +303,27 @@ def add_rubric_criterion(
         )
 
     criterion = rubric_storage.create(
-        {
-            "objective_id": objective_id,
-            "name": request.name,
-            "description": request.description,
-            "evidence_indicators": request.evidence_indicators,
-            "failure_modes": [
-                FailureMode(
-                    name=fm.name,
-                    description=fm.description,
-                    indicators=fm.indicators,
-                )
-                for fm in request.failure_modes
-            ],
-            "grade_thresholds": [
-                GradeThreshold(
-                    grade=gt.grade,
-                    description=gt.description,
-                    min_evidence_count=gt.min_evidence_count,
-                )
-                for gt in request.grade_thresholds
-            ],
-            "weight": request.weight,
-        },
+        objective_id=objective_id,
+        name=request.name,
+        description=request.description,
+        evidence_indicators=request.evidence_indicators,
+        failure_modes=[
+            FailureModeCreateParams(
+                name=fm.name,
+                description=fm.description,
+                indicators=fm.indicators,
+            )
+            for fm in request.failure_modes
+        ],
+        grade_thresholds=[
+            GradeThresholdCreateParams(
+                grade=gt.grade,
+                description=gt.description,
+                min_evidence_count=gt.min_evidence_count,
+            )
+            for gt in request.grade_thresholds
+        ],
+        weight=request.weight,
         session=session,
     )
 

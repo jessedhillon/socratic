@@ -3,18 +3,23 @@ from __future__ import annotations
 import datetime
 import typing as t
 
-from sqlalchemy import delete as sql_delete
-from sqlalchemy import select
+import sqlalchemy as sqla
 
 from socratic.core import di
+from socratic.lib import NotSet
 from socratic.model import Assignment, AssignmentID, ObjectiveID, OrganizationID, RetakePolicy, UserID
 
 from . import Session
 from .table import assignments
 
 
-def get(key: AssignmentID, session: Session = di.Provide["storage.persistent.session"]) -> Assignment | None:
-    stmt = select(assignments.__table__).where(assignments.assignment_id == key)
+def get(
+    assignment_id: AssignmentID,
+    *,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> Assignment | None:
+    """Get an assignment by ID."""
+    stmt = sqla.select(assignments.__table__).where(assignments.assignment_id == assignment_id)
     row = session.execute(stmt).mappings().one_or_none()
     return Assignment(**row) if row else None
 
@@ -27,7 +32,8 @@ def find(
     assigned_to: UserID | None = None,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> tuple[Assignment, ...]:
-    stmt = select(assignments.__table__)
+    """Find assignments matching criteria."""
+    stmt = sqla.select(assignments.__table__)
     if organization_id is not None:
         stmt = stmt.where(assignments.organization_id == organization_id)
     if objective_id is not None:
@@ -40,67 +46,99 @@ def find(
     return tuple(Assignment(**row) for row in rows)
 
 
-def create(params: AssignmentCreateParams, session: Session = di.Provide["storage.persistent.session"]) -> Assignment:
-    assignment = assignments(
-        assignment_id=AssignmentID(),
-        organization_id=params["organization_id"],
-        objective_id=params["objective_id"],
-        assigned_by=params["assigned_by"],
-        assigned_to=params["assigned_to"],
-        available_from=params.get("available_from"),
-        available_until=params.get("available_until"),
-        max_attempts=params.get("max_attempts", 1),
-        retake_policy=params.get("retake_policy", RetakePolicy.None_).value,
-        retake_delay_hours=params.get("retake_delay_hours"),
+def create(
+    *,
+    organization_id: OrganizationID,
+    objective_id: ObjectiveID,
+    assigned_by: UserID,
+    assigned_to: UserID,
+    available_from: datetime.datetime | None = None,
+    available_until: datetime.datetime | None = None,
+    max_attempts: int = 1,
+    retake_policy: RetakePolicy = RetakePolicy.None_,
+    retake_delay_hours: int | None = None,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> Assignment:
+    """Create a new assignment."""
+    assignment_id = AssignmentID()
+    stmt = sqla.insert(assignments).values(
+        assignment_id=assignment_id,
+        organization_id=organization_id,
+        objective_id=objective_id,
+        assigned_by=assigned_by,
+        assigned_to=assigned_to,
+        available_from=available_from,
+        available_until=available_until,
+        max_attempts=max_attempts,
+        retake_policy=retake_policy.value,
+        retake_delay_hours=retake_delay_hours,
     )
-    session.add(assignment)
+    session.execute(stmt)
     session.flush()
-    return get(assignment.assignment_id, session=session)  # type: ignore
+    result = get(assignment_id, session=session)
+    assert result is not None
+    return result
 
 
 def update(
-    key: AssignmentID,
-    params: AssignmentUpdateParams,
+    assignment_id: AssignmentID,
+    *,
+    available_from: datetime.datetime | None | NotSet = NotSet(),
+    available_until: datetime.datetime | None | NotSet = NotSet(),
+    max_attempts: int | NotSet = NotSet(),
+    retake_policy: RetakePolicy | NotSet = NotSet(),
+    retake_delay_hours: int | None | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
-) -> Assignment | None:
-    stmt = select(assignments).where(assignments.assignment_id == key)
-    assignment = session.execute(stmt).scalar_one_or_none()
-    if assignment is None:
-        return None
-    for field, value in params.items():
-        if value is not None:
-            if field == "retake_policy" and isinstance(value, RetakePolicy):
-                setattr(assignment, field, value.value)
-            else:
-                setattr(assignment, field, value)
+) -> Assignment:
+    """Update an assignment.
+
+    Uses NotSet sentinel for parameters where None may be a valid value.
+
+    Raises:
+        KeyError: If assignment_id does not correspond to an assignment
+    """
+    values: dict[str, t.Any] = {}
+    if not isinstance(available_from, NotSet):
+        values["available_from"] = available_from
+    if not isinstance(available_until, NotSet):
+        values["available_until"] = available_until
+    if not isinstance(max_attempts, NotSet):
+        values["max_attempts"] = max_attempts
+    if not isinstance(retake_policy, NotSet):
+        values["retake_policy"] = retake_policy.value
+    if not isinstance(retake_delay_hours, NotSet):
+        values["retake_delay_hours"] = retake_delay_hours
+
+    if values:
+        stmt = sqla.update(assignments).where(assignments.assignment_id == assignment_id).values(**values)
+    else:
+        # No-op update to verify assignment exists
+        stmt = (
+            sqla.update(assignments)
+            .where(assignments.assignment_id == assignment_id)
+            .values(assignment_id=assignment_id)
+        )
+
+    result = session.execute(stmt)
+    if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue]
+        raise KeyError(f"Assignment {assignment_id} not found")
+
     session.flush()
-    return get(key, session=session)
+    assignment = get(assignment_id, session=session)
+    assert assignment is not None
+    return assignment
 
 
 def delete(
-    key: AssignmentID,
+    assignment_id: AssignmentID,
+    *,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> bool:
-    stmt = sql_delete(assignments).where(assignments.assignment_id == key)
+    """Delete an assignment.
+
+    Returns:
+        True if an assignment was deleted, False if not found
+    """
+    stmt = sqla.delete(assignments).where(assignments.assignment_id == assignment_id)
     result = session.execute(stmt)
-    return bool(result.rowcount)  # pyright: ignore [reportAttributeAccessIssue, reportUnknownArgumentType]
-
-
-class AssignmentCreateParams(t.TypedDict, total=False):
-    organization_id: t.Required[OrganizationID]
-    objective_id: t.Required[ObjectiveID]
-    assigned_by: t.Required[UserID]
-    assigned_to: t.Required[UserID]
-    available_from: datetime.datetime | None
-    available_until: datetime.datetime | None
-    max_attempts: int
-    retake_policy: RetakePolicy
-    retake_delay_hours: int | None
-
-
-class AssignmentUpdateParams(t.TypedDict, total=False):
-    available_from: datetime.datetime | None
-    available_until: datetime.datetime | None
-    max_attempts: int
-    retake_policy: RetakePolicy
-    retake_delay_hours: int | None
+    return bool(result.rowcount)  # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue]
