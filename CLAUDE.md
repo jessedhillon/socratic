@@ -719,6 +719,20 @@ refactor(api): ...  # 'refactor' not allowed, use 'revise'
 Add feature         # missing type
 ```
 
+## Linear Issue Convention
+
+Issue titles should be lowercase, except for proper nouns or technical terms. Use backticks for technical names:
+
+```
+# Good
+refactor `storage.objective` to new patterns
+consider making `update()` return `None`
+fix authentication bug in `LoginForm`
+
+# Bad
+Refactor storage.objective to New Patterns  # unnecessary caps, missing backticks
+```
+
 ## Debugging
 
 ### Python Debugger
