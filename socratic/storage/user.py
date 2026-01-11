@@ -164,7 +164,9 @@ def create(
     )
     session.execute(stmt)
     session.flush()
-    return get(user_id=user_id, session=session)  # type: ignore[return-value]
+    user = get(user_id, session=session)
+    assert user is not None
+    return user
 
 
 @t.overload
@@ -292,4 +294,6 @@ def update(
     if with_memberships is None:
         with_memberships = bool(add_memberships or remove_memberships)
 
-    return get(user_id=user_id, with_memberships=with_memberships, session=session)  # type: ignore[return-value]
+    user = get(user_id, with_memberships=with_memberships, session=session)
+    assert user is not None
+    return user

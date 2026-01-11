@@ -75,7 +75,9 @@ def create(
     )
     session.execute(stmt)
     session.flush()
-    return get(organization_id=organization_id, session=session)  # type: ignore[return-value]
+    org = get(organization_id, session=session)
+    assert org is not None
+    return org
 
 
 def update(
@@ -113,4 +115,6 @@ def update(
         raise KeyError(f"Organization {organization_id} not found")
 
     session.flush()
-    return get(organization_id=organization_id, session=session)  # type: ignore[return-value]
+    org = get(organization_id, session=session)
+    assert org is not None
+    return org

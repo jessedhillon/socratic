@@ -73,7 +73,9 @@ def create(
     )
     session.execute(stmt)
     session.flush()
-    return get(objective_id, session=session)  # type: ignore[return-value]
+    obj = get(objective_id, session=session)
+    assert obj is not None
+    return obj
 
 
 def update(
@@ -125,4 +127,6 @@ def update(
         raise KeyError(f"Objective {objective_id} not found")
 
     session.flush()
-    return get(objective_id, session=session)  # type: ignore[return-value]
+    obj = get(objective_id, session=session)
+    assert obj is not None
+    return obj
