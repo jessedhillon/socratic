@@ -879,6 +879,7 @@ export type ListObjectivesData = {
   path?: never;
   query?: {
     status_filter?: ObjectiveStatus | null;
+    include_archived?: boolean;
   };
   url: '/api/objectives';
 };
