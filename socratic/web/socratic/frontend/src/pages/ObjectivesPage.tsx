@@ -127,7 +127,11 @@ const ObjectivesPage: React.FC = () => {
             >
               <div className="flex justify-between items-start mb-2">
                 <h3 className="text-lg font-semibold text-gray-800">
-                  {objective.title}
+                  {objective.title || (
+                    <span className="text-gray-400 italic font-normal">
+                      Untitled Objective
+                    </span>
+                  )}
                 </h3>
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-medium ${

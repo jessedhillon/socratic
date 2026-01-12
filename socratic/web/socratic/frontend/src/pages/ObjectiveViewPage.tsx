@@ -87,15 +87,10 @@ const ObjectiveViewPage: React.FC = () => {
         const currentState = objective || defaultObjective;
         const merged = { ...currentState, ...updates };
 
-        // Require at least a title to create
-        if (!merged.title?.trim()) {
-          return;
-        }
-
         setIsSaving(true);
         try {
           const createRequest: ObjectiveCreateRequest = {
-            title: merged.title,
+            title: merged.title || '',
             description: merged.description || '',
             scope_boundaries: merged.scope_boundaries || undefined,
             time_expectation_minutes:
