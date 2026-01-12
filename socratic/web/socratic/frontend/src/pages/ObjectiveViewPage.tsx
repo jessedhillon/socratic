@@ -263,6 +263,7 @@ const ObjectiveViewPage: React.FC = () => {
             value={objective.title}
             onChange={(value) => setObjective({ ...objective, title: value })}
             onSave={() => saveField({ title: objective.title })}
+            placeholder="Click to edit title..."
             className="flex-1 mr-4"
             textClassName="text-3xl font-bold text-gray-900"
           />
@@ -285,6 +286,7 @@ const ObjectiveViewPage: React.FC = () => {
             setObjective({ ...objective, description: value })
           }
           onSave={() => saveField({ description: objective.description })}
+          placeholder="Click to edit description..."
           multiline
           rows={4}
           textClassName="text-lg text-gray-700 leading-relaxed"

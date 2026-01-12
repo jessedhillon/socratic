@@ -85,7 +85,7 @@ const EditableText = forwardRef<EditableTextHandle, EditableTextProps>(
 
     const displayClasses = `
     ${baseClasses}
-    cursor-text
+    cursor-pointer
     ${textClassName}
   `;
 
