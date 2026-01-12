@@ -43,8 +43,8 @@ const EditableSelect: React.FC<EditableSelectProps> = ({
 
   const baseClasses = `
     rounded px-2 py-1 -mx-2 -my-1
-    border-b-2 transition-all duration-150
-    ${isEditing ? 'border-blue-500 bg-blue-50/50' : isHovered ? 'border-dotted border-gray-400' : 'border-transparent'}
+    transition-all duration-150
+    ${isEditing ? 'bg-blue-50/50' : ''}
   `;
 
   // Edit icon (pencil)
