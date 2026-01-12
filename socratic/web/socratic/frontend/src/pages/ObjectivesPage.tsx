@@ -210,7 +210,7 @@ const ObjectivesPage: React.FC = () => {
                 </span>
                 <button
                   onClick={(e) => handleArchive(e, objective.objective_id)}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:bg-gray-200 transition-all duration-150 text-gray-500"
+                  className="flex items-center gap-1 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-amber-100 transition-all duration-150 text-amber-700"
                   title="Archive objective"
                 >
                   <svg
