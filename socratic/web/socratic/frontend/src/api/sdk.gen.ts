@@ -341,6 +341,7 @@ export const inviteUser = <ThrowOnError extends boolean = false>(
  * List objectives for the educator's organization.
  *
  * Only educators can list objectives.
+ * Archived objectives are excluded by default unless include_archived=True.
  */
 export const listObjectives = <ThrowOnError extends boolean = false>(
   options?: Options<ListObjectivesData, ThrowOnError>
