@@ -76,10 +76,11 @@ def update(
     confidence_score: decimal.Decimal | None | NotSet = NotSet(),
     audio_url: str | None | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
-) -> AssessmentAttempt:
+) -> None:
     """Update an attempt.
 
     Uses NotSet sentinel for parameters where None may be a valid value.
+    Call get() after if you need the updated entity.
 
     Raises:
         KeyError: If attempt_id does not correspond to an attempt
@@ -103,7 +104,8 @@ def update(
     else:
         # No-op update to verify attempt exists
         stmt = (
-            sqla.update(assessment_attempts)
+            sqla
+            .update(assessment_attempts)
             .where(assessment_attempts.attempt_id == attempt_id)
             .values(attempt_id=attempt_id)
         )
@@ -113,9 +115,6 @@ def update(
         raise KeyError(f"Attempt {attempt_id} not found")
 
     session.flush()
-    attempt = get(attempt_id, session=session)
-    assert attempt is not None
-    return attempt
 
 
 def transition_to_evaluated(
@@ -139,13 +138,17 @@ def transition_to_evaluated(
         msg = f"Cannot evaluate attempt with status {attempt.status.value}"
         raise ValueError(msg)
 
-    return update(
+    update(
         attempt_id,
         status=AttemptStatus.Evaluated,
         grade=grade,
         confidence_score=confidence_score,
         session=session,
     )
+
+    result = get(attempt_id, session=session)
+    assert result is not None
+    return result
 
 
 def transition_to_reviewed(
@@ -169,15 +172,19 @@ def transition_to_reviewed(
         raise ValueError(msg)
 
     if grade_override is not None:
-        return update(
+        update(
             attempt_id,
             status=AttemptStatus.Reviewed,
             grade=grade_override,
             session=session,
         )
     else:
-        return update(
+        update(
             attempt_id,
             status=AttemptStatus.Reviewed,
             session=session,
         )
+
+    result = get(attempt_id, session=session)
+    assert result is not None
+    return result

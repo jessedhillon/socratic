@@ -197,8 +197,11 @@ class TestUpdate(object):
         obj = objective_factory(title="Old Title")
 
         with db_session.begin():
-            updated = obj_storage.update(obj.objective_id, title="New Title", session=db_session)
+            obj_storage.update(obj.objective_id, title="New Title", session=db_session)
 
+            updated = obj_storage.get(obj.objective_id, session=db_session)
+
+        assert updated is not None
         assert updated.title == "New Title"
         assert updated.description == obj.description  # unchanged
 
@@ -211,8 +214,11 @@ class TestUpdate(object):
         obj = objective_factory(description="Old description")
 
         with db_session.begin():
-            updated = obj_storage.update(obj.objective_id, description="New description", session=db_session)
+            obj_storage.update(obj.objective_id, description="New description", session=db_session)
 
+            updated = obj_storage.get(obj.objective_id, session=db_session)
+
+        assert updated is not None
         assert updated.description == "New description"
 
     def test_update_status(
@@ -224,8 +230,11 @@ class TestUpdate(object):
         obj = objective_factory(status=ObjectiveStatus.Draft)
 
         with db_session.begin():
-            updated = obj_storage.update(obj.objective_id, status=ObjectiveStatus.Published, session=db_session)
+            obj_storage.update(obj.objective_id, status=ObjectiveStatus.Published, session=db_session)
 
+            updated = obj_storage.get(obj.objective_id, session=db_session)
+
+        assert updated is not None
         assert updated.status == ObjectiveStatus.Published
 
     def test_update_nullable_field_to_none(
@@ -237,8 +246,11 @@ class TestUpdate(object):
         obj = objective_factory(scope_boundaries="Some boundaries")
 
         with db_session.begin():
-            updated = obj_storage.update(obj.objective_id, scope_boundaries=None, session=db_session)
+            obj_storage.update(obj.objective_id, scope_boundaries=None, session=db_session)
 
+            updated = obj_storage.get(obj.objective_id, session=db_session)
+
+        assert updated is not None
         assert updated.scope_boundaries is None
 
     def test_update_multiple_fields(
@@ -250,7 +262,7 @@ class TestUpdate(object):
         obj = objective_factory(title="Old", description="Old desc")
 
         with db_session.begin():
-            updated = obj_storage.update(
+            obj_storage.update(
                 obj.objective_id,
                 title="New",
                 description="New desc",
@@ -258,6 +270,9 @@ class TestUpdate(object):
                 session=db_session,
             )
 
+            updated = obj_storage.get(obj.objective_id, session=db_session)
+
+        assert updated is not None
         assert updated.title == "New"
         assert updated.description == "New desc"
         assert updated.status == ObjectiveStatus.Published

@@ -299,17 +299,16 @@ def user_reset_password(
             raise SystemExit(1)
 
         try:
-            updated_user = user_storage.update(
+            user_storage.update(
                 found_user.user_id,
                 password=p.Secret(password),
-                with_memberships=False,
                 session=session,
             )
         except KeyError as e:
             click.echo("Error: Failed to update password.", err=True)
             raise SystemExit(1) from e
 
-    click.echo(f"Password reset for {updated_user.name} ({updated_user.email})")
+    click.echo(f"Password reset for {found_user.name} ({found_user.email})")
     if generated_password:
         click.echo(f"  New password: {generated_password}")
 

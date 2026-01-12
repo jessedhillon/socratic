@@ -70,8 +70,10 @@ def update(
     name: str | NotSet = NotSet(),
     description: str | None | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
-) -> Strand:
+) -> None:
     """Update a strand.
+
+    Call get() after if you need the updated entity.
 
     Raises:
         KeyError: If strand_id not found
@@ -87,10 +89,6 @@ def update(
     if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue]
         raise KeyError(strand_id)
     session.flush()
-
-    updated = get(strand_id, session=session)
-    assert updated is not None
-    return updated
 
 
 def get_objectives_in_strand(

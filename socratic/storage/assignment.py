@@ -89,10 +89,11 @@ def update(
     retake_policy: RetakePolicy | NotSet = NotSet(),
     retake_delay_hours: int | None | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
-) -> Assignment:
+) -> None:
     """Update an assignment.
 
     Uses NotSet sentinel for parameters where None may be a valid value.
+    Call get() after if you need the updated entity.
 
     Raises:
         KeyError: If assignment_id does not correspond to an assignment
@@ -114,7 +115,8 @@ def update(
     else:
         # No-op update to verify assignment exists
         stmt = (
-            sqla.update(assignments)
+            sqla
+            .update(assignments)
             .where(assignments.assignment_id == assignment_id)
             .values(assignment_id=assignment_id)
         )
@@ -124,9 +126,6 @@ def update(
         raise KeyError(f"Assignment {assignment_id} not found")
 
     session.flush()
-    assignment = get(assignment_id, session=session)
-    assert assignment is not None
-    return assignment
 
 
 def delete(
