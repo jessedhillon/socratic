@@ -22,22 +22,25 @@ const statusColors: Record<string, string> = {
   archived: 'bg-gray-100 text-gray-600',
 };
 
-const extensionPolicyLabels: Record<string, string> = {
-  disallowed: 'Stay within scope',
-  allowed: 'May explore beyond scope',
-  conditional: 'Extend if learner demonstrates mastery',
-};
+const extensionPolicyOptions = [
+  {
+    value: 'allowed',
+    label: 'Yes, students may explore beyond the scope',
+  },
+  {
+    value: 'conditional',
+    label: 'Only once they demonstrate mastery within the scope',
+  },
+  {
+    value: 'disallowed',
+    label: 'No, students must remain within this scope',
+  },
+];
 
 const statusOptions = [
   { value: 'draft', label: 'Draft' },
   { value: 'published', label: 'Published' },
   { value: 'archived', label: 'Archived' },
-];
-
-const extensionPolicyOptions = [
-  { value: 'disallowed', label: 'Disallowed' },
-  { value: 'allowed', label: 'Allowed' },
-  { value: 'conditional', label: 'Conditional' },
 ];
 
 // Default values for a new objective
@@ -376,35 +379,53 @@ const ObjectiveViewPage: React.FC = () => {
           rows={3}
           textClassName="text-gray-700 leading-relaxed"
         />
-      </section>
 
-      {/* Extension Policy */}
-      <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-3">
-          Extension Policy
-        </h2>
-        <div className="flex items-center gap-3">
-          <EditableSelect
-            value={objective.extension_policy}
-            options={extensionPolicyOptions}
-            onChange={(value) => {
-              setObjective({
-                ...objective,
-                extension_policy: value as ExtensionPolicy,
-              });
-              saveField({ extension_policy: value as ExtensionPolicy });
-            }}
-            className={`px-3 py-1 rounded-full text-sm font-medium ${
-              objective.extension_policy === 'disallowed'
-                ? 'bg-red-100 text-red-800'
-                : objective.extension_policy === 'allowed'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-yellow-100 text-yellow-800'
-            }`}
-          />
-          <span className="text-gray-600">
-            {extensionPolicyLabels[objective.extension_policy]}
-          </span>
+        {/* Scope Extension */}
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Scope extension
+          </h3>
+          <p className="text-gray-600 mb-4">
+            Are students allowed to explore and discuss elements of the topic
+            which are outside of these boundaries?
+          </p>
+          <div className="space-y-1">
+            {extensionPolicyOptions.map((option) => (
+              <label
+                key={option.value}
+                className={`flex items-center gap-3 px-3 py-2 -mx-3 rounded-lg cursor-pointer transition-colors duration-150 ${
+                  objective.extension_policy === option.value
+                    ? 'bg-blue-50'
+                    : 'hover:bg-gray-900/[0.04]'
+                }`}
+              >
+                <span
+                  className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-150 ${
+                    objective.extension_policy === option.value
+                      ? 'border-blue-600'
+                      : 'border-gray-400'
+                  }`}
+                >
+                  {objective.extension_policy === option.value && (
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                  )}
+                </span>
+                <input
+                  type="radio"
+                  name="extension_policy"
+                  value={option.value}
+                  checked={objective.extension_policy === option.value}
+                  onChange={(e) => {
+                    const value = e.target.value as ExtensionPolicy;
+                    setObjective({ ...objective, extension_policy: value });
+                    saveField({ extension_policy: value });
+                  }}
+                  className="sr-only"
+                />
+                <span className="text-gray-700">{option.label}</span>
+              </label>
+            ))}
+          </div>
         </div>
       </section>
 
