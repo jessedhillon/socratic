@@ -6,6 +6,7 @@ import AssignmentsPage from './pages/AssignmentsPage';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
 import ObjectivesPage from './pages/ObjectivesPage';
+import ObjectiveViewPage from './pages/ObjectiveViewPage';
 import ReviewPage from './pages/ReviewPage';
 
 const App: React.FC = () => {
@@ -28,6 +29,10 @@ const App: React.FC = () => {
           <Route path="/reviews" element={<ReviewPage />} />
           <Route path="/reviews/:attemptId" element={<ReviewPage />} />
           <Route path="/objectives" element={<ObjectivesPage />} />
+          <Route
+            path="/objectives/:objectiveId"
+            element={<ObjectiveViewPage />}
+          />
           <Route path="/assignments" element={<AssignmentsPage />} />
         </Route>
       </Routes>
