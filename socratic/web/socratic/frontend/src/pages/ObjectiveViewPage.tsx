@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   getObjective,
@@ -9,7 +9,9 @@ import {
   type ObjectiveStatus,
 } from '../api';
 import { getLoginUrl } from '../auth';
-import EditableText from '../components/EditableText';
+import EditableText, {
+  type EditableTextHandle,
+} from '../components/EditableText';
 import EditableSelect from '../components/EditableSelect';
 
 const statusColors: Record<string, string> = {
@@ -48,6 +50,11 @@ const ObjectiveViewPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const initialPromptRefs = useRef<Map<number, EditableTextHandle>>(new Map());
+  const challengePromptRefs = useRef<Map<number, EditableTextHandle>>(
+    new Map()
+  );
+
   const saveField = useCallback(
     async (updates: ObjectiveUpdateRequest) => {
       if (!objectiveId || isSaving) return;
@@ -72,6 +79,42 @@ const ObjectiveViewPage: React.FC = () => {
     },
     [objectiveId, isSaving]
   );
+
+  const handleAddInitialPrompt = useCallback(() => {
+    if (!objective) return;
+    const prompts = objective.initial_prompts || [];
+    // Find first empty prompt
+    const emptyIndex = prompts.findIndex((p) => p.trim() === '');
+    if (emptyIndex >= 0) {
+      // Focus the empty prompt
+      initialPromptRefs.current.get(emptyIndex)?.focus();
+    } else {
+      // Add new prompt and focus it after render
+      const newPrompts = [...prompts, ''];
+      setObjective({ ...objective, initial_prompts: newPrompts });
+      setTimeout(() => {
+        initialPromptRefs.current.get(newPrompts.length - 1)?.focus();
+      }, 0);
+    }
+  }, [objective]);
+
+  const handleAddChallengePrompt = useCallback(() => {
+    if (!objective) return;
+    const prompts = objective.challenge_prompts || [];
+    // Find first empty prompt
+    const emptyIndex = prompts.findIndex((p) => p.trim() === '');
+    if (emptyIndex >= 0) {
+      // Focus the empty prompt
+      challengePromptRefs.current.get(emptyIndex)?.focus();
+    } else {
+      // Add new prompt and focus it after render
+      const newPrompts = [...prompts, ''];
+      setObjective({ ...objective, challenge_prompts: newPrompts });
+      setTimeout(() => {
+        challengePromptRefs.current.get(newPrompts.length - 1)?.focus();
+      }, 0);
+    }
+  }, [objective]);
 
   useEffect(() => {
     if (objectiveId) {
@@ -319,6 +362,13 @@ const ObjectiveViewPage: React.FC = () => {
                 {index + 1}
               </span>
               <EditableText
+                ref={(el) => {
+                  if (el) {
+                    initialPromptRefs.current.set(index, el);
+                  } else {
+                    initialPromptRefs.current.delete(index);
+                  }
+                }}
                 value={prompt}
                 onChange={(value) => {
                   const newPrompts = [...(objective.initial_prompts || [])];
@@ -335,10 +385,7 @@ const ObjectiveViewPage: React.FC = () => {
           ))}
         </ul>
         <button
-          onClick={() => {
-            const newPrompts = [...(objective.initial_prompts || []), ''];
-            setObjective({ ...objective, initial_prompts: newPrompts });
-          }}
+          onClick={handleAddInitialPrompt}
           className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
         >
           <svg
@@ -376,6 +423,13 @@ const ObjectiveViewPage: React.FC = () => {
                 {index + 1}
               </span>
               <EditableText
+                ref={(el) => {
+                  if (el) {
+                    challengePromptRefs.current.set(index, el);
+                  } else {
+                    challengePromptRefs.current.delete(index);
+                  }
+                }}
                 value={prompt}
                 onChange={(value) => {
                   const newPrompts = [...(objective.challenge_prompts || [])];
@@ -392,10 +446,7 @@ const ObjectiveViewPage: React.FC = () => {
           ))}
         </ul>
         <button
-          onClick={() => {
-            const newPrompts = [...(objective.challenge_prompts || []), ''];
-            setObjective({ ...objective, challenge_prompts: newPrompts });
-          }}
+          onClick={handleAddChallengePrompt}
           className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
         >
           <svg
