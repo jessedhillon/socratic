@@ -1,7 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { getObjective, type ObjectiveResponse } from '../api';
+import {
+  getObjective,
+  updateObjective,
+  type ObjectiveResponse,
+  type ObjectiveUpdateRequest,
+  type ExtensionPolicy,
+  type ObjectiveStatus,
+} from '../api';
 import { getLoginUrl } from '../auth';
+import EditableText from '../components/EditableText';
+import EditableSelect from '../components/EditableSelect';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800',
@@ -15,6 +24,18 @@ const extensionPolicyLabels: Record<string, string> = {
   conditional: 'Extend if learner demonstrates mastery',
 };
 
+const statusOptions = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'published', label: 'Published' },
+  { value: 'archived', label: 'Archived' },
+];
+
+const extensionPolicyOptions = [
+  { value: 'disallowed', label: 'Disallowed' },
+  { value: 'allowed', label: 'Allowed' },
+  { value: 'conditional', label: 'Conditional' },
+];
+
 /**
  * Document-style view page for a single objective.
  */
@@ -25,6 +46,32 @@ const ObjectiveViewPage: React.FC = () => {
   const [objective, setObjective] = useState<ObjectiveResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const saveField = useCallback(
+    async (updates: ObjectiveUpdateRequest) => {
+      if (!objectiveId || isSaving) return;
+      setIsSaving(true);
+      try {
+        const { data, response } = await updateObjective({
+          path: { objective_id: objectiveId },
+          body: updates,
+        });
+        if (!response.ok) {
+          console.error('Failed to save:', response.status);
+          return;
+        }
+        if (data) {
+          setObjective(data);
+        }
+      } catch (err) {
+        console.error('Failed to save field:', err);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [objectiveId, isSaving]
+  );
 
   useEffect(() => {
     if (objectiveId) {
@@ -107,21 +154,36 @@ const ObjectiveViewPage: React.FC = () => {
       {/* Document header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-6">
         <div className="flex justify-between items-start mb-4">
-          <h1 className="text-3xl font-bold text-gray-900">
-            {objective.title}
-          </h1>
-          <span
+          <EditableText
+            value={objective.title}
+            onChange={(value) => setObjective({ ...objective, title: value })}
+            onSave={() => saveField({ title: objective.title })}
+            className="flex-1 mr-4"
+            textClassName="text-3xl font-bold text-gray-900"
+          />
+          <EditableSelect
+            value={objective.status}
+            options={statusOptions}
+            onChange={(value) => {
+              setObjective({ ...objective, status: value as ObjectiveStatus });
+              saveField({ status: value as ObjectiveStatus });
+            }}
             className={`px-3 py-1 rounded-full text-sm font-medium ${
               statusColors[objective.status] || 'bg-gray-100'
             }`}
-          >
-            {objective.status}
-          </span>
+          />
         </div>
 
-        <p className="text-lg text-gray-700 leading-relaxed">
-          {objective.description}
-        </p>
+        <EditableText
+          value={objective.description}
+          onChange={(value) =>
+            setObjective({ ...objective, description: value })
+          }
+          onSave={() => saveField({ description: objective.description })}
+          multiline
+          rows={4}
+          textClassName="text-lg text-gray-700 leading-relaxed"
+        />
 
         {/* Metadata */}
         <div className="flex flex-wrap gap-6 mt-6 pt-6 border-t border-gray-200 text-sm text-gray-500">
@@ -190,16 +252,24 @@ const ObjectiveViewPage: React.FC = () => {
       </div>
 
       {/* Scope Boundaries */}
-      {objective.scope_boundaries && (
-        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-3">
-            Scope Boundaries
-          </h2>
-          <p className="text-gray-700 leading-relaxed">
-            {objective.scope_boundaries}
-          </p>
-        </section>
-      )}
+      <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-3">
+          Scope Boundaries
+        </h2>
+        <EditableText
+          value={objective.scope_boundaries || ''}
+          onChange={(value) =>
+            setObjective({ ...objective, scope_boundaries: value })
+          }
+          onSave={() =>
+            saveField({ scope_boundaries: objective.scope_boundaries })
+          }
+          placeholder="Define the boundaries of this objective..."
+          multiline
+          rows={3}
+          textClassName="text-gray-700 leading-relaxed"
+        />
+      </section>
 
       {/* Extension Policy */}
       <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -207,7 +277,16 @@ const ObjectiveViewPage: React.FC = () => {
           Extension Policy
         </h2>
         <div className="flex items-center gap-3">
-          <span
+          <EditableSelect
+            value={objective.extension_policy}
+            options={extensionPolicyOptions}
+            onChange={(value) => {
+              setObjective({
+                ...objective,
+                extension_policy: value as ExtensionPolicy,
+              });
+              saveField({ extension_policy: value as ExtensionPolicy });
+            }}
             className={`px-3 py-1 rounded-full text-sm font-medium ${
               objective.extension_policy === 'disallowed'
                 ? 'bg-red-100 text-red-800'
@@ -215,9 +294,7 @@ const ObjectiveViewPage: React.FC = () => {
                   ? 'bg-green-100 text-green-800'
                   : 'bg-yellow-100 text-yellow-800'
             }`}
-          >
-            {objective.extension_policy}
-          </span>
+          />
           <span className="text-gray-600">
             {extensionPolicyLabels[objective.extension_policy]}
           </span>
@@ -225,55 +302,118 @@ const ObjectiveViewPage: React.FC = () => {
       </section>
 
       {/* Initial Prompts */}
-      {objective.initial_prompts && objective.initial_prompts.length > 0 && (
-        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-3">
-            Initial Prompts
-          </h2>
-          <p className="text-gray-500 text-sm mb-4">
-            Questions to start the assessment conversation
-          </p>
-          <ul className="space-y-3">
-            {objective.initial_prompts.map((prompt, index) => (
-              <li
-                key={index}
-                className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
-              >
-                <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">
-                  {index + 1}
-                </span>
-                <span className="text-gray-700">{prompt}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-3">
+          Initial Prompts
+        </h2>
+        <p className="text-gray-500 text-sm mb-4">
+          Questions to start the assessment conversation
+        </p>
+        <ul className="space-y-3">
+          {(objective.initial_prompts || []).map((prompt, index) => (
+            <li
+              key={index}
+              className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+            >
+              <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">
+                {index + 1}
+              </span>
+              <EditableText
+                value={prompt}
+                onChange={(value) => {
+                  const newPrompts = [...(objective.initial_prompts || [])];
+                  newPrompts[index] = value;
+                  setObjective({ ...objective, initial_prompts: newPrompts });
+                }}
+                onSave={() => {
+                  saveField({ initial_prompts: objective.initial_prompts });
+                }}
+                className="flex-1"
+                textClassName="text-gray-700"
+              />
+            </li>
+          ))}
+        </ul>
+        <button
+          onClick={() => {
+            const newPrompts = [...(objective.initial_prompts || []), ''];
+            setObjective({ ...objective, initial_prompts: newPrompts });
+          }}
+          className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
+          Add prompt
+        </button>
+      </section>
 
       {/* Challenge Prompts */}
-      {objective.challenge_prompts &&
-        objective.challenge_prompts.length > 0 && (
-          <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-3">
-              Challenge Prompts
-            </h2>
-            <p className="text-gray-500 text-sm mb-4">
-              Follow-up questions to probe deeper understanding
-            </p>
-            <ul className="space-y-3">
-              {objective.challenge_prompts.map((prompt, index) => (
-                <li
-                  key={index}
-                  className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
-                >
-                  <span className="flex-shrink-0 w-6 h-6 bg-orange-100 text-orange-700 rounded-full flex items-center justify-center text-sm font-medium">
-                    {index + 1}
-                  </span>
-                  <span className="text-gray-700">{prompt}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+      <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-3">
+          Challenge Prompts
+        </h2>
+        <p className="text-gray-500 text-sm mb-4">
+          Follow-up questions to probe deeper understanding
+        </p>
+        <ul className="space-y-3">
+          {(objective.challenge_prompts || []).map((prompt, index) => (
+            <li
+              key={index}
+              className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+            >
+              <span className="flex-shrink-0 w-6 h-6 bg-orange-100 text-orange-700 rounded-full flex items-center justify-center text-sm font-medium">
+                {index + 1}
+              </span>
+              <EditableText
+                value={prompt}
+                onChange={(value) => {
+                  const newPrompts = [...(objective.challenge_prompts || [])];
+                  newPrompts[index] = value;
+                  setObjective({ ...objective, challenge_prompts: newPrompts });
+                }}
+                onSave={() => {
+                  saveField({ challenge_prompts: objective.challenge_prompts });
+                }}
+                className="flex-1"
+                textClassName="text-gray-700"
+              />
+            </li>
+          ))}
+        </ul>
+        <button
+          onClick={() => {
+            const newPrompts = [...(objective.challenge_prompts || []), ''];
+            setObjective({ ...objective, challenge_prompts: newPrompts });
+          }}
+          className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
+          Add prompt
+        </button>
+      </section>
 
       {/* Rubric Criteria */}
       {objective.rubric_criteria && objective.rubric_criteria.length > 0 && (
