@@ -144,7 +144,8 @@ const ObjectivesPage: React.FC = () => {
           {objectives.map((objective) => (
             <div
               key={objective.objective_id}
-              className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
+              onClick={() => navigate(`/objectives/${objective.objective_id}`)}
+              className="bg-white rounded-lg shadow p-6 hover:bg-gray-900/[0.08] hover:shadow-md transition-all cursor-pointer"
             >
               <div className="flex justify-between items-start mb-2">
                 <h3 className="text-lg font-semibold text-gray-800">
