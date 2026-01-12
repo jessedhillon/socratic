@@ -90,10 +90,11 @@ def update(
     extension_policy: ExtensionPolicy | NotSet = NotSet(),
     status: ObjectiveStatus | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
-) -> Objective:
+) -> None:
     """Update an objective.
 
     Uses NotSet sentinel for parameters where None may be a valid value.
+    Call get() after if you need the updated entity.
 
     Raises:
         KeyError: If objective_id does not correspond to an objective
@@ -127,6 +128,3 @@ def update(
         raise KeyError(f"Objective {objective_id} not found")
 
     session.flush()
-    obj = get(objective_id, session=session)
-    assert obj is not None
-    return obj

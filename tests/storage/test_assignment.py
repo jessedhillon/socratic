@@ -212,8 +212,11 @@ class TestUpdate(object):
         assignment = assignment_factory(max_attempts=1)
 
         with db_session.begin():
-            updated = assignment_storage.update(assignment.assignment_id, max_attempts=5, session=db_session)
+            assignment_storage.update(assignment.assignment_id, max_attempts=5, session=db_session)
 
+            updated = assignment_storage.get(assignment.assignment_id, session=db_session)
+
+        assert updated is not None
         assert updated.max_attempts == 5
 
     def test_update_retake_policy(
@@ -225,10 +228,13 @@ class TestUpdate(object):
         assignment = assignment_factory(retake_policy=RetakePolicy.None_)
 
         with db_session.begin():
-            updated = assignment_storage.update(
+            assignment_storage.update(
                 assignment.assignment_id, retake_policy=RetakePolicy.Immediate, session=db_session
             )
 
+            updated = assignment_storage.get(assignment.assignment_id, session=db_session)
+
+        assert updated is not None
         assert updated.retake_policy == RetakePolicy.Immediate
 
     def test_update_nullable_field_to_none(
@@ -240,8 +246,11 @@ class TestUpdate(object):
         assignment = assignment_factory(retake_delay_hours=24)
 
         with db_session.begin():
-            updated = assignment_storage.update(assignment.assignment_id, retake_delay_hours=None, session=db_session)
+            assignment_storage.update(assignment.assignment_id, retake_delay_hours=None, session=db_session)
 
+            updated = assignment_storage.get(assignment.assignment_id, session=db_session)
+
+        assert updated is not None
         assert updated.retake_delay_hours is None
 
     def test_update_multiple_fields(
@@ -253,7 +262,7 @@ class TestUpdate(object):
         assignment = assignment_factory()
 
         with db_session.begin():
-            updated = assignment_storage.update(
+            assignment_storage.update(
                 assignment.assignment_id,
                 max_attempts=10,
                 retake_policy=RetakePolicy.Delayed,
@@ -261,6 +270,9 @@ class TestUpdate(object):
                 session=db_session,
             )
 
+            updated = assignment_storage.get(assignment.assignment_id, session=db_session)
+
+        assert updated is not None
         assert updated.max_attempts == 10
         assert updated.retake_policy == RetakePolicy.Delayed
         assert updated.retake_delay_hours == 48

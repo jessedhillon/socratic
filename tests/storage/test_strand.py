@@ -146,12 +146,15 @@ class TestUpdate(object):
         strand = strand_factory(name="Original Name")
 
         with db_session.begin():
-            result = strand_storage.update(
+            strand_storage.update(
                 strand.strand_id,
                 name="New Name",
                 session=db_session,
             )
 
+            result = strand_storage.get(strand.strand_id, session=db_session)
+
+        assert result is not None
         assert result.name == "New Name"
 
     def test_update_description(
@@ -163,12 +166,15 @@ class TestUpdate(object):
         strand = strand_factory(description=None)
 
         with db_session.begin():
-            result = strand_storage.update(
+            strand_storage.update(
                 strand.strand_id,
                 description="New description",
                 session=db_session,
             )
 
+            result = strand_storage.get(strand.strand_id, session=db_session)
+
+        assert result is not None
         assert result.description == "New description"
 
     def test_update_description_to_none(
@@ -180,12 +186,15 @@ class TestUpdate(object):
         strand = strand_factory(description="Original")
 
         with db_session.begin():
-            result = strand_storage.update(
+            strand_storage.update(
                 strand.strand_id,
                 description=None,
                 session=db_session,
             )
 
+            result = strand_storage.get(strand.strand_id, session=db_session)
+
+        assert result is not None
         assert result.description is None
 
     def test_update_nonexistent_raises_keyerror(self, db_session: Session) -> None:

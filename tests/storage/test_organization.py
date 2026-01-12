@@ -68,7 +68,7 @@ class TestGet(object):
         """get() raises ValueError if both organization_id and slug provided."""
         with pytest.raises(ValueError, match="Only one of organization_id or slug"):
             org_storage.get(
-                organization_id=OrganizationID(),
+                organization_id=OrganizationID(),  # pyright: ignore[reportArgumentType]
                 slug="test",
                 session=db_session,
             )  # pyright: ignore[reportCallIssue]
@@ -120,8 +120,11 @@ class TestUpdate(object):
         org = org_factory(name="Old Name", slug="old-name")
 
         with db_session.begin():
-            updated = org_storage.update(org.organization_id, name="New Name", session=db_session)
+            org_storage.update(org.organization_id, name="New Name", session=db_session)
 
+            updated = org_storage.get(org.organization_id, session=db_session)
+
+        assert updated is not None
         assert updated.name == "New Name"
         assert updated.slug == "old-name"  # slug unchanged
 
@@ -134,8 +137,11 @@ class TestUpdate(object):
         org = org_factory(name="Test Org", slug="old-slug")
 
         with db_session.begin():
-            updated = org_storage.update(org.organization_id, slug="new-slug", session=db_session)
+            org_storage.update(org.organization_id, slug="new-slug", session=db_session)
 
+            updated = org_storage.get(org.organization_id, session=db_session)
+
+        assert updated is not None
         assert updated.slug == "new-slug"
         assert updated.name == "Test Org"  # name unchanged
 
@@ -148,13 +154,16 @@ class TestUpdate(object):
         org = org_factory(name="Old Name", slug="old-slug")
 
         with db_session.begin():
-            updated = org_storage.update(
+            org_storage.update(
                 org.organization_id,
                 name="New Name",
                 slug="new-slug",
                 session=db_session,
             )
 
+            updated = org_storage.get(org.organization_id, session=db_session)
+
+        assert updated is not None
         assert updated.name == "New Name"
         assert updated.slug == "new-slug"
 

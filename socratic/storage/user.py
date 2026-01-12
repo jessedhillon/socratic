@@ -127,7 +127,8 @@ def find(
     """Find users matching criteria."""
     if organization_id is not None:
         stmt = (
-            sqla.select(users.__table__)
+            sqla
+            .select(users.__table__)
             .join(organization_memberships, users.user_id == organization_memberships.user_id)
             .where(organization_memberships.organization_id == organization_id)
         )
@@ -169,62 +170,6 @@ def create(
     return user
 
 
-@t.overload
-def update(
-    user_id: UserID,
-    *,
-    email: str | NotSet = ...,
-    name: str | NotSet = ...,
-    password: p.Secret[str] | NotSet = ...,
-    add_memberships: set[MembershipCreateParams] | None = ...,
-    remove_memberships: set[MembershipRemoveParams] | None = ...,
-    with_memberships: t.Literal[False],
-    session: Session = ...,
-) -> User: ...
-
-
-@t.overload
-def update(
-    user_id: UserID,
-    *,
-    email: str | NotSet = ...,
-    name: str | NotSet = ...,
-    password: p.Secret[str] | NotSet = ...,
-    add_memberships: set[MembershipCreateParams] | None = ...,
-    remove_memberships: set[MembershipRemoveParams] | None = ...,
-    with_memberships: t.Literal[True] = ...,
-    session: Session = ...,
-) -> UserWithMemberships: ...
-
-
-@t.overload
-def update(
-    user_id: UserID,
-    *,
-    email: str | NotSet = ...,
-    name: str | NotSet = ...,
-    password: p.Secret[str] | NotSet = ...,
-    add_memberships: set[MembershipCreateParams],
-    remove_memberships: set[MembershipRemoveParams] | None = ...,
-    with_memberships: None = ...,
-    session: Session = ...,
-) -> UserWithMemberships: ...
-
-
-@t.overload
-def update(
-    user_id: UserID,
-    *,
-    email: str | NotSet = ...,
-    name: str | NotSet = ...,
-    password: p.Secret[str] | NotSet = ...,
-    add_memberships: set[MembershipCreateParams] | None = ...,
-    remove_memberships: set[MembershipRemoveParams],
-    with_memberships: None = ...,
-    session: Session = ...,
-) -> UserWithMemberships: ...
-
-
 def update(
     user_id: UserID,
     *,
@@ -233,13 +178,13 @@ def update(
     password: p.Secret[str] | NotSet = NotSet(),
     add_memberships: set[MembershipCreateParams] | None = None,
     remove_memberships: set[MembershipRemoveParams] | None = None,
-    with_memberships: bool | None = None,
     session: Session = di.Provide["storage.persistent.session"],
-) -> User | UserWithMemberships:
+) -> None:
     """Update a user.
 
     Uses NotSet sentinel for parameters where None is a valid update value.
     Password is hashed internally using bcrypt.
+    Call get() after if you need the updated entity.
 
     Raises:
         KeyError: If user_id does not correspond to a user
@@ -289,11 +234,3 @@ def update(
             session.execute(delete_stmt)
 
     session.flush()
-
-    # Determine return type - defaults to True if memberships were modified
-    if with_memberships is None:
-        with_memberships = bool(add_memberships or remove_memberships)
-
-    user = get(user_id, with_memberships=with_memberships, session=session)
-    assert user is not None
-    return user

@@ -86,10 +86,11 @@ def update(
     name: str | NotSet = NotSet(),
     slug: str | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
-) -> Organization:
+) -> None:
     """Update an organization.
 
     Uses NotSet sentinel for parameters where None is not a valid value.
+    Call get() after if you need the updated entity.
 
     Raises:
         KeyError: If organization_id does not correspond to an organization
@@ -105,7 +106,8 @@ def update(
     else:
         # No-op update to verify organization exists
         stmt = (
-            sqla.update(organizations)
+            sqla
+            .update(organizations)
             .where(organizations.organization_id == organization_id)
             .values(organization_id=organization_id)
         )
@@ -115,6 +117,3 @@ def update(
         raise KeyError(f"Organization {organization_id} not found")
 
     session.flush()
-    org = get(organization_id, session=session)
-    assert org is not None
-    return org

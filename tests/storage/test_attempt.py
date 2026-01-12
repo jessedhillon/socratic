@@ -180,8 +180,11 @@ class TestUpdate(object):
         attempt = attempt_factory(status=AttemptStatus.NotStarted)
 
         with db_session.begin():
-            updated = attempt_storage.update(attempt.attempt_id, status=AttemptStatus.InProgress, session=db_session)
+            attempt_storage.update(attempt.attempt_id, status=AttemptStatus.InProgress, session=db_session)
 
+            updated = attempt_storage.get(attempt.attempt_id, session=db_session)
+
+        assert updated is not None
         assert updated.status == AttemptStatus.InProgress
 
     def test_update_grade(
@@ -193,8 +196,11 @@ class TestUpdate(object):
         attempt = attempt_factory(status=AttemptStatus.Completed)
 
         with db_session.begin():
-            updated = attempt_storage.update(attempt.attempt_id, grade=Grade.A, session=db_session)
+            attempt_storage.update(attempt.attempt_id, grade=Grade.A, session=db_session)
 
+            updated = attempt_storage.get(attempt.attempt_id, session=db_session)
+
+        assert updated is not None
         assert updated.grade == Grade.A
 
     def test_update_nullable_field_to_none(
@@ -211,8 +217,11 @@ class TestUpdate(object):
 
         # Then set it to None
         with db_session.begin():
-            updated = attempt_storage.update(attempt.attempt_id, grade=None, session=db_session)
+            attempt_storage.update(attempt.attempt_id, grade=None, session=db_session)
 
+            updated = attempt_storage.get(attempt.attempt_id, session=db_session)
+
+        assert updated is not None
         assert updated.grade is None
 
     def test_update_multiple_fields(
@@ -225,7 +234,7 @@ class TestUpdate(object):
         now = datetime.datetime.now(datetime.UTC)
 
         with db_session.begin():
-            updated = attempt_storage.update(
+            attempt_storage.update(
                 attempt.attempt_id,
                 status=AttemptStatus.Completed,
                 completed_at=now,
@@ -234,6 +243,9 @@ class TestUpdate(object):
                 session=db_session,
             )
 
+            updated = attempt_storage.get(attempt.attempt_id, session=db_session)
+
+        assert updated is not None
         assert updated.status == AttemptStatus.Completed
         assert updated.completed_at is not None
         assert updated.grade == Grade.A

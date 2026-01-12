@@ -84,7 +84,7 @@ class TestGet(object):
     def test_get_rejects_both_user_id_and_email(self, db_session: Session) -> None:
         """get() raises ValueError if both user_id and email provided."""
         with pytest.raises(ValueError, match="Only one of user_id or email"):
-            user_storage.get(user_id=UserID(), email="test@example.com", session=db_session)  # pyright: ignore[reportCallIssue]
+            user_storage.get(user_id=UserID(), email="test@example.com", session=db_session)  # pyright: ignore[reportCallIssue, reportArgumentType]
 
 
 class TestCreate(object):
@@ -138,13 +138,15 @@ class TestUpdate(object):
         user = user_factory(email="old@example.com", organization_id=test_org.organization_id)
 
         with db_session.begin():
-            updated = user_storage.update(
+            user_storage.update(
                 user.user_id,
                 email="new@example.com",
-                with_memberships=False,
                 session=db_session,
             )
 
+            updated = user_storage.get(user_id=user.user_id, session=db_session)
+
+        assert updated is not None
         assert updated.email == "new@example.com"
 
     def test_update_password(
@@ -166,7 +168,6 @@ class TestUpdate(object):
             user_storage.update(
                 user.user_id,
                 password=p.Secret("newpassword"),
-                with_memberships=False,
                 session=db_session,
             )
 
@@ -183,7 +184,6 @@ class TestUpdate(object):
                 user_storage.update(
                     UserID(),
                     name="Nobody",
-                    with_memberships=False,
                     session=db_session,
                 )
 
@@ -203,12 +203,15 @@ class TestMembershipAdd(object):
         user = user_factory(email="multi@example.com", organization_id=org1.organization_id)
 
         with db_session.begin():
-            result = user_storage.update(
+            user_storage.update(
                 user.user_id,
                 add_memberships={MembershipCreateParams(organization_id=org2.organization_id, role=UserRole.Learner)},
                 session=db_session,
             )
 
+            result = user_storage.get(user_id=user.user_id, with_memberships=True, session=db_session)
+
+        assert result is not None
         assert len(result.memberships) == 2
         org_ids = {m.organization_id for m in result.memberships}
         assert org1.organization_id in org_ids
@@ -239,12 +242,15 @@ class TestMembershipRemove(object):
 
         # Remove from org1 (role=None means remove all roles)
         with db_session.begin():
-            result = user_storage.update(
+            user_storage.update(
                 user.user_id,
                 remove_memberships={MembershipRemoveParams(organization_id=org1.organization_id)},
                 session=db_session,
             )
 
+            result = user_storage.get(user_id=user.user_id, with_memberships=True, session=db_session)
+
+        assert result is not None
         assert len(result.memberships) == 1
         assert result.memberships[0].organization_id == org2.organization_id
 
@@ -275,7 +281,7 @@ class TestMembershipRemove(object):
 
         # Remove educator role from org1 (matches)
         with db_session.begin():
-            result = user_storage.update(
+            user_storage.update(
                 user.user_id,
                 remove_memberships={
                     MembershipRemoveParams(organization_id=org1.organization_id, role=UserRole.Educator)
@@ -283,7 +289,10 @@ class TestMembershipRemove(object):
                 session=db_session,
             )
 
+            result = user_storage.get(user_id=user.user_id, with_memberships=True, session=db_session)
+
         # Should only have org2 membership
+        assert result is not None
         assert len(result.memberships) == 1
         assert result.memberships[0].organization_id == org2.organization_id
 
@@ -302,7 +311,7 @@ class TestMembershipRemove(object):
 
         # Try to remove learner role (user only has educator)
         with db_session.begin():
-            result = user_storage.update(
+            user_storage.update(
                 user.user_id,
                 remove_memberships={
                     MembershipRemoveParams(organization_id=test_org.organization_id, role=UserRole.Learner)
@@ -310,7 +319,10 @@ class TestMembershipRemove(object):
                 session=db_session,
             )
 
+            result = user_storage.get(user_id=user.user_id, with_memberships=True, session=db_session)
+
         # Should still have educator role
+        assert result is not None
         assert len(result.memberships) == 1
         assert result.memberships[0].role == UserRole.Educator
 
@@ -325,12 +337,15 @@ class TestMembershipRemove(object):
 
         # Try to remove from org user isn't a member of
         with db_session.begin():
-            result = user_storage.update(
+            user_storage.update(
                 user.user_id,
                 remove_memberships={MembershipRemoveParams(organization_id=OrganizationID())},
                 session=db_session,
             )
 
+            result = user_storage.get(user_id=user.user_id, with_memberships=True, session=db_session)
+
         # Should still have original membership
+        assert result is not None
         assert len(result.memberships) == 1
         assert result.memberships[0].organization_id == test_org.organization_id
