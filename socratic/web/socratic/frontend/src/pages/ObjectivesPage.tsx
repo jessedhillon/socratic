@@ -1,13 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  listObjectives,
-  createObjective,
-  type ObjectiveResponse,
-  type ObjectiveCreateRequest,
-} from '../api';
+import { listObjectives, type ObjectiveResponse } from '../api';
 import { getLoginUrl } from '../auth';
-import ObjectiveForm from '../components/ObjectiveForm';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800',
@@ -24,8 +18,6 @@ const ObjectivesPage: React.FC = () => {
   const [objectives, setObjectives] = useState<ObjectiveResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchObjectives();
@@ -47,20 +39,6 @@ const ObjectivesPage: React.FC = () => {
       setError('Failed to load objectives');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCreateObjective = async (data: ObjectiveCreateRequest) => {
-    setIsSubmitting(true);
-    try {
-      const { response } = await createObjective({ body: data });
-      if (!response.ok) {
-        throw new Error('Failed to create objective');
-      }
-      await fetchObjectives();
-      setShowCreateModal(false);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -89,7 +67,7 @@ const ObjectivesPage: React.FC = () => {
           Learning Objectives
         </h1>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => navigate('/objectives/new')}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
         >
           <svg
@@ -133,7 +111,7 @@ const ObjectivesPage: React.FC = () => {
             Create learning objectives to assess your learners.
           </p>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => navigate('/objectives/new')}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Create Your First Objective
@@ -206,47 +184,6 @@ const ObjectivesPage: React.FC = () => {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Create Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-gray-800">
-                  Create Learning Objective
-                </h2>
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                  disabled={isSubmitting}
-                >
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              <ObjectiveForm
-                onSubmit={handleCreateObjective}
-                onCancel={() => setShowCreateModal(false)}
-                isSubmitting={isSubmitting}
-              />
-            </div>
-          </div>
         </div>
       )}
     </div>
