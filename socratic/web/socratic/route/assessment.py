@@ -24,7 +24,6 @@ from socratic.storage import evaluation as eval_storage
 from socratic.storage import objective as obj_storage
 from socratic.storage import rubric as rubric_storage
 from socratic.storage import transcript as transcript_storage
-from socratic.storage.transcript import TranscriptSegmentCreateParams
 
 from ..view.assessment import AssessmentStatusResponse, CompleteAssessmentOkResponse, CompleteAssessmentRequest, \
     SendMessageRequest, TranscriptMessageResponse, TranscriptResponse
@@ -140,13 +139,13 @@ async def start_assessment_route(
 
         # Store transcript segment
         with session:
-            transcript_params: TranscriptSegmentCreateParams = {
-                "attempt_id": attempt_id,
-                "utterance_type": UtteranceType.Interviewer,
-                "content": full_message,
-                "start_time": datetime.datetime.now(datetime.UTC),
-            }
-            transcript_storage.create(transcript_params, session=session)
+            transcript_storage.create(
+                attempt_id=attempt_id,
+                utterance_type=UtteranceType.Interviewer,
+                content=full_message,
+                start_time=datetime.datetime.now(datetime.UTC),
+                session=session,
+            )
 
         # Send completion event with metadata
         yield {
@@ -198,13 +197,13 @@ async def send_message_route(
     checkpointer = PostgresCheckpointer()
 
     # Store learner message in transcript
-    learner_params: TranscriptSegmentCreateParams = {
-        "attempt_id": aid,
-        "utterance_type": UtteranceType.Learner,
-        "content": request.content,
-        "start_time": datetime.datetime.now(datetime.UTC),
-    }
-    transcript_storage.create(learner_params, session=session)
+    transcript_storage.create(
+        attempt_id=aid,
+        utterance_type=UtteranceType.Learner,
+        content=request.content,
+        start_time=datetime.datetime.now(datetime.UTC),
+        session=session,
+    )
     session.commit()
 
     async def event_generator() -> AsyncIterator[dict[str, t.Any]]:
@@ -222,13 +221,13 @@ async def send_message_route(
 
         # Store AI response in transcript
         with session:
-            ai_params: TranscriptSegmentCreateParams = {
-                "attempt_id": aid,
-                "utterance_type": UtteranceType.Interviewer,
-                "content": full_response,
-                "start_time": datetime.datetime.now(datetime.UTC),
-            }
-            transcript_storage.create(ai_params, session=session)
+            transcript_storage.create(
+                attempt_id=aid,
+                utterance_type=UtteranceType.Interviewer,
+                content=full_response,
+                start_time=datetime.datetime.now(datetime.UTC),
+                session=session,
+            )
 
         yield {"event": "done", "data": ""}
 
@@ -451,14 +450,12 @@ async def trigger_evaluation_route(
 
     # Store evaluation result
     eval_storage.create(
-        {
-            "attempt_id": aid,
-            "evidence_mappings": result["evidence_mappings"],
-            "flags": result["flags"],
-            "strengths": result["strengths"],
-            "gaps": result["gaps"],
-            "reasoning_summary": result["reasoning_summary"],
-        },
+        attempt_id=aid,
+        evidence_mappings=result["evidence_mappings"],
+        flags=result["flags"],
+        strengths=result["strengths"],
+        gaps=result["gaps"],
+        reasoning_summary=result["reasoning_summary"],
         session=session,
     )
 

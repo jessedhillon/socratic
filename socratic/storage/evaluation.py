@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from sqlalchemy import select
+import sqlalchemy as sqla
 
 from socratic.core import di
 from socratic.model import AssessmentFlag, AttemptID, EvaluationResult, EvaluationResultID, EvidenceMapping, \
@@ -12,49 +12,42 @@ from . import Session
 from .table import evaluation_results
 
 
+@t.overload
 def get(
-    key: EvaluationResultID, session: Session = di.Provide["storage.persistent.session"]
+    evaluation_id: EvaluationResultID,
+    *,
+    session: Session = ...,
+) -> EvaluationResult | None: ...
+
+
+@t.overload
+def get(
+    evaluation_id: None = None,
+    *,
+    attempt_id: AttemptID,
+    session: Session = ...,
+) -> EvaluationResult | None: ...
+
+
+def get(
+    evaluation_id: EvaluationResultID | None = None,
+    *,
+    attempt_id: AttemptID | None = None,
+    session: Session = di.Provide["storage.persistent.session"],
 ) -> EvaluationResult | None:
-    stmt = select(evaluation_results.__table__).where(evaluation_results.evaluation_id == key)
+    """Get an evaluation result by ID or attempt_id.
+
+    Exactly one lookup key must be provided.
+    """
+    if evaluation_id is not None:
+        stmt = sqla.select(evaluation_results.__table__).where(evaluation_results.evaluation_id == evaluation_id)
+    elif attempt_id is not None:
+        stmt = sqla.select(evaluation_results.__table__).where(evaluation_results.attempt_id == attempt_id)
+    else:
+        raise ValueError("exactly one of evaluation_id or attempt_id must be provided")
+
     row = session.execute(stmt).mappings().one_or_none()
     return EvaluationResult(**row) if row else None
-
-
-def get_by_attempt(
-    attempt_id: AttemptID, session: Session = di.Provide["storage.persistent.session"]
-) -> EvaluationResult | None:
-    stmt = select(evaluation_results.__table__).where(evaluation_results.attempt_id == attempt_id)
-    row = session.execute(stmt).mappings().one_or_none()
-    return EvaluationResult(**row) if row else None
-
-
-def create(
-    params: EvaluationCreateParams, session: Session = di.Provide["storage.persistent.session"]
-) -> EvaluationResult:
-    evidence_mappings_data: list[dict[str, t.Any]] = [m.model_dump() for m in params.get("evidence_mappings", [])]
-    flags_data: list[str] = [f.value for f in params.get("flags", [])]
-
-    evaluation = evaluation_results(
-        evaluation_id=EvaluationResultID(),
-        attempt_id=params["attempt_id"],
-        evidence_mappings=evidence_mappings_data,
-        flags=flags_data,
-        strengths=params.get("strengths", []),
-        gaps=params.get("gaps", []),
-        reasoning_summary=params.get("reasoning_summary"),
-    )
-    session.add(evaluation)
-    session.flush()
-    return get(evaluation.evaluation_id, session=session)  # type: ignore
-
-
-class EvaluationCreateParams(t.TypedDict, total=False):
-    attempt_id: t.Required[AttemptID]
-    evidence_mappings: list[EvidenceMapping]
-    flags: list[AssessmentFlag]
-    strengths: list[str]
-    gaps: list[str]
-    reasoning_summary: str | None
 
 
 def find_pending_review(
@@ -70,7 +63,8 @@ def find_pending_review(
 
     # Join evaluations -> attempts -> assignments to filter by org
     stmt = (
-        select(evaluation_results.__table__)
+        sqla
+        .select(evaluation_results.__table__)
         .join(
             assessment_attempts,
             evaluation_results.attempt_id == assessment_attempts.attempt_id,
@@ -87,3 +81,34 @@ def find_pending_review(
 
     rows = session.execute(stmt).mappings().all()
     return tuple(EvaluationResult(**row) for row in rows)
+
+
+def create(
+    *,
+    attempt_id: AttemptID,
+    evidence_mappings: list[EvidenceMapping] | None = None,
+    flags: list[AssessmentFlag] | None = None,
+    strengths: list[str] | None = None,
+    gaps: list[str] | None = None,
+    reasoning_summary: str | None = None,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> EvaluationResult:
+    """Create a new evaluation result."""
+    evidence_mappings_data: list[dict[str, t.Any]] = [em.model_dump() for em in (evidence_mappings or [])]
+    flags_data: list[str] = [f.value for f in (flags or [])]
+
+    evaluation_id = EvaluationResultID()
+    stmt = sqla.insert(evaluation_results).values(
+        evaluation_id=evaluation_id,
+        attempt_id=attempt_id,
+        evidence_mappings=evidence_mappings_data,
+        flags=flags_data,
+        strengths=strengths if strengths is not None else [],
+        gaps=gaps if gaps is not None else [],
+        reasoning_summary=reasoning_summary,
+    )
+    session.execute(stmt)
+    session.flush()
+    result = get(evaluation_id, session=session)
+    assert result is not None
+    return result

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator
 from socratic.core import di
+from socratic.lib import NotSet
 from socratic.model import ObjectiveID, StrandID
 from socratic.storage import objective as obj_storage
 from socratic.storage import strand as strand_storage
@@ -79,12 +80,10 @@ def create_strand(
     Only educators can create strands.
     """
     strand = strand_storage.create(
-        {
-            "organization_id": auth.organization_id,
-            "created_by": auth.user.user_id,
-            "name": request.name,
-            "description": request.description,
-        },
+        organization_id=auth.organization_id,
+        created_by=auth.user.user_id,
+        name=request.name,
+        description=request.description,
         session=session,
     )
 
@@ -180,12 +179,12 @@ def update_strand(
             detail="Cannot update strands from other organizations",
         )
 
-    update_params: strand_storage.StrandUpdateParams = {}
-    if request.name is not None:
-        update_params["name"] = request.name
-    if request.description is not None:
-        update_params["description"] = request.description
-    strand_storage.update(strand_id, update_params, session=session)
+    strand_storage.update(
+        strand_id,
+        name=request.name if request.name is not None else NotSet(),
+        description=request.description if request.description is not None else NotSet(),
+        session=session,
+    )
 
     session.commit()
     return _build_strand_response(strand_id, session)
@@ -235,11 +234,9 @@ def add_objective_to_strand(
         )
 
     ois = strand_storage.add_objective_to_strand(
-        {
-            "strand_id": strand_id,
-            "objective_id": request.objective_id,
-            "position": request.position,
-        },
+        strand_id=strand_id,
+        objective_id=request.objective_id,
+        position=request.position,
         session=session,
     )
 
@@ -333,11 +330,9 @@ def add_objective_dependency(
         )
 
     dep = strand_storage.add_dependency(
-        {
-            "objective_id": objective_id,
-            "depends_on_objective_id": request.depends_on_objective_id,
-            "dependency_type": request.dependency_type,
-        },
+        objective_id=objective_id,
+        depends_on_objective_id=request.depends_on_objective_id,
+        dependency_type=request.dependency_type,
         session=session,
     )
 

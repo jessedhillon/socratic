@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import typing as t
 
-from sqlalchemy import select
-from sqlalchemy import update as sql_update
+import sqlalchemy as sqla
 
 from socratic.core import di
+from socratic.lib import NotSet
 from socratic.model import DependencyType, ObjectiveDependency, ObjectiveID, ObjectiveInStrand, OrganizationID, \
     Strand, StrandID, UserID
 
@@ -13,8 +13,13 @@ from . import Session
 from .table import objective_dependencies, objectives_in_strands, strands
 
 
-def get(key: StrandID, session: Session = di.Provide["storage.persistent.session"]) -> Strand | None:
-    stmt = select(strands.__table__).where(strands.strand_id == key)
+def get(
+    strand_id: StrandID,
+    *,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> Strand | None:
+    """Get a strand by ID."""
+    stmt = sqla.select(strands.__table__).where(strands.strand_id == strand_id)
     row = session.execute(stmt).mappings().one_or_none()
     return Strand(**row) if row else None
 
@@ -25,7 +30,8 @@ def find(
     created_by: UserID | None = None,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> tuple[Strand, ...]:
-    stmt = select(strands.__table__)
+    """Find strands matching criteria."""
+    stmt = sqla.select(strands.__table__)
     if organization_id is not None:
         stmt = stmt.where(strands.organization_id == organization_id)
     if created_by is not None:
@@ -34,25 +40,68 @@ def find(
     return tuple(Strand(**row) for row in rows)
 
 
-def create(params: StrandCreateParams, session: Session = di.Provide["storage.persistent.session"]) -> Strand:
-    strand = strands(
-        strand_id=StrandID(),
-        organization_id=params["organization_id"],
-        created_by=params["created_by"],
-        name=params["name"],
-        description=params.get("description"),
+def create(
+    *,
+    organization_id: OrganizationID,
+    created_by: UserID,
+    name: str,
+    description: str | None = None,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> Strand:
+    """Create a new strand."""
+    strand_id = StrandID()
+    stmt = sqla.insert(strands).values(
+        strand_id=strand_id,
+        organization_id=organization_id,
+        created_by=created_by,
+        name=name,
+        description=description,
     )
-    session.add(strand)
+    session.execute(stmt)
     session.flush()
-    return get(strand.strand_id, session=session)  # type: ignore
+    result = get(strand_id, session=session)
+    assert result is not None
+    return result
+
+
+def update(
+    strand_id: StrandID,
+    *,
+    name: str | NotSet = NotSet(),
+    description: str | None | NotSet = NotSet(),
+    session: Session = di.Provide["storage.persistent.session"],
+) -> Strand:
+    """Update a strand.
+
+    Raises:
+        KeyError: If strand_id not found
+    """
+    update_values: dict[str, t.Any] = {}
+    if not isinstance(name, NotSet):
+        update_values["name"] = name
+    if not isinstance(description, NotSet):
+        update_values["description"] = description
+
+    stmt = sqla.update(strands).where(strands.strand_id == strand_id).values(**update_values)
+    result = session.execute(stmt)
+    if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue]
+        raise KeyError(strand_id)
+    session.flush()
+
+    updated = get(strand_id, session=session)
+    assert updated is not None
+    return updated
 
 
 def get_objectives_in_strand(
     strand_id: StrandID,
+    *,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> tuple[ObjectiveInStrand, ...]:
+    """Get objectives in a strand, ordered by position."""
     stmt = (
-        select(objectives_in_strands.__table__)
+        sqla
+        .select(objectives_in_strands.__table__)
         .where(objectives_in_strands.strand_id == strand_id)
         .order_by(objectives_in_strands.position)
     )
@@ -61,66 +110,59 @@ def get_objectives_in_strand(
 
 
 def add_objective_to_strand(
-    params: ObjectiveInStrandParams,
+    *,
+    strand_id: StrandID,
+    objective_id: ObjectiveID,
+    position: int,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> ObjectiveInStrand:
-    obj_in_strand = objectives_in_strands(
-        strand_id=params["strand_id"],
-        objective_id=params["objective_id"],
-        position=params["position"],
+    """Add an objective to a strand at a given position."""
+    stmt = sqla.insert(objectives_in_strands).values(
+        strand_id=strand_id,
+        objective_id=objective_id,
+        position=position,
     )
-    session.add(obj_in_strand)
+    session.execute(stmt)
     session.flush()
-    return ObjectiveInStrand(**params)
+    return ObjectiveInStrand(
+        strand_id=strand_id,
+        objective_id=objective_id,
+        position=position,
+    )
 
 
-def get_dependencies(
+def remove_objective_from_strand(
+    *,
+    strand_id: StrandID,
     objective_id: ObjectiveID,
     session: Session = di.Provide["storage.persistent.session"],
-) -> tuple[ObjectiveDependency, ...]:
-    stmt = select(objective_dependencies.__table__).where(objective_dependencies.objective_id == objective_id)
-    rows = session.execute(stmt).mappings().all()
-    return tuple(ObjectiveDependency(**row) for row in rows)
+) -> bool:
+    """Remove an objective from a strand.
 
-
-def add_dependency(
-    params: DependencyCreateParams,
-    session: Session = di.Provide["storage.persistent.session"],
-) -> ObjectiveDependency:
-    dep = objective_dependencies(
-        objective_id=params["objective_id"],
-        depends_on_objective_id=params["depends_on_objective_id"],
-        dependency_type=params.get("dependency_type", DependencyType.Hard).value,
+    Returns:
+        True if removed, False if not found
+    """
+    stmt = sqla.delete(objectives_in_strands).where(
+        sqla.and_(
+            objectives_in_strands.strand_id == strand_id,
+            objectives_in_strands.objective_id == objective_id,
+        )
     )
-    session.add(dep)
-    session.flush()
-    return ObjectiveDependency(**params)
-
-
-def update(
-    key: StrandID,
-    params: StrandUpdateParams,
-    session: Session = di.Provide["storage.persistent.session"],
-) -> Strand | None:
-    stmt = select(strands).where(strands.strand_id == key)
-    strand = session.execute(stmt).scalar_one_or_none()
-    if strand is None:
-        return None
-    for field, value in params.items():
-        if value is not None:
-            setattr(strand, field, value)
-    session.flush()
-    return get(key, session=session)
+    result = session.execute(stmt)
+    return bool(result.rowcount)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownArgumentType]
 
 
 def reorder_objectives_in_strand(
     strand_id: StrandID,
     objective_ids: list[ObjectiveID],
+    *,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> None:
+    """Reorder objectives within a strand."""
     for position, objective_id in enumerate(objective_ids):
         stmt = (
-            sql_update(objectives_in_strands)
+            sqla
+            .update(objectives_in_strands)
             .where(objectives_in_strands.strand_id == strand_id)
             .where(objectives_in_strands.objective_id == objective_id)
             .values(position=position)
@@ -128,25 +170,55 @@ def reorder_objectives_in_strand(
         session.execute(stmt)
 
 
-class StrandCreateParams(t.TypedDict, total=False):
-    organization_id: t.Required[OrganizationID]
-    created_by: t.Required[UserID]
-    name: t.Required[str]
-    description: str | None
+def get_dependencies(
+    objective_id: ObjectiveID,
+    *,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> tuple[ObjectiveDependency, ...]:
+    """Get dependencies for an objective."""
+    stmt = sqla.select(objective_dependencies.__table__).where(objective_dependencies.objective_id == objective_id)
+    rows = session.execute(stmt).mappings().all()
+    return tuple(ObjectiveDependency(**row) for row in rows)
 
 
-class StrandUpdateParams(t.TypedDict, total=False):
-    name: str
-    description: str | None
+def add_dependency(
+    *,
+    objective_id: ObjectiveID,
+    depends_on_objective_id: ObjectiveID,
+    dependency_type: DependencyType = DependencyType.Hard,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> ObjectiveDependency:
+    """Add a dependency between objectives."""
+    stmt = sqla.insert(objective_dependencies).values(
+        objective_id=objective_id,
+        depends_on_objective_id=depends_on_objective_id,
+        dependency_type=dependency_type.value,
+    )
+    session.execute(stmt)
+    session.flush()
+    return ObjectiveDependency(
+        objective_id=objective_id,
+        depends_on_objective_id=depends_on_objective_id,
+        dependency_type=dependency_type,
+    )
 
 
-class ObjectiveInStrandParams(t.TypedDict):
-    strand_id: StrandID
-    objective_id: ObjectiveID
-    position: int
+def remove_dependency(
+    *,
+    objective_id: ObjectiveID,
+    depends_on_objective_id: ObjectiveID,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> bool:
+    """Remove a dependency between objectives.
 
-
-class DependencyCreateParams(t.TypedDict, total=False):
-    objective_id: t.Required[ObjectiveID]
-    depends_on_objective_id: t.Required[ObjectiveID]
-    dependency_type: DependencyType
+    Returns:
+        True if removed, False if not found
+    """
+    stmt = sqla.delete(objective_dependencies).where(
+        sqla.and_(
+            objective_dependencies.objective_id == objective_id,
+            objective_dependencies.depends_on_objective_id == depends_on_objective_id,
+        )
+    )
+    result = session.execute(stmt)
+    return bool(result.rowcount)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownArgumentType]
