@@ -238,7 +238,7 @@ const ObjectiveViewPage: React.FC = () => {
       {/* Back navigation */}
       <button
         onClick={() => navigate('/objectives')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6"
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6 cursor-pointer"
       >
         <svg
           className="w-5 h-5"
