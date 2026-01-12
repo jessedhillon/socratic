@@ -297,27 +297,47 @@ const ObjectiveViewPage: React.FC = () => {
 
         {/* Metadata */}
         <div className="flex flex-wrap gap-6 mt-6 pt-6 border-t border-gray-200 text-sm text-gray-500">
-          {objective.time_expectation_minutes && (
-            <div className="flex items-center gap-2">
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span>
-                <strong>Expected Duration:</strong>{' '}
-                {objective.time_expectation_minutes} minutes
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>
+              <strong>Expected Duration:</strong>{' '}
+              <input
+                type="number"
+                min="1"
+                value={objective.time_expectation_minutes ?? ''}
+                onChange={(e) => {
+                  const value = e.target.value
+                    ? parseInt(e.target.value, 10)
+                    : null;
+                  setObjective({
+                    ...objective,
+                    time_expectation_minutes: value,
+                  });
+                }}
+                onBlur={() =>
+                  saveField({
+                    time_expectation_minutes:
+                      objective.time_expectation_minutes,
+                  })
+                }
+                placeholder="--"
+                className="w-10 py-0.5 text-center border-b border-transparent hover:border-gray-400 focus:border-blue-500 focus:outline-none bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />{' '}
+              minutes
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <svg
               className="w-5 h-5"
