@@ -56,6 +56,10 @@
 
         env = [
           {
+            name = "CLAUDE_CONFIG_DIR";
+            eval = "$PRJ_ROOT/.claude";
+          }
+          {
             name = "XDG_STATE_HOME";
             eval = "$PRJ_ROOT/.state";
           }
@@ -122,6 +126,7 @@
           python313
           nodejs
           ruff
+          uv
         ];
 
         commands = [
