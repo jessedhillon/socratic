@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { listObjectives, type ObjectiveResponse } from '../api';
+import {
+  listObjectives,
+  archiveObjective,
+  type ObjectiveResponse,
+} from '../api';
 import { getLoginUrl } from '../auth';
 
 const statusColors: Record<string, string> = {
@@ -39,6 +43,25 @@ const ObjectivesPage: React.FC = () => {
       setError('Failed to load objectives');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleArchive = async (e: React.MouseEvent, objectiveId: string) => {
+    e.stopPropagation();
+    try {
+      const { response } = await archiveObjective({
+        path: { objective_id: objectiveId },
+      });
+      if (!response.ok) {
+        console.error('Failed to delete:', response.status);
+        return;
+      }
+      // Remove from local state
+      setObjectives((prev) =>
+        prev.filter((o) => o.objective_id !== objectiveId)
+      );
+    } catch (err) {
+      console.error('Failed to delete objective:', err);
     }
   };
 
@@ -123,7 +146,7 @@ const ObjectivesPage: React.FC = () => {
             <div
               key={objective.objective_id}
               onClick={() => navigate(`/objectives/${objective.objective_id}`)}
-              className="bg-white rounded-lg shadow p-6 hover:bg-gray-900/[0.08] hover:shadow-md transition-all cursor-pointer"
+              className="group bg-white rounded-lg shadow p-6 hover:bg-gray-900/[0.08] hover:shadow-md transition-all cursor-pointer"
             >
               <div className="flex justify-between items-start mb-2">
                 <h3 className="text-lg font-semibold text-gray-800">
@@ -185,6 +208,25 @@ const ObjectivesPage: React.FC = () => {
                 <span>
                   Created {new Date(objective.create_time).toLocaleDateString()}
                 </span>
+                <button
+                  onClick={(e) => handleArchive(e, objective.objective_id)}
+                  className="ml-auto p-1 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:bg-gray-200 transition-all duration-150 text-gray-500 hover:text-red-600"
+                  title="Archive objective"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
               </div>
             </div>
           ))}
