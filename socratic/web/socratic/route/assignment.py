@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator
 from socratic.core import di
+from socratic.lib import NotSet
 from socratic.model import AssignmentID, ObjectiveID, UserID
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
@@ -126,17 +127,15 @@ def create_assignment(
         )
 
     assignment = assignment_storage.create(
-        {
-            "organization_id": auth.organization_id,
-            "objective_id": request.objective_id,
-            "assigned_by": auth.user.user_id,
-            "assigned_to": request.assigned_to,
-            "available_from": request.available_from,
-            "available_until": request.available_until,
-            "max_attempts": request.max_attempts,
-            "retake_policy": request.retake_policy,
-            "retake_delay_hours": request.retake_delay_hours,
-        },
+        organization_id=auth.organization_id,
+        objective_id=request.objective_id,
+        assigned_by=auth.user.user_id,
+        assigned_to=request.assigned_to,
+        available_from=request.available_from,
+        available_until=request.available_until,
+        max_attempts=request.max_attempts,
+        retake_policy=request.retake_policy,
+        retake_delay_hours=request.retake_delay_hours,
         session=session,
     )
 
@@ -185,17 +184,15 @@ def create_bulk_assignments(
             )
 
         assignment = assignment_storage.create(
-            {
-                "organization_id": auth.organization_id,
-                "objective_id": request.objective_id,
-                "assigned_by": auth.user.user_id,
-                "assigned_to": learner_id,
-                "available_from": request.available_from,
-                "available_until": request.available_until,
-                "max_attempts": request.max_attempts,
-                "retake_policy": request.retake_policy,
-                "retake_delay_hours": request.retake_delay_hours,
-            },
+            organization_id=auth.organization_id,
+            objective_id=request.objective_id,
+            assigned_by=auth.user.user_id,
+            assigned_to=learner_id,
+            available_from=request.available_from,
+            available_until=request.available_until,
+            max_attempts=request.max_attempts,
+            retake_policy=request.retake_policy,
+            retake_delay_hours=request.retake_delay_hours,
             session=session,
         )
         created_assignments.append(_build_assignment_response(assignment.assignment_id, session))
@@ -303,18 +300,15 @@ def update_assignment(
             detail="Cannot update assignments from other organizations",
         )
 
-    update_params: assignment_storage.AssignmentUpdateParams = {}
-    if request.available_from is not None:
-        update_params["available_from"] = request.available_from
-    if request.available_until is not None:
-        update_params["available_until"] = request.available_until
-    if request.max_attempts is not None:
-        update_params["max_attempts"] = request.max_attempts
-    if request.retake_policy is not None:
-        update_params["retake_policy"] = request.retake_policy
-    if request.retake_delay_hours is not None:
-        update_params["retake_delay_hours"] = request.retake_delay_hours
-    assignment_storage.update(assignment_id, update_params, session=session)
+    assignment_storage.update(
+        assignment_id,
+        available_from=request.available_from if request.available_from is not None else NotSet(),
+        available_until=request.available_until if request.available_until is not None else NotSet(),
+        max_attempts=request.max_attempts if request.max_attempts is not None else NotSet(),
+        retake_policy=request.retake_policy if request.retake_policy is not None else NotSet(),
+        retake_delay_hours=request.retake_delay_hours if request.retake_delay_hours is not None else NotSet(),
+        session=session,
+    )
 
     session.commit()
     return _build_assignment_response(assignment_id, session)

@@ -4,17 +4,23 @@ import datetime
 import decimal
 import typing as t
 
-from sqlalchemy import select
+import sqlalchemy as sqla
 
 from socratic.core import di
+from socratic.lib import NotSet
 from socratic.model import AssessmentAttempt, AssignmentID, AttemptID, AttemptStatus, Grade, UserID
 
 from . import Session
 from .table import assessment_attempts
 
 
-def get(key: AttemptID, session: Session = di.Provide["storage.persistent.session"]) -> AssessmentAttempt | None:
-    stmt = select(assessment_attempts.__table__).where(assessment_attempts.attempt_id == key)
+def get(
+    attempt_id: AttemptID,
+    *,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> AssessmentAttempt | None:
+    """Get an attempt by ID."""
+    stmt = sqla.select(assessment_attempts.__table__).where(assessment_attempts.attempt_id == attempt_id)
     row = session.execute(stmt).mappings().one_or_none()
     return AssessmentAttempt(**row) if row else None
 
@@ -26,7 +32,8 @@ def find(
     status: AttemptStatus | None = None,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> tuple[AssessmentAttempt, ...]:
-    stmt = select(assessment_attempts.__table__)
+    """Find attempts matching criteria."""
+    stmt = sqla.select(assessment_attempts.__table__)
     if assignment_id is not None:
         stmt = stmt.where(assessment_attempts.assignment_id == assignment_id)
     if learner_id is not None:
@@ -38,86 +45,105 @@ def find(
 
 
 def create(
-    params: AttemptCreateParams, session: Session = di.Provide["storage.persistent.session"]
+    *,
+    assignment_id: AssignmentID,
+    learner_id: UserID,
+    status: AttemptStatus = AttemptStatus.NotStarted,
+    session: Session = di.Provide["storage.persistent.session"],
 ) -> AssessmentAttempt:
-    attempt = assessment_attempts(
-        attempt_id=AttemptID(),
-        assignment_id=params["assignment_id"],
-        learner_id=params["learner_id"],
-        status=params.get("status", AttemptStatus.NotStarted).value,
+    """Create a new attempt."""
+    attempt_id = AttemptID()
+    stmt = sqla.insert(assessment_attempts).values(
+        attempt_id=attempt_id,
+        assignment_id=assignment_id,
+        learner_id=learner_id,
+        status=status.value,
     )
-    session.add(attempt)
+    session.execute(stmt)
     session.flush()
-    return get(attempt.attempt_id, session=session)  # type: ignore
+    result = get(attempt_id, session=session)
+    assert result is not None
+    return result
 
 
 def update(
-    key: AttemptID,
-    params: AttemptUpdateParams,
+    attempt_id: AttemptID,
+    *,
+    status: AttemptStatus | NotSet = NotSet(),
+    started_at: datetime.datetime | None | NotSet = NotSet(),
+    completed_at: datetime.datetime | None | NotSet = NotSet(),
+    grade: Grade | None | NotSet = NotSet(),
+    confidence_score: decimal.Decimal | None | NotSet = NotSet(),
+    audio_url: str | None | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
-) -> AssessmentAttempt | None:
-    stmt = select(assessment_attempts).where(assessment_attempts.attempt_id == key)
-    attempt = session.execute(stmt).scalar_one_or_none()
-    if attempt is None:
-        return None
-    for field, value in params.items():
-        if value is not None:
-            actual_value: t.Any = value
-            if field in ("status", "grade") and hasattr(value, "value"):
-                actual_value = value.value  # type: ignore[union-attr]
-            setattr(attempt, field, actual_value)
+) -> AssessmentAttempt:
+    """Update an attempt.
+
+    Uses NotSet sentinel for parameters where None may be a valid value.
+
+    Raises:
+        KeyError: If attempt_id does not correspond to an attempt
+    """
+    values: dict[str, t.Any] = {}
+    if not isinstance(status, NotSet):
+        values["status"] = status.value
+    if not isinstance(started_at, NotSet):
+        values["started_at"] = started_at
+    if not isinstance(completed_at, NotSet):
+        values["completed_at"] = completed_at
+    if not isinstance(grade, NotSet):
+        values["grade"] = grade.value if grade is not None else None
+    if not isinstance(confidence_score, NotSet):
+        values["confidence_score"] = confidence_score
+    if not isinstance(audio_url, NotSet):
+        values["audio_url"] = audio_url
+
+    if values:
+        stmt = sqla.update(assessment_attempts).where(assessment_attempts.attempt_id == attempt_id).values(**values)
+    else:
+        # No-op update to verify attempt exists
+        stmt = (
+            sqla.update(assessment_attempts)
+            .where(assessment_attempts.attempt_id == attempt_id)
+            .values(attempt_id=attempt_id)
+        )
+
+    result = session.execute(stmt)
+    if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue]
+        raise KeyError(f"Attempt {attempt_id} not found")
+
     session.flush()
-    return get(key, session=session)
-
-
-class AttemptCreateParams(t.TypedDict, total=False):
-    assignment_id: t.Required[AssignmentID]
-    learner_id: t.Required[UserID]
-    status: AttemptStatus
-
-
-class AttemptUpdateParams(t.TypedDict, total=False):
-    status: AttemptStatus
-    started_at: datetime.datetime | None
-    completed_at: datetime.datetime | None
-    grade: Grade | None
-    confidence_score: decimal.Decimal | None
-    audio_url: str | None
+    attempt = get(attempt_id, session=session)
+    assert attempt is not None
+    return attempt
 
 
 def transition_to_evaluated(
     attempt_id: AttemptID,
+    *,
     grade: Grade,
     confidence_score: decimal.Decimal,
     session: Session = di.Provide["storage.persistent.session"],
-) -> AssessmentAttempt | None:
+) -> AssessmentAttempt:
     """Transition an attempt from Completed to Evaluated status.
 
-    Args:
-        attempt_id: The attempt to transition
-        grade: The AI-assigned grade
-        confidence_score: Confidence in the grade (0-1)
-        session: Database session
-
-    Returns:
-        Updated attempt or None if not found
+    Raises:
+        KeyError: If attempt_id does not correspond to an attempt
+        ValueError: If attempt is not in Completed status
     """
     attempt = get(attempt_id, session=session)
     if attempt is None:
-        return None
+        raise KeyError(f"Attempt {attempt_id} not found")
 
-    # Validate current status
     if attempt.status != AttemptStatus.Completed:
         msg = f"Cannot evaluate attempt with status {attempt.status.value}"
         raise ValueError(msg)
 
     return update(
         attempt_id,
-        {
-            "status": AttemptStatus.Evaluated,
-            "grade": grade,
-            "confidence_score": confidence_score,
-        },
+        status=AttemptStatus.Evaluated,
+        grade=grade,
+        confidence_score=confidence_score,
         session=session,
     )
 
@@ -127,28 +153,31 @@ def transition_to_reviewed(
     *,
     grade_override: Grade | None = None,
     session: Session = di.Provide["storage.persistent.session"],
-) -> AssessmentAttempt | None:
+) -> AssessmentAttempt:
     """Transition an attempt from Evaluated to Reviewed status.
 
-    Args:
-        attempt_id: The attempt to transition
-        grade_override: Optional new grade if educator overrides
-        session: Database session
-
-    Returns:
-        Updated attempt or None if not found
+    Raises:
+        KeyError: If attempt_id does not correspond to an attempt
+        ValueError: If attempt is not in Evaluated status
     """
     attempt = get(attempt_id, session=session)
     if attempt is None:
-        return None
+        raise KeyError(f"Attempt {attempt_id} not found")
 
-    # Validate current status
     if attempt.status != AttemptStatus.Evaluated:
         msg = f"Cannot review attempt with status {attempt.status.value}"
         raise ValueError(msg)
 
-    update_params: AttemptUpdateParams = {"status": AttemptStatus.Reviewed}
     if grade_override is not None:
-        update_params["grade"] = grade_override
-
-    return update(attempt_id, update_params, session=session)
+        return update(
+            attempt_id,
+            status=AttemptStatus.Reviewed,
+            grade=grade_override,
+            session=session,
+        )
+    else:
+        return update(
+            attempt_id,
+            status=AttemptStatus.Reviewed,
+            session=session,
+        )
