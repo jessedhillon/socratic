@@ -389,12 +389,27 @@ const ObjectiveViewPage: React.FC = () => {
             Are students allowed to explore and discuss elements of the topic
             which are outside of these boundaries?
           </p>
-          <div className="space-y-3">
+          <div className="space-y-1">
             {extensionPolicyOptions.map((option) => (
               <label
                 key={option.value}
-                className="flex items-center gap-3 cursor-pointer"
+                className={`flex items-center gap-3 px-3 py-2 -mx-3 rounded-lg cursor-pointer transition-colors duration-150 ${
+                  objective.extension_policy === option.value
+                    ? 'bg-blue-50'
+                    : 'hover:bg-gray-900/[0.04]'
+                }`}
               >
+                <span
+                  className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-150 ${
+                    objective.extension_policy === option.value
+                      ? 'border-blue-600'
+                      : 'border-gray-400'
+                  }`}
+                >
+                  {objective.extension_policy === option.value && (
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                  )}
+                </span>
                 <input
                   type="radio"
                   name="extension_policy"
@@ -405,7 +420,7 @@ const ObjectiveViewPage: React.FC = () => {
                     setObjective({ ...objective, extension_policy: value });
                     saveField({ extension_policy: value });
                   }}
-                  className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                  className="sr-only"
                 />
                 <span className="text-gray-700">{option.label}</span>
               </label>
