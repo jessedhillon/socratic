@@ -112,7 +112,7 @@ def get_review_detail(
         criteria_by_id = {str(c.criterion_id): c for c in criteria}
 
         # Get evaluation
-        evaluation = eval_storage.get_by_attempt(attempt_id, session=session)
+        evaluation = eval_storage.get(attempt_id=attempt_id, session=session)
 
         # Get transcript
         transcript_segments = transcript_storage.find(attempt_id=attempt_id, session=session)
@@ -158,9 +158,7 @@ def accept_grade(
             )
 
         # Transition to reviewed
-        updated_attempt = attempt_storage.transition_to_reviewed(attempt_id, session=session)
-        if updated_attempt is None:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update attempt")
+        attempt_storage.transition_to_reviewed(attempt_id, session=session)
 
     # Return updated review detail
     return get_review_detail(attempt_id, auth, session)
@@ -188,24 +186,20 @@ def override_grade(
 
         # Create override record
         override_storage.create(
-            {
-                "attempt_id": attempt_id,
-                "educator_id": auth.user.user_id,
-                "original_grade": attempt.grade,
-                "new_grade": request.new_grade,
-                "reason": request.reason,
-            },
+            attempt_id=attempt_id,
+            educator_id=auth.user.user_id,
+            original_grade=attempt.grade,
+            new_grade=request.new_grade,
+            reason=request.reason,
             session=session,
         )
 
         # Transition to reviewed with new grade
-        updated_attempt = attempt_storage.transition_to_reviewed(
+        attempt_storage.transition_to_reviewed(
             attempt_id,
             grade_override=request.new_grade,
             session=session,
         )
-        if updated_attempt is None:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update attempt")
 
     # Return updated review detail
     return get_review_detail(attempt_id, auth, session)
@@ -227,14 +221,12 @@ def add_feedback(
         # Create or update feedback via override record
         # Using override for feedback storage allows tracking history
         override_storage.create(
-            {
-                "attempt_id": attempt_id,
-                "educator_id": auth.user.user_id,
-                "original_grade": attempt.grade,
-                "new_grade": attempt.grade or Grade.F,  # Keep same grade
-                "reason": "Feedback added",
-                "feedback": request.feedback_text,
-            },
+            attempt_id=attempt_id,
+            educator_id=auth.user.user_id,
+            original_grade=attempt.grade,
+            new_grade=attempt.grade or Grade.F,  # Keep same grade
+            reason="Feedback added",
+            feedback=request.feedback_text,
             session=session,
         )
 
