@@ -141,11 +141,13 @@ def create_objective(
 def list_objectives(
     auth: AuthContext = Depends(require_educator),
     status_filter: ObjectiveStatus | None = None,
+    include_archived: bool = False,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> ObjectiveListResponse:
     """List objectives for the educator's organization.
 
     Only educators can list objectives.
+    Archived objectives are excluded by default unless include_archived=True.
     """
     with session.begin():
         objectives = obj_storage.find(
@@ -153,6 +155,10 @@ def list_objectives(
             status=status_filter,
             session=session,
         )
+
+        # Filter out archived objectives unless explicitly requested
+        if not include_archived and status_filter is None:
+            objectives = tuple(o for o in objectives if o.status != ObjectiveStatus.Archived)
 
         # Build full responses with rubric criteria
         objective_responses = [_build_objective_response(obj.objective_id, session) for obj in objectives]
