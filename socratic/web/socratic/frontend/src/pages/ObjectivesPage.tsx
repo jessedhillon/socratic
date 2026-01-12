@@ -2,12 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   listObjectives,
-  createObjective,
+  archiveObjective,
   type ObjectiveResponse,
-  type ObjectiveCreateRequest,
 } from '../api';
 import { getLoginUrl } from '../auth';
-import ObjectiveForm from '../components/ObjectiveForm';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-yellow-100 text-yellow-800',
@@ -24,8 +22,6 @@ const ObjectivesPage: React.FC = () => {
   const [objectives, setObjectives] = useState<ObjectiveResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchObjectives();
@@ -50,17 +46,22 @@ const ObjectivesPage: React.FC = () => {
     }
   };
 
-  const handleCreateObjective = async (data: ObjectiveCreateRequest) => {
-    setIsSubmitting(true);
+  const handleArchive = async (e: React.MouseEvent, objectiveId: string) => {
+    e.stopPropagation();
     try {
-      const { response } = await createObjective({ body: data });
+      const { response } = await archiveObjective({
+        path: { objective_id: objectiveId },
+      });
       if (!response.ok) {
-        throw new Error('Failed to create objective');
+        console.error('Failed to delete:', response.status);
+        return;
       }
-      await fetchObjectives();
-      setShowCreateModal(false);
-    } finally {
-      setIsSubmitting(false);
+      // Remove from local state
+      setObjectives((prev) =>
+        prev.filter((o) => o.objective_id !== objectiveId)
+      );
+    } catch (err) {
+      console.error('Failed to delete objective:', err);
     }
   };
 
@@ -89,7 +90,7 @@ const ObjectivesPage: React.FC = () => {
           Learning Objectives
         </h1>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => navigate('/objectives/new')}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
         >
           <svg
@@ -133,7 +134,7 @@ const ObjectivesPage: React.FC = () => {
             Create learning objectives to assess your learners.
           </p>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => navigate('/objectives/new')}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Create Your First Objective
@@ -145,11 +146,15 @@ const ObjectivesPage: React.FC = () => {
             <div
               key={objective.objective_id}
               onClick={() => navigate(`/objectives/${objective.objective_id}`)}
-              className="bg-white rounded-lg shadow p-6 hover:bg-gray-900/[0.08] hover:shadow-md transition-all cursor-pointer"
+              className="group bg-white rounded-lg shadow p-6 hover:bg-gray-900/[0.08] hover:shadow-md transition-all cursor-pointer"
             >
               <div className="flex justify-between items-start mb-2">
                 <h3 className="text-lg font-semibold text-gray-800">
-                  {objective.title}
+                  {objective.title || (
+                    <span className="text-gray-400 italic font-normal">
+                      Untitled Objective
+                    </span>
+                  )}
                 </h3>
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -203,28 +208,13 @@ const ObjectivesPage: React.FC = () => {
                 <span>
                   Created {new Date(objective.create_time).toLocaleDateString()}
                 </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Create Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold text-gray-800">
-                  Create Learning Objective
-                </h2>
                 <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                  disabled={isSubmitting}
+                  onClick={(e) => handleArchive(e, objective.objective_id)}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-amber-100 transition-all duration-150 text-amber-700"
+                  title="Archive objective"
                 >
                   <svg
-                    className="w-6 h-6"
+                    className="w-4 h-4"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -233,20 +223,14 @@ const ObjectivesPage: React.FC = () => {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
+                      d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
                     />
                   </svg>
+                  Archive
                 </button>
               </div>
             </div>
-            <div className="p-6">
-              <ObjectiveForm
-                onSubmit={handleCreateObjective}
-                onCancel={() => setShowCreateModal(false)}
-                isSubmitting={isSubmitting}
-              />
-            </div>
-          </div>
+          ))}
         </div>
       )}
     </div>

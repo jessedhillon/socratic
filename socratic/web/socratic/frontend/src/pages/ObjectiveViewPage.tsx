@@ -3,8 +3,10 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   getObjective,
   updateObjective,
+  createObjective,
   type ObjectiveResponse,
   type ObjectiveUpdateRequest,
+  type ObjectiveCreateRequest,
   type ExtensionPolicy,
   type ObjectiveStatus,
 } from '../api';
@@ -38,15 +40,35 @@ const extensionPolicyOptions = [
   { value: 'conditional', label: 'Conditional' },
 ];
 
+// Default values for a new objective
+const defaultObjective: ObjectiveResponse = {
+  objective_id: '',
+  title: '',
+  description: '',
+  status: 'draft' as ObjectiveStatus,
+  extension_policy: 'disallowed' as ExtensionPolicy,
+  scope_boundaries: '',
+  time_expectation_minutes: null,
+  initial_prompts: [],
+  challenge_prompts: [],
+  rubric_criteria: [],
+  create_time: new Date().toISOString(),
+  update_time: new Date().toISOString(),
+};
+
 /**
  * Document-style view page for a single objective.
+ * Also handles creating new objectives when objectiveId is "new".
  */
 const ObjectiveViewPage: React.FC = () => {
   const { objectiveId } = useParams<{ objectiveId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const [objective, setObjective] = useState<ObjectiveResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const isNew = objectiveId === 'new';
+  const [objective, setObjective] = useState<ObjectiveResponse | null>(
+    isNew ? { ...defaultObjective } : null
+  );
+  const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -57,7 +79,47 @@ const ObjectiveViewPage: React.FC = () => {
 
   const saveField = useCallback(
     async (updates: ObjectiveUpdateRequest) => {
-      if (!objectiveId || isSaving) return;
+      if (isSaving) return;
+
+      // For new objectives, we need to create first
+      if (isNew) {
+        // Merge updates with current objective state
+        const currentState = objective || defaultObjective;
+        const merged = { ...currentState, ...updates };
+
+        setIsSaving(true);
+        try {
+          const createRequest: ObjectiveCreateRequest = {
+            title: merged.title || '',
+            description: merged.description || '',
+            scope_boundaries: merged.scope_boundaries || undefined,
+            time_expectation_minutes:
+              merged.time_expectation_minutes || undefined,
+            initial_prompts: merged.initial_prompts || undefined,
+            challenge_prompts: merged.challenge_prompts || undefined,
+            extension_policy: merged.extension_policy,
+          };
+          const { data, response } = await createObjective({
+            body: createRequest,
+          });
+          if (!response.ok) {
+            console.error('Failed to create:', response.status);
+            return;
+          }
+          if (data) {
+            // Navigate to the new objective's page
+            navigate(`/objectives/${data.objective_id}`, { replace: true });
+          }
+        } catch (err) {
+          console.error('Failed to create objective:', err);
+        } finally {
+          setIsSaving(false);
+        }
+        return;
+      }
+
+      // For existing objectives, update as before
+      if (!objectiveId) return;
       setIsSaving(true);
       try {
         const { data, response } = await updateObjective({
@@ -77,7 +139,7 @@ const ObjectiveViewPage: React.FC = () => {
         setIsSaving(false);
       }
     },
-    [objectiveId, isSaving]
+    [objectiveId, isSaving, isNew, objective, navigate]
   );
 
   const handleAddInitialPrompt = useCallback(() => {
@@ -117,10 +179,10 @@ const ObjectiveViewPage: React.FC = () => {
   }, [objective]);
 
   useEffect(() => {
-    if (objectiveId) {
+    if (objectiveId && !isNew) {
       fetchObjective(objectiveId);
     }
-  }, [objectiveId]);
+  }, [objectiveId, isNew]);
 
   const fetchObjective = async (id: string) => {
     try {
@@ -176,7 +238,7 @@ const ObjectiveViewPage: React.FC = () => {
       {/* Back navigation */}
       <button
         onClick={() => navigate('/objectives')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6"
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6 cursor-pointer"
       >
         <svg
           className="w-5 h-5"
@@ -201,6 +263,7 @@ const ObjectiveViewPage: React.FC = () => {
             value={objective.title}
             onChange={(value) => setObjective({ ...objective, title: value })}
             onSave={() => saveField({ title: objective.title })}
+            placeholder="Click to edit title..."
             className="flex-1 mr-4"
             textClassName="text-3xl font-bold text-gray-900"
           />
@@ -223,6 +286,7 @@ const ObjectiveViewPage: React.FC = () => {
             setObjective({ ...objective, description: value })
           }
           onSave={() => saveField({ description: objective.description })}
+          placeholder="Click to edit description..."
           multiline
           rows={4}
           textClassName="text-lg text-gray-700 leading-relaxed"
@@ -410,7 +474,7 @@ const ObjectiveViewPage: React.FC = () => {
         </ul>
         <button
           onClick={handleAddInitialPrompt}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+          className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
         >
           <svg
             className="w-4 h-4"
@@ -495,7 +559,7 @@ const ObjectiveViewPage: React.FC = () => {
         </ul>
         <button
           onClick={handleAddChallengePrompt}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+          className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
         >
           <svg
             className="w-4 h-4"
