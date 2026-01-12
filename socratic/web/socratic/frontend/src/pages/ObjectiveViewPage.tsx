@@ -474,7 +474,7 @@ const ObjectiveViewPage: React.FC = () => {
         </ul>
         <button
           onClick={handleAddInitialPrompt}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+          className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
         >
           <svg
             className="w-4 h-4"
@@ -559,7 +559,7 @@ const ObjectiveViewPage: React.FC = () => {
         </ul>
         <button
           onClick={handleAddChallengePrompt}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+          className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
         >
           <svg
             className="w-4 h-4"
