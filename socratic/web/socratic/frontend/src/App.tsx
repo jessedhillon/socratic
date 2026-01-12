@@ -1,11 +1,8 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import InstructorLayout from './components/InstructorLayout';
 import AssessmentPage from './pages/AssessmentPage';
-import AssignmentsPage from './pages/AssignmentsPage';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
-import ObjectivesPage from './pages/ObjectivesPage';
 import ReviewPage from './pages/ReviewPage';
 
 const App: React.FC = () => {
@@ -23,13 +20,9 @@ const App: React.FC = () => {
           element={<AssessmentPage />}
         />
 
-        {/* Instructor routes */}
-        <Route element={<InstructorLayout />}>
-          <Route path="/reviews" element={<ReviewPage />} />
-          <Route path="/reviews/:attemptId" element={<ReviewPage />} />
-          <Route path="/objectives" element={<ObjectivesPage />} />
-          <Route path="/assignments" element={<AssignmentsPage />} />
-        </Route>
+        {/* Educator routes */}
+        <Route path="/reviews" element={<ReviewPage />} />
+        <Route path="/reviews/:attemptId" element={<ReviewPage />} />
       </Routes>
     </div>
   );

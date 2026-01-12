@@ -91,49 +91,49 @@ def create_objective(
 
     Only educators can create objectives.
     """
-    with session.begin():
-        # Create the objective
-        obj = obj_storage.create(
-            organization_id=auth.organization_id,
-            created_by=auth.user.user_id,
-            title=request.title,
-            description=request.description,
-            scope_boundaries=request.scope_boundaries,
-            time_expectation_minutes=request.time_expectation_minutes,
-            initial_prompts=request.initial_prompts,
-            challenge_prompts=request.challenge_prompts,
-            extension_policy=request.extension_policy,
+    # Create the objective
+    obj = obj_storage.create(
+        organization_id=auth.organization_id,
+        created_by=auth.user.user_id,
+        title=request.title,
+        description=request.description,
+        scope_boundaries=request.scope_boundaries,
+        time_expectation_minutes=request.time_expectation_minutes,
+        initial_prompts=request.initial_prompts,
+        challenge_prompts=request.challenge_prompts,
+        extension_policy=request.extension_policy,
+        session=session,
+    )
+
+    # Create rubric criteria if provided
+    for criterion_req in request.rubric_criteria:
+        rubric_storage.create(
+            objective_id=obj.objective_id,
+            name=criterion_req.name,
+            description=criterion_req.description,
+            evidence_indicators=criterion_req.evidence_indicators,
+            failure_modes=[
+                FailureModeCreateParams(
+                    name=fm.name,
+                    description=fm.description,
+                    indicators=fm.indicators,
+                )
+                for fm in criterion_req.failure_modes
+            ],
+            grade_thresholds=[
+                GradeThresholdCreateParams(
+                    grade=gt.grade,
+                    description=gt.description,
+                    min_evidence_count=gt.min_evidence_count,
+                )
+                for gt in criterion_req.grade_thresholds
+            ],
+            weight=criterion_req.weight,
             session=session,
         )
 
-        # Create rubric criteria if provided
-        for criterion_req in request.rubric_criteria:
-            rubric_storage.create(
-                objective_id=obj.objective_id,
-                name=criterion_req.name,
-                description=criterion_req.description,
-                evidence_indicators=criterion_req.evidence_indicators,
-                failure_modes=[
-                    FailureModeCreateParams(
-                        name=fm.name,
-                        description=fm.description,
-                        indicators=fm.indicators,
-                    )
-                    for fm in criterion_req.failure_modes
-                ],
-                grade_thresholds=[
-                    GradeThresholdCreateParams(
-                        grade=gt.grade,
-                        description=gt.description,
-                        min_evidence_count=gt.min_evidence_count,
-                    )
-                    for gt in criterion_req.grade_thresholds
-                ],
-                weight=criterion_req.weight,
-                session=session,
-            )
-
-        return _build_objective_response(obj.objective_id, session)
+    session.commit()
+    return _build_objective_response(obj.objective_id, session)
 
 
 @router.get("", operation_id="list_objectives")
@@ -147,20 +147,19 @@ def list_objectives(
 
     Only educators can list objectives.
     """
-    with session.begin():
-        objectives = obj_storage.find(
-            organization_id=auth.organization_id,
-            status=status_filter,
-            session=session,
-        )
+    objectives = obj_storage.find(
+        organization_id=auth.organization_id,
+        status=status_filter,
+        session=session,
+    )
 
-        # Build full responses with rubric criteria
-        objective_responses = [_build_objective_response(obj.objective_id, session) for obj in objectives]
+    # Build full responses with rubric criteria
+    objective_responses = [_build_objective_response(obj.objective_id, session) for obj in objectives]
 
-        return ObjectiveListResponse(
-            objectives=objective_responses,
-            total=len(objective_responses),
-        )
+    return ObjectiveListResponse(
+        objectives=objective_responses,
+        total=len(objective_responses),
+    )
 
 
 @router.get("/{objective_id}", operation_id="get_objective")
@@ -174,22 +173,21 @@ def get_objective(
 
     Only educators can view objective details.
     """
-    with session.begin():
-        obj = obj_storage.get(objective_id, session=session)
-        if obj is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Objective not found",
-            )
+    obj = obj_storage.get(objective_id, session=session)
+    if obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Objective not found",
+        )
 
-        # Verify organization access
-        if obj.organization_id != auth.organization_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot access objectives from other organizations",
-            )
+    # Verify organization access
+    if obj.organization_id != auth.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot access objectives from other organizations",
+        )
 
-        return _build_objective_response(objective_id, session)
+    return _build_objective_response(objective_id, session)
 
 
 @router.put("/{objective_id}", operation_id="update_objective")
@@ -204,43 +202,43 @@ def update_objective(
 
     Only educators can update objectives.
     """
-    with session.begin():
-        obj = obj_storage.get(objective_id, session=session)
-        if obj is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Objective not found",
-            )
+    obj = obj_storage.get(objective_id, session=session)
+    if obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Objective not found",
+        )
 
-        # Verify organization access
-        if obj.organization_id != auth.organization_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot update objectives from other organizations",
-            )
+    # Verify organization access
+    if obj.organization_id != auth.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot update objectives from other organizations",
+        )
 
-        # Build update kwargs from request (only include fields that are set)
-        update_kwargs: dict[str, t.Any] = {}
-        if request.title is not None:
-            update_kwargs["title"] = request.title
-        if request.description is not None:
-            update_kwargs["description"] = request.description
-        if request.scope_boundaries is not None:
-            update_kwargs["scope_boundaries"] = request.scope_boundaries
-        if request.time_expectation_minutes is not None:
-            update_kwargs["time_expectation_minutes"] = request.time_expectation_minutes
-        if request.initial_prompts is not None:
-            update_kwargs["initial_prompts"] = request.initial_prompts
-        if request.challenge_prompts is not None:
-            update_kwargs["challenge_prompts"] = request.challenge_prompts
-        if request.extension_policy is not None:
-            update_kwargs["extension_policy"] = request.extension_policy
-        if request.status is not None:
-            update_kwargs["status"] = request.status
+    # Build update kwargs from request (only include fields that are set)
+    update_kwargs: dict[str, t.Any] = {}
+    if request.title is not None:
+        update_kwargs["title"] = request.title
+    if request.description is not None:
+        update_kwargs["description"] = request.description
+    if request.scope_boundaries is not None:
+        update_kwargs["scope_boundaries"] = request.scope_boundaries
+    if request.time_expectation_minutes is not None:
+        update_kwargs["time_expectation_minutes"] = request.time_expectation_minutes
+    if request.initial_prompts is not None:
+        update_kwargs["initial_prompts"] = request.initial_prompts
+    if request.challenge_prompts is not None:
+        update_kwargs["challenge_prompts"] = request.challenge_prompts
+    if request.extension_policy is not None:
+        update_kwargs["extension_policy"] = request.extension_policy
+    if request.status is not None:
+        update_kwargs["status"] = request.status
 
-        obj_storage.update(objective_id, **update_kwargs, session=session)
+    obj_storage.update(objective_id, **update_kwargs, session=session)
+    session.commit()
 
-        return _build_objective_response(objective_id, session)
+    return _build_objective_response(objective_id, session)
 
 
 @router.delete("/{objective_id}", operation_id="archive_objective")
@@ -254,24 +252,24 @@ def archive_objective(
 
     Only educators can archive objectives.
     """
-    with session.begin():
-        obj = obj_storage.get(objective_id, session=session)
-        if obj is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Objective not found",
-            )
+    obj = obj_storage.get(objective_id, session=session)
+    if obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Objective not found",
+        )
 
-        # Verify organization access
-        if obj.organization_id != auth.organization_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot archive objectives from other organizations",
-            )
+    # Verify organization access
+    if obj.organization_id != auth.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot archive objectives from other organizations",
+        )
 
-        obj_storage.update(objective_id, status=ObjectiveStatus.Archived, session=session)
+    obj_storage.update(objective_id, status=ObjectiveStatus.Archived, session=session)
+    session.commit()
 
-        return _build_objective_response(objective_id, session)
+    return _build_objective_response(objective_id, session)
 
 
 @router.post(
@@ -290,67 +288,68 @@ def add_rubric_criterion(
 
     Only educators can add rubric criteria.
     """
-    with session.begin():
-        obj = obj_storage.get(objective_id, session=session)
-        if obj is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Objective not found",
-            )
-
-        # Verify organization access
-        if obj.organization_id != auth.organization_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot modify objectives from other organizations",
-            )
-
-        criterion = rubric_storage.create(
-            objective_id=objective_id,
-            name=request.name,
-            description=request.description,
-            evidence_indicators=request.evidence_indicators,
-            failure_modes=[
-                FailureModeCreateParams(
-                    name=fm.name,
-                    description=fm.description,
-                    indicators=fm.indicators,
-                )
-                for fm in request.failure_modes
-            ],
-            grade_thresholds=[
-                GradeThresholdCreateParams(
-                    grade=gt.grade,
-                    description=gt.description,
-                    min_evidence_count=gt.min_evidence_count,
-                )
-                for gt in request.grade_thresholds
-            ],
-            weight=request.weight,
-            session=session,
+    obj = obj_storage.get(objective_id, session=session)
+    if obj is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Objective not found",
         )
 
-        return RubricCriterionResponse(
-            criterion_id=criterion.criterion_id,
-            objective_id=criterion.objective_id,
-            name=criterion.name,
-            description=criterion.description,
-            evidence_indicators=criterion.evidence_indicators,
-            failure_modes=[
-                FailureModeResponse(
-                    name=fm.name,
-                    description=fm.description,
-                    indicators=fm.indicators,
-                )
-                for fm in criterion.failure_modes
-            ],
-            grade_thresholds=[
-                GradeThresholdResponse(
-                    grade=gt.grade,
-                    description=gt.description,
-                    min_evidence_count=gt.min_evidence_count,
-                )
-                for gt in criterion.grade_thresholds
-            ],
-            weight=criterion.weight,
+    # Verify organization access
+    if obj.organization_id != auth.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot modify objectives from other organizations",
         )
+
+    criterion = rubric_storage.create(
+        objective_id=objective_id,
+        name=request.name,
+        description=request.description,
+        evidence_indicators=request.evidence_indicators,
+        failure_modes=[
+            FailureModeCreateParams(
+                name=fm.name,
+                description=fm.description,
+                indicators=fm.indicators,
+            )
+            for fm in request.failure_modes
+        ],
+        grade_thresholds=[
+            GradeThresholdCreateParams(
+                grade=gt.grade,
+                description=gt.description,
+                min_evidence_count=gt.min_evidence_count,
+            )
+            for gt in request.grade_thresholds
+        ],
+        weight=request.weight,
+        session=session,
+    )
+
+    session.commit()
+
+    return RubricCriterionResponse(
+        criterion_id=criterion.criterion_id,
+        objective_id=criterion.objective_id,
+        name=criterion.name,
+        description=criterion.description,
+        evidence_indicators=criterion.evidence_indicators,
+        failure_modes=[
+            FailureModeResponse(
+                name=fm.name,
+                description=fm.description,
+                indicators=fm.indicators,
+            )
+            for fm in criterion.failure_modes
+        ],
+        grade_thresholds=[
+            GradeThresholdResponse(
+                grade=gt.grade,
+                description=gt.description,
+                min_evidence_count=gt.min_evidence_count,
+            )
+            for gt in criterion.grade_thresholds
+        ],
+        weight=criterion.weight,
+    )

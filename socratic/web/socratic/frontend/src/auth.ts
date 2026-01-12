@@ -1,11 +1,5 @@
 import { client } from './api/client.gen';
 
-// Configure client to use relative URLs (proxied through Vite in dev)
-// SDK paths already include /api prefix, so baseUrl should be empty
-client.setConfig({
-  baseUrl: '',
-});
-
 export function getAuthToken(): string | null {
   return localStorage.getItem('access_token');
 }
