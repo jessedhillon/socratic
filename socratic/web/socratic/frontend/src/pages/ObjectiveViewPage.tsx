@@ -333,7 +333,7 @@ const ObjectiveViewPage: React.FC = () => {
                   })
                 }
                 placeholder="--"
-                className="w-12 px-1 py-0.5 text-center border-b border-transparent hover:border-gray-400 focus:border-blue-500 focus:outline-none bg-transparent"
+                className="w-12 px-1 py-0.5 text-center border-b border-transparent hover:border-gray-400 focus:border-blue-500 focus:outline-none bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />{' '}
               minutes
             </span>
