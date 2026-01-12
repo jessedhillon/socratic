@@ -356,7 +356,7 @@ const ObjectiveViewPage: React.FC = () => {
           {(objective.initial_prompts || []).map((prompt, index) => (
             <li
               key={index}
-              className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+              className="group flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
             >
               <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-medium">
                 {index + 1}
@@ -381,6 +381,30 @@ const ObjectiveViewPage: React.FC = () => {
                 className="flex-1"
                 textClassName="text-gray-700"
               />
+              <button
+                onClick={() => {
+                  const newPrompts = [...(objective.initial_prompts || [])];
+                  newPrompts.splice(index, 1);
+                  setObjective({ ...objective, initial_prompts: newPrompts });
+                  saveField({ initial_prompts: newPrompts });
+                }}
+                className="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:bg-gray-200 transition-all duration-150 text-gray-500 hover:text-red-600"
+                title="Delete prompt"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
             </li>
           ))}
         </ul>
@@ -417,7 +441,7 @@ const ObjectiveViewPage: React.FC = () => {
           {(objective.challenge_prompts || []).map((prompt, index) => (
             <li
               key={index}
-              className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+              className="group flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
             >
               <span className="flex-shrink-0 w-6 h-6 bg-orange-100 text-orange-700 rounded-full flex items-center justify-center text-sm font-medium">
                 {index + 1}
@@ -442,6 +466,30 @@ const ObjectiveViewPage: React.FC = () => {
                 className="flex-1"
                 textClassName="text-gray-700"
               />
+              <button
+                onClick={() => {
+                  const newPrompts = [...(objective.challenge_prompts || [])];
+                  newPrompts.splice(index, 1);
+                  setObjective({ ...objective, challenge_prompts: newPrompts });
+                  saveField({ challenge_prompts: newPrompts });
+                }}
+                className="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 hover:bg-gray-200 transition-all duration-150 text-gray-500 hover:text-red-600"
+                title="Delete prompt"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
             </li>
           ))}
         </ul>
