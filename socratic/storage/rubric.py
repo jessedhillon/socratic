@@ -7,6 +7,7 @@ import pydantic as p
 import sqlalchemy as sqla
 
 from socratic.core import di
+from socratic.lib import NotSet
 from socratic.model import ObjectiveID, RubricCriterion, RubricCriterionID
 
 from . import Session
@@ -88,6 +89,57 @@ def create(
     result = get(criterion_id, session=session)
     assert result is not None
     return result
+
+
+def update(
+    criterion_id: RubricCriterionID,
+    *,
+    name: str | NotSet = NotSet(),
+    description: str | NotSet = NotSet(),
+    evidence_indicators: list[str] | NotSet = NotSet(),
+    failure_modes: list[FailureModeCreateParams] | NotSet = NotSet(),
+    grade_thresholds: list[GradeThresholdCreateParams] | NotSet = NotSet(),
+    weight: decimal.Decimal | NotSet = NotSet(),
+    session: Session = di.Provide["storage.persistent.session"],
+) -> None:
+    """Update a rubric criterion.
+
+    Uses NotSet sentinel for parameters where None may be a valid value.
+    Call get() after if you need the updated entity.
+
+    Raises:
+        KeyError: If criterion_id does not correspond to a criterion
+    """
+    values: dict[str, t.Any] = {}
+    if not isinstance(name, NotSet):
+        values["name"] = name
+    if not isinstance(description, NotSet):
+        values["description"] = description
+    if not isinstance(evidence_indicators, NotSet):
+        values["evidence_indicators"] = evidence_indicators
+    if not isinstance(failure_modes, NotSet):
+        values["failure_modes"] = [m.model_dump() for m in failure_modes]
+    if not isinstance(grade_thresholds, NotSet):
+        values["grade_thresholds"] = [th.model_dump() for th in grade_thresholds]
+    if not isinstance(weight, NotSet):
+        values["weight"] = weight
+
+    if values:
+        stmt = sqla.update(rubric_criteria).where(rubric_criteria.criterion_id == criterion_id).values(**values)
+    else:
+        # No-op update to verify criterion exists
+        stmt = (
+            sqla
+            .update(rubric_criteria)
+            .where(rubric_criteria.criterion_id == criterion_id)
+            .values(criterion_id=criterion_id)
+        )
+
+    result = session.execute(stmt)
+    if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue]
+        raise KeyError(f"RubricCriterion {criterion_id} not found")
+
+    session.flush()
 
 
 def delete(

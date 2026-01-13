@@ -205,6 +205,162 @@ class TestDelete(object):
         assert result is False
 
 
+class TestUpdate(object):
+    """Tests for rubric_storage.update()."""
+
+    def test_update_single_field(
+        self,
+        db_session: Session,
+        criterion_factory: t.Callable[..., RubricCriterion],
+    ) -> None:
+        """update() updates a single field."""
+        criterion = criterion_factory(name="Original Name")
+
+        with db_session.begin():
+            rubric_storage.update(
+                criterion.criterion_id,
+                name="Updated Name",
+                session=db_session,
+            )
+            result = rubric_storage.get(criterion.criterion_id, session=db_session)
+
+        assert result is not None
+        assert result.name == "Updated Name"
+        assert result.description == "A test criterion description"  # unchanged
+
+    def test_update_multiple_fields(
+        self,
+        db_session: Session,
+        criterion_factory: t.Callable[..., RubricCriterion],
+    ) -> None:
+        """update() updates multiple fields at once."""
+        criterion = criterion_factory()
+
+        with db_session.begin():
+            rubric_storage.update(
+                criterion.criterion_id,
+                name="New Name",
+                description="New Description",
+                weight=decimal.Decimal("2.5"),
+                session=db_session,
+            )
+            result = rubric_storage.get(criterion.criterion_id, session=db_session)
+
+        assert result is not None
+        assert result.name == "New Name"
+        assert result.description == "New Description"
+        assert result.weight == decimal.Decimal("2.5")
+
+    def test_update_evidence_indicators(
+        self,
+        db_session: Session,
+        criterion_factory: t.Callable[..., RubricCriterion],
+    ) -> None:
+        """update() updates evidence_indicators list."""
+        criterion = criterion_factory(evidence_indicators=["old indicator"])
+
+        with db_session.begin():
+            rubric_storage.update(
+                criterion.criterion_id,
+                evidence_indicators=["new indicator 1", "new indicator 2"],
+                session=db_session,
+            )
+            result = rubric_storage.get(criterion.criterion_id, session=db_session)
+
+        assert result is not None
+        assert result.evidence_indicators == ["new indicator 1", "new indicator 2"]
+
+    def test_update_failure_modes(
+        self,
+        db_session: Session,
+        criterion_factory: t.Callable[..., RubricCriterion],
+    ) -> None:
+        """update() updates failure_modes list."""
+        criterion = criterion_factory()
+
+        new_failure_modes = [
+            FailureModeCreateParams(
+                name="New Failure Mode",
+                description="Description of new failure mode",
+                indicators=["indicator 1"],
+            )
+        ]
+
+        with db_session.begin():
+            rubric_storage.update(
+                criterion.criterion_id,
+                failure_modes=new_failure_modes,
+                session=db_session,
+            )
+            result = rubric_storage.get(criterion.criterion_id, session=db_session)
+
+        assert result is not None
+        assert len(result.failure_modes) == 1
+        assert result.failure_modes[0].name == "New Failure Mode"
+
+    def test_update_grade_thresholds(
+        self,
+        db_session: Session,
+        criterion_factory: t.Callable[..., RubricCriterion],
+    ) -> None:
+        """update() updates grade_thresholds list."""
+        criterion = criterion_factory()
+
+        new_thresholds = [
+            GradeThresholdCreateParams(
+                grade="A",
+                description="Excellent",
+                min_evidence_count=3,
+            ),
+            GradeThresholdCreateParams(
+                grade="B",
+                description="Good",
+                min_evidence_count=2,
+            ),
+        ]
+
+        with db_session.begin():
+            rubric_storage.update(
+                criterion.criterion_id,
+                grade_thresholds=new_thresholds,
+                session=db_session,
+            )
+            result = rubric_storage.get(criterion.criterion_id, session=db_session)
+
+        assert result is not None
+        assert len(result.grade_thresholds) == 2
+        assert result.grade_thresholds[0].grade == "A"
+        assert result.grade_thresholds[1].grade == "B"
+
+    def test_update_nonexistent_raises_keyerror(self, db_session: Session) -> None:
+        """update() raises KeyError for nonexistent criterion."""
+        with pytest.raises(KeyError):
+            with db_session.begin():
+                rubric_storage.update(
+                    RubricCriterionID(),
+                    name="New Name",
+                    session=db_session,
+                )
+
+    def test_update_no_changes_verifies_existence(
+        self,
+        db_session: Session,
+        criterion_factory: t.Callable[..., RubricCriterion],
+    ) -> None:
+        """update() with no fields still verifies criterion exists."""
+        criterion = criterion_factory()
+
+        # Should not raise - criterion exists
+        with db_session.begin():
+            rubric_storage.update(criterion.criterion_id, session=db_session)
+
+    def test_update_no_changes_raises_for_nonexistent(self, db_session: Session) -> None:
+        """update() with no fields raises KeyError for nonexistent criterion."""
+        with pytest.raises(KeyError):
+            with db_session.begin():
+                rubric_storage.update(RubricCriterionID(), session=db_session)
+
+
 @pytest.fixture
 def test_educator(
     user_factory: t.Callable[..., User],
