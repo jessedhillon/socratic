@@ -531,6 +531,18 @@ export type RubricCriterionResponse = {
 };
 
 /**
+ * Request to update a rubric criterion.
+ */
+export type RubricCriterionUpdateRequest = {
+  name?: string | null;
+  description?: string | null;
+  evidence_indicators?: Array<string> | null;
+  failure_modes?: Array<FailureModeRequest> | null;
+  grade_thresholds?: Array<GradeThresholdRequest> | null;
+  weight?: number | string | null;
+};
+
+/**
  * Request to send a learner message.
  */
 export type SendMessageRequest = {
@@ -1045,6 +1057,66 @@ export type AddRubricCriterionResponses = {
 
 export type AddRubricCriterionResponse =
   AddRubricCriterionResponses[keyof AddRubricCriterionResponses];
+
+export type DeleteRubricCriterionData = {
+  body?: never;
+  path: {
+    objective_id: string;
+    criterion_id: string;
+  };
+  query?: never;
+  url: '/api/objectives/{objective_id}/criteria/{criterion_id}';
+};
+
+export type DeleteRubricCriterionErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteRubricCriterionError =
+  DeleteRubricCriterionErrors[keyof DeleteRubricCriterionErrors];
+
+export type DeleteRubricCriterionResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteRubricCriterionResponse =
+  DeleteRubricCriterionResponses[keyof DeleteRubricCriterionResponses];
+
+export type UpdateRubricCriterionData = {
+  body: RubricCriterionUpdateRequest;
+  path: {
+    objective_id: string;
+    criterion_id: string;
+  };
+  query?: never;
+  url: '/api/objectives/{objective_id}/criteria/{criterion_id}';
+};
+
+export type UpdateRubricCriterionErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateRubricCriterionError =
+  UpdateRubricCriterionErrors[keyof UpdateRubricCriterionErrors];
+
+export type UpdateRubricCriterionResponses = {
+  /**
+   * Successful Response
+   */
+  200: RubricCriterionResponse;
+};
+
+export type UpdateRubricCriterionResponse =
+  UpdateRubricCriterionResponses[keyof UpdateRubricCriterionResponses];
 
 export type ListStrandsData = {
   body?: never;

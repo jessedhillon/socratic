@@ -46,6 +46,12 @@ import type {
   AddRubricCriterionData,
   AddRubricCriterionResponse,
   AddRubricCriterionError,
+  DeleteRubricCriterionData,
+  DeleteRubricCriterionResponse,
+  DeleteRubricCriterionError,
+  UpdateRubricCriterionData,
+  UpdateRubricCriterionResponse,
+  UpdateRubricCriterionError,
   ListStrandsData,
   ListStrandsResponse,
   CreateStrandData,
@@ -491,6 +497,60 @@ export const addRubricCriterion = <ThrowOnError extends boolean = false>(
       },
     ],
     url: '/api/objectives/{objective_id}/criteria',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+};
+
+/**
+ * Delete Rubric Criterion
+ * Delete a rubric criterion.
+ *
+ * Only educators can delete rubric criteria.
+ */
+export const deleteRubricCriterion = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteRubricCriterionData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).delete<
+    DeleteRubricCriterionResponse,
+    DeleteRubricCriterionError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/objectives/{objective_id}/criteria/{criterion_id}',
+    ...options,
+  });
+};
+
+/**
+ * Update Rubric Criterion
+ * Update a rubric criterion.
+ *
+ * Only educators can update rubric criteria.
+ */
+export const updateRubricCriterion = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateRubricCriterionData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).put<
+    UpdateRubricCriterionResponse,
+    UpdateRubricCriterionError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/objectives/{objective_id}/criteria/{criterion_id}',
     ...options,
     headers: {
       'Content-Type': 'application/json',

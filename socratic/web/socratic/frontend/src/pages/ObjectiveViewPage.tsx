@@ -4,11 +4,16 @@ import {
   getObjective,
   updateObjective,
   createObjective,
+  addRubricCriterion,
+  updateRubricCriterion,
+  deleteRubricCriterion,
   type ObjectiveResponse,
   type ObjectiveUpdateRequest,
   type ObjectiveCreateRequest,
   type ExtensionPolicy,
   type ObjectiveStatus,
+  type RubricCriterionResponse,
+  type RubricCriterionCreateRequest,
 } from '../api';
 import { getLoginUrl } from '../auth';
 import EditableText, {
@@ -79,6 +84,10 @@ const ObjectiveViewPage: React.FC = () => {
   const challengePromptRefs = useRef<Map<number, EditableTextHandle>>(
     new Map()
   );
+  const [editingCriterionId, setEditingCriterionId] = useState<string | null>(
+    null
+  );
+  const [isAddingCriterion, setIsAddingCriterion] = useState(false);
 
   const saveField = useCallback(
     async (updates: ObjectiveUpdateRequest) => {
@@ -180,6 +189,98 @@ const ObjectiveViewPage: React.FC = () => {
       }, 0);
     }
   }, [objective]);
+
+  const handleAddCriterion = useCallback(
+    async (criterionData: RubricCriterionCreateRequest) => {
+      if (!objectiveId || isNew || isSaving) return;
+      setIsSaving(true);
+      try {
+        const { data, response } = await addRubricCriterion({
+          path: { objective_id: objectiveId },
+          body: criterionData,
+        });
+        if (!response.ok) {
+          console.error('Failed to add criterion:', response.status);
+          return;
+        }
+        if (data && objective) {
+          setObjective({
+            ...objective,
+            rubric_criteria: [...(objective.rubric_criteria || []), data],
+          });
+        }
+        setIsAddingCriterion(false);
+      } catch (err) {
+        console.error('Failed to add criterion:', err);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [objectiveId, isNew, isSaving, objective]
+  );
+
+  const handleUpdateCriterion = useCallback(
+    async (
+      criterionId: string,
+      updates: Partial<RubricCriterionCreateRequest>
+    ) => {
+      if (!objectiveId || isNew || isSaving) return;
+      setIsSaving(true);
+      try {
+        const { data, response } = await updateRubricCriterion({
+          path: { objective_id: objectiveId, criterion_id: criterionId },
+          body: updates,
+        });
+        if (!response.ok) {
+          console.error('Failed to update criterion:', response.status);
+          return;
+        }
+        if (data && objective) {
+          setObjective({
+            ...objective,
+            rubric_criteria: (objective.rubric_criteria || []).map((c) =>
+              c.criterion_id === criterionId ? data : c
+            ),
+          });
+        }
+        setEditingCriterionId(null);
+      } catch (err) {
+        console.error('Failed to update criterion:', err);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [objectiveId, isNew, isSaving, objective]
+  );
+
+  const handleDeleteCriterion = useCallback(
+    async (criterionId: string) => {
+      if (!objectiveId || isNew || isSaving) return;
+      setIsSaving(true);
+      try {
+        const { response } = await deleteRubricCriterion({
+          path: { objective_id: objectiveId, criterion_id: criterionId },
+        });
+        if (!response.ok) {
+          console.error('Failed to delete criterion:', response.status);
+          return;
+        }
+        if (objective) {
+          setObjective({
+            ...objective,
+            rubric_criteria: (objective.rubric_criteria || []).filter(
+              (c) => c.criterion_id !== criterionId
+            ),
+          });
+        }
+      } catch (err) {
+        console.error('Failed to delete criterion:', err);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [objectiveId, isNew, isSaving, objective]
+  );
 
   useEffect(() => {
     if (objectiveId && !isNew) {
@@ -620,104 +721,363 @@ const ObjectiveViewPage: React.FC = () => {
       </section>
 
       {/* Rubric Criteria */}
-      {objective.rubric_criteria && objective.rubric_criteria.length > 0 && (
-        <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-3">
-            Rubric Criteria
-          </h2>
-          <p className="text-gray-500 text-sm mb-4">
-            Criteria used to evaluate learner understanding
-          </p>
-          <div className="space-y-6">
-            {objective.rubric_criteria.map((criterion) => (
-              <div
-                key={criterion.criterion_id}
-                className="border border-gray-200 rounded-lg p-4"
+      <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-3">
+          Rubric Criteria
+        </h2>
+        <p className="text-gray-500 text-sm mb-4">
+          Criteria used to evaluate learner understanding
+        </p>
+        <div className="space-y-6">
+          {(objective.rubric_criteria || []).map((criterion) => (
+            <CriterionCard
+              key={criterion.criterion_id}
+              criterion={criterion}
+              isEditing={editingCriterionId === criterion.criterion_id}
+              onEdit={() => setEditingCriterionId(criterion.criterion_id)}
+              onCancel={() => setEditingCriterionId(null)}
+              onSave={(updates) =>
+                handleUpdateCriterion(criterion.criterion_id, updates)
+              }
+              onDelete={() => handleDeleteCriterion(criterion.criterion_id)}
+              disabled={isSaving || isNew}
+            />
+          ))}
+        </div>
+
+        {/* Add Criterion Form */}
+        {isAddingCriterion ? (
+          <div className="mt-6 border border-blue-200 rounded-lg p-4 bg-blue-50">
+            <CriterionForm
+              onSave={handleAddCriterion}
+              onCancel={() => setIsAddingCriterion(false)}
+              disabled={isSaving}
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => setIsAddingCriterion(true)}
+            disabled={isNew}
+            className="mt-4 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Add criterion
+          </button>
+        )}
+      </section>
+    </div>
+  );
+};
+
+/**
+ * Form for creating/editing a rubric criterion
+ */
+const CriterionForm: React.FC<{
+  criterion?: RubricCriterionResponse;
+  onSave: (data: RubricCriterionCreateRequest) => void;
+  onCancel: () => void;
+  disabled?: boolean;
+}> = ({ criterion, onSave, onCancel, disabled }) => {
+  const [name, setName] = useState(criterion?.name || '');
+  const [description, setDescription] = useState(criterion?.description || '');
+  const [weight, setWeight] = useState(criterion?.weight?.toString() || '1.0');
+  const [evidenceIndicators, setEvidenceIndicators] = useState<string[]>(
+    criterion?.evidence_indicators || []
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !description.trim()) return;
+    onSave({
+      name: name.trim(),
+      description: description.trim(),
+      weight: parseFloat(weight) || 1.0,
+      evidence_indicators: evidenceIndicators.filter((i) => i.trim()),
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Name <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g., Conceptual Understanding"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          disabled={disabled}
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Description <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Describe what this criterion evaluates..."
+          rows={3}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          disabled={disabled}
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Weight
+        </label>
+        <input
+          type="number"
+          step="0.1"
+          min="0.1"
+          value={weight}
+          onChange={(e) => setWeight(e.target.value)}
+          className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          disabled={disabled}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Evidence Indicators
+        </label>
+        <div className="space-y-2">
+          {evidenceIndicators.map((indicator, index) => (
+            <div key={index} className="flex gap-2">
+              <input
+                type="text"
+                value={indicator}
+                onChange={(e) => {
+                  const newIndicators = [...evidenceIndicators];
+                  newIndicators[index] = e.target.value;
+                  setEvidenceIndicators(newIndicators);
+                }}
+                placeholder="What demonstrates understanding..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={disabled}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setEvidenceIndicators(
+                    evidenceIndicators.filter((_, i) => i !== index)
+                  );
+                }}
+                className="p-2 text-gray-400 hover:text-red-600"
+                disabled={disabled}
               >
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-lg font-medium text-gray-800">
-                    {criterion.name}
-                  </h3>
-                  <span className="text-sm text-gray-500">
-                    Weight: {criterion.weight}
-                  </span>
-                </div>
-                <p className="text-gray-600 mb-4">{criterion.description}</p>
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setEvidenceIndicators([...evidenceIndicators, ''])}
+            className="text-sm text-blue-600 hover:text-blue-800"
+            disabled={disabled}
+          >
+            + Add indicator
+          </button>
+        </div>
+      </div>
 
-                {/* Evidence Indicators */}
-                {criterion.evidence_indicators &&
-                  criterion.evidence_indicators.length > 0 && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">
-                        Evidence Indicators
-                      </h4>
-                      <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
-                        {criterion.evidence_indicators.map(
-                          (indicator, index) => (
-                            <li key={index}>{indicator}</li>
-                          )
-                        )}
-                      </ul>
-                    </div>
-                  )}
+      <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+          disabled={disabled}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+          disabled={disabled || !name.trim() || !description.trim()}
+        >
+          {criterion ? 'Save Changes' : 'Add Criterion'}
+        </button>
+      </div>
+    </form>
+  );
+};
 
-                {/* Failure Modes */}
-                {criterion.failure_modes &&
-                  criterion.failure_modes.length > 0 && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">
-                        Failure Modes
-                      </h4>
-                      <div className="space-y-2">
-                        {criterion.failure_modes.map((mode, index) => (
-                          <div
-                            key={index}
-                            className="bg-red-50 border border-red-100 rounded p-3"
-                          >
-                            <span className="font-medium text-red-800">
-                              {mode.name}:
-                            </span>{' '}
-                            <span className="text-red-700">
-                              {mode.description}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+/**
+ * Display card for a rubric criterion with edit/delete actions
+ */
+const CriterionCard: React.FC<{
+  criterion: RubricCriterionResponse;
+  isEditing: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: (updates: Partial<RubricCriterionCreateRequest>) => void;
+  onDelete: () => void;
+  disabled?: boolean;
+}> = ({
+  criterion,
+  isEditing,
+  onEdit,
+  onCancel,
+  onSave,
+  onDelete,
+  disabled,
+}) => {
+  if (isEditing) {
+    return (
+      <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+        <CriterionForm
+          criterion={criterion}
+          onSave={onSave}
+          onCancel={onCancel}
+          disabled={disabled}
+        />
+      </div>
+    );
+  }
 
-                {/* Grade Thresholds */}
-                {criterion.grade_thresholds &&
-                  criterion.grade_thresholds.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">
-                        Grade Thresholds
-                      </h4>
-                      <div className="grid grid-cols-2 gap-2">
-                        {criterion.grade_thresholds.map((threshold, index) => (
-                          <div
-                            key={index}
-                            className="bg-gray-50 border border-gray-200 rounded p-2 text-sm"
-                          >
-                            <span className="font-medium">
-                              {threshold.grade}:
-                            </span>{' '}
-                            {threshold.description}
-                            {threshold.min_evidence_count && (
-                              <span className="text-gray-500">
-                                {' '}
-                                (min {threshold.min_evidence_count} evidence)
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+  return (
+    <div className="group border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors">
+      <div className="flex justify-between items-start mb-2">
+        <h3 className="text-lg font-medium text-gray-800">{criterion.name}</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500">
+            Weight: {criterion.weight}
+          </span>
+          {!disabled && (
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={onEdit}
+                className="p-1 text-gray-400 hover:text-blue-600 rounded"
+                title="Edit criterion"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                  />
+                </svg>
+              </button>
+              <button
+                onClick={onDelete}
+                className="p-1 text-gray-400 hover:text-red-600 rounded"
+                title="Delete criterion"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="text-gray-600 mb-4">{criterion.description}</p>
+
+      {/* Evidence Indicators */}
+      {criterion.evidence_indicators &&
+        criterion.evidence_indicators.length > 0 && (
+          <div className="mb-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">
+              Evidence Indicators
+            </h4>
+            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+              {criterion.evidence_indicators.map((indicator, index) => (
+                <li key={index}>{indicator}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+      {/* Failure Modes */}
+      {criterion.failure_modes && criterion.failure_modes.length > 0 && (
+        <div className="mb-4">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">
+            Failure Modes
+          </h4>
+          <div className="space-y-2">
+            {criterion.failure_modes.map((mode, index) => (
+              <div
+                key={index}
+                className="bg-red-50 border border-red-100 rounded p-3"
+              >
+                <span className="font-medium text-red-800">{mode.name}:</span>{' '}
+                <span className="text-red-700">{mode.description}</span>
               </div>
             ))}
           </div>
-        </section>
+        </div>
+      )}
+
+      {/* Grade Thresholds */}
+      {criterion.grade_thresholds && criterion.grade_thresholds.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-2">
+            Grade Thresholds
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            {criterion.grade_thresholds.map((threshold, index) => (
+              <div
+                key={index}
+                className="bg-gray-50 border border-gray-200 rounded p-2 text-sm"
+              >
+                <span className="font-medium">{threshold.grade}:</span>{' '}
+                {threshold.description}
+                {threshold.min_evidence_count && (
+                  <span className="text-gray-500">
+                    {' '}
+                    (min {threshold.min_evidence_count} evidence)
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
