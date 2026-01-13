@@ -127,6 +127,7 @@
           nodejs
           ruff
           uv
+          yq
         ];
 
         commands = [
@@ -144,32 +145,49 @@
           {
             name = "generate-api-clients";
             command = ''
+              if [[ -z "''${1:-}" ]]; then
+                echo "A web application name must be specified, example: generate-api-clients socratic" >&2
+                exit 1
+              fi
               set -euo pipefail
               SERVER_PIDS=()
+              APP_NAME=$1
+              STARTED_SERVER=false
+
+              # Get the expected port from config
+              API_PORT=$(yq -r ".$APP_NAME.backend.port" "$PRJ_ROOT/config/web.yaml")
+              if [[ -z "$API_PORT" || "$API_PORT" == "null" ]]; then
+                echo "Could not find backend port for $APP_NAME in config/web.yaml" >&2
+                exit 1
+              fi
 
               cleanup() {
-                echo "Stopping API servers..."
-                for pid in "''${SERVER_PIDS[@]}"; do
-                  kill "$pid" 2>/dev/null || true
-                done
+                if [[ "$STARTED_SERVER" == "true" ]]; then
+                  echo "Stopping API server..."
+                  for pid in "''${SERVER_PIDS[@]}"; do
+                    kill "$pid" 2>/dev/null || true
+                  done
+                fi
               }
               trap cleanup EXIT
 
+              # Check if something is already listening on the port
+              if ss -tln | grep -q ":$API_PORT "; then
+                echo "Server already running on port $API_PORT, skipping backend startup..."
+              else
+                echo "Starting $APP_NAME API server on port $API_PORT..."
+                poetry run python -m socratic.cli web serve $APP_NAME &
+                SERVER_PIDS+=($!)
+                STARTED_SERVER=true
+                sleep 3
+              fi
 
-              echo "Starting Example API server..."
-              poetry run python -m socratic.cli web serve example &
-              SERVER_PIDS+=($!)
-
-              sleep 3
-
-
-              echo "Generating API client for Example..."
-              pushd $PRJ_ROOT/socratic/web/example/frontend > /dev/null
+              echo "Generating API client for $APP_NAME..."
+              pushd $PRJ_ROOT/socratic/web/$APP_NAME/frontend > /dev/null
               npx openapi-ts
               popd > /dev/null
 
-
-              echo "API clients generated successfully"
+              echo "$APP_NAME API clients generated successfully"
             '';
             help = "generate TypeScript API clients from OpenAPI specs";
           }
