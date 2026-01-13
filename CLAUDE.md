@@ -745,6 +745,28 @@ Move issues through statuses as work progresses:
 
 Do not mark issues as Done when opening a PR — they are only Done after the code is merged.
 
+### Branching and PR Strategy
+
+**One Linear issue = one branch = one PR.** This is the expected workflow:
+
+1. Create a branch for the issue (Linear provides a suggested branch name)
+2. Complete the work for that single issue
+3. Open a PR that closes that issue
+4. Merge, then mark the issue Done
+
+**Why this matters:**
+
+- Smaller PRs are easier to review
+- Each PR has a focused scope and clear purpose
+- Issues can be merged/reverted independently
+- Git history stays clean and bisectable
+
+**Exceptions:** Sometimes closely related issues can be bundled into one PR — for example, if issue B is a direct consequence of issue A and makes no sense without it. But this is a deviation from the norm, not the default. When in doubt, use separate PRs.
+
+**Stacked PRs are fine:** If issue B depends on issue A, you can create B's branch from A's branch and open a PR for B that targets A's branch. This keeps each PR focused while allowing dependent work to proceed. Once A merges, update B's base to master.
+
+**Anti-pattern:** Don't work through multiple issues sequentially on the same branch and then open one large PR at the end. Stop after each issue, commit, push, and open a PR before moving to the next issue.
+
 ## Debugging
 
 ### Python Debugger
