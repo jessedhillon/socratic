@@ -156,24 +156,6 @@ export type EvidenceMappingResponse = {
 export type ExtensionPolicy = 'allowed' | 'disallowed' | 'conditional';
 
 /**
- * Failure mode input.
- */
-export type FailureModeRequest = {
-  name: string;
-  description: string;
-  indicators?: Array<string>;
-};
-
-/**
- * Failure mode output.
- */
-export type FailureModeResponse = {
-  name: string;
-  description: string;
-  indicators?: Array<string>;
-};
-
-/**
  * Request to add feedback.
  */
 export type FeedbackRequest = {
@@ -196,24 +178,6 @@ export type GradeAcceptRequest = {
 export type GradeOverrideRequest = {
   new_grade: Grade;
   reason: string;
-};
-
-/**
- * Grade threshold input.
- */
-export type GradeThresholdRequest = {
-  grade: string;
-  description: string;
-  min_evidence_count?: number | null;
-};
-
-/**
- * Grade threshold output.
- */
-export type GradeThresholdResponse = {
-  grade: string;
-  description: string;
-  min_evidence_count?: number | null;
 };
 
 export type HttpValidationError = {
@@ -438,6 +402,22 @@ export type OverrideResponse = {
 };
 
 /**
+ * Proficiency level input.
+ */
+export type ProficiencyLevelRequest = {
+  grade: string;
+  description: string;
+};
+
+/**
+ * Proficiency level output.
+ */
+export type ProficiencyLevelResponse = {
+  grade: string;
+  description: string;
+};
+
+/**
  * Request body for registration.
  */
 export type RegisterRequest = {
@@ -498,9 +478,7 @@ export type ReviewSummary = {
 export type RubricCriterionCreateRequest = {
   name: string;
   description: string;
-  evidence_indicators?: Array<string>;
-  failure_modes?: Array<FailureModeRequest>;
-  grade_thresholds?: Array<GradeThresholdRequest>;
+  proficiency_levels?: Array<ProficiencyLevelRequest>;
   weight?: number | string;
 };
 
@@ -510,9 +488,7 @@ export type RubricCriterionCreateRequest = {
 export type RubricCriterionRequest = {
   name: string;
   description: string;
-  evidence_indicators?: Array<string>;
-  failure_modes?: Array<FailureModeRequest>;
-  grade_thresholds?: Array<GradeThresholdRequest>;
+  proficiency_levels?: Array<ProficiencyLevelRequest>;
   weight?: number | string;
 };
 
@@ -524,9 +500,7 @@ export type RubricCriterionResponse = {
   objective_id: string;
   name: string;
   description: string;
-  evidence_indicators?: Array<string>;
-  failure_modes?: Array<FailureModeResponse>;
-  grade_thresholds?: Array<GradeThresholdResponse>;
+  proficiency_levels?: Array<ProficiencyLevelResponse>;
   weight: string;
 };
 
@@ -536,9 +510,7 @@ export type RubricCriterionResponse = {
 export type RubricCriterionUpdateRequest = {
   name?: string | null;
   description?: string | null;
-  evidence_indicators?: Array<string> | null;
-  failure_modes?: Array<FailureModeRequest> | null;
-  grade_thresholds?: Array<GradeThresholdRequest> | null;
+  proficiency_levels?: Array<ProficiencyLevelRequest> | null;
   weight?: number | string | null;
 };
 
