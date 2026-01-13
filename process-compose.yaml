@@ -54,7 +54,7 @@ processes:
         port: 8089
         path: /openapi.json
       period_seconds: 30
-      initial_delay_seconds: 4
+      initial_delay_seconds: 6
     shutdown:
       signal: 15 # TERM
       timeout_seconds: 10
@@ -70,7 +70,7 @@ processes:
         port: 8089
         path: /openapi.json
       period_seconds: 30
-      initial_delay_seconds: 4
+      initial_delay_seconds: 6
     shutdown:
       signal: 15 # TERM
       timeout_seconds: 10
