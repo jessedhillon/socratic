@@ -14,24 +14,13 @@ from . import Session
 from .table import rubric_criteria
 
 
-class GradeThresholdCreateParams(p.BaseModel):
-    """Parameters for creating a grade threshold."""
+class ProficiencyLevelCreateParams(p.BaseModel):
+    """Parameters for creating a proficiency level."""
 
     model_config = p.ConfigDict(frozen=True)
 
     grade: str
     description: str
-    min_evidence_count: int | None = None
-
-
-class FailureModeCreateParams(p.BaseModel):
-    """Parameters for creating a failure mode."""
-
-    model_config = p.ConfigDict(frozen=True)
-
-    name: str
-    description: str
-    indicators: list[str] = []
 
 
 def get(
@@ -63,15 +52,12 @@ def create(
     objective_id: ObjectiveID,
     name: str,
     description: str,
-    evidence_indicators: list[str] | None = None,
-    failure_modes: list[FailureModeCreateParams] | None = None,
-    grade_thresholds: list[GradeThresholdCreateParams] | None = None,
+    proficiency_levels: list[ProficiencyLevelCreateParams] | None = None,
     weight: decimal.Decimal = decimal.Decimal("1.0"),
     session: Session = di.Provide["storage.persistent.session"],
 ) -> RubricCriterion:
     """Create a new rubric criterion."""
-    failure_modes_data: list[dict[str, t.Any]] = [m.model_dump() for m in (failure_modes or [])]
-    grade_thresholds_data: list[dict[str, t.Any]] = [th.model_dump() for th in (grade_thresholds or [])]
+    proficiency_levels_data: list[dict[str, t.Any]] = [pl.model_dump() for pl in (proficiency_levels or [])]
 
     criterion_id = RubricCriterionID()
     stmt = sqla.insert(rubric_criteria).values(
@@ -79,9 +65,7 @@ def create(
         objective_id=objective_id,
         name=name,
         description=description,
-        evidence_indicators=evidence_indicators if evidence_indicators is not None else [],
-        failure_modes=failure_modes_data,
-        grade_thresholds=grade_thresholds_data,
+        proficiency_levels=proficiency_levels_data,
         weight=weight,
     )
     session.execute(stmt)
@@ -96,9 +80,7 @@ def update(
     *,
     name: str | NotSet = NotSet(),
     description: str | NotSet = NotSet(),
-    evidence_indicators: list[str] | NotSet = NotSet(),
-    failure_modes: list[FailureModeCreateParams] | NotSet = NotSet(),
-    grade_thresholds: list[GradeThresholdCreateParams] | NotSet = NotSet(),
+    proficiency_levels: list[ProficiencyLevelCreateParams] | NotSet = NotSet(),
     weight: decimal.Decimal | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
 ) -> None:
@@ -115,12 +97,8 @@ def update(
         values["name"] = name
     if not isinstance(description, NotSet):
         values["description"] = description
-    if not isinstance(evidence_indicators, NotSet):
-        values["evidence_indicators"] = evidence_indicators
-    if not isinstance(failure_modes, NotSet):
-        values["failure_modes"] = [m.model_dump() for m in failure_modes]
-    if not isinstance(grade_thresholds, NotSet):
-        values["grade_thresholds"] = [th.model_dump() for th in grade_thresholds]
+    if not isinstance(proficiency_levels, NotSet):
+        values["proficiency_levels"] = [pl.model_dump() for pl in proficiency_levels]
     if not isinstance(weight, NotSet):
         values["weight"] = weight
 

@@ -20,10 +20,8 @@ __all__ = [
     "RubricCriterionRequest",
     "RubricCriterionResponse",
     "RubricCriterionCreateRequest",
-    "GradeThresholdRequest",
-    "GradeThresholdResponse",
-    "FailureModeRequest",
-    "FailureModeResponse",
+    "ProficiencyLevelRequest",
+    "ProficiencyLevelResponse",
     # Strand views
     "StrandCreateRequest",
     "StrandUpdateRequest",
@@ -53,9 +51,9 @@ from .assignment import AssignmentCreateRequest, AssignmentListResponse, Assignm
     AssignmentWithAttemptsResponse, AttemptResponse, BulkAssignmentCreateRequest, LearnerAssignmentSummary, \
     LearnerDashboardResponse, LearnerListResponse, LearnerResponse
 from .auth import LoginOkResponse, LoginRequest, RegisterRequest, TokenResponse, UserResponse
-from .objective import FailureModeRequest, FailureModeResponse, GradeThresholdRequest, GradeThresholdResponse, \
-    ObjectiveCreateRequest, ObjectiveListResponse, ObjectiveResponse, ObjectiveUpdateRequest, \
-    RubricCriterionCreateRequest, RubricCriterionRequest, RubricCriterionResponse
+from .objective import ObjectiveCreateRequest, ObjectiveListResponse, ObjectiveResponse, ObjectiveUpdateRequest, \
+    ProficiencyLevelRequest, ProficiencyLevelResponse, RubricCriterionCreateRequest, RubricCriterionRequest, \
+    RubricCriterionResponse
 from .organization import InviteRequest, InviteResponse, OrganizationCreateRequest, OrganizationResponse
 from .strand import ObjectiveDependencyRequest, ObjectiveDependencyResponse, ObjectiveInStrandRequest, \
     ObjectiveInStrandResponse, ReorderObjectivesRequest, StrandCreateRequest, StrandListResponse, StrandResponse, \

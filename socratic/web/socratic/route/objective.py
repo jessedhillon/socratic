@@ -12,11 +12,10 @@ from socratic.core import di
 from socratic.model import ObjectiveID, ObjectiveStatus, RubricCriterionID
 from socratic.storage import objective as obj_storage
 from socratic.storage import rubric as rubric_storage
-from socratic.storage.rubric import FailureModeCreateParams, GradeThresholdCreateParams
+from socratic.storage.rubric import ProficiencyLevelCreateParams
 
-from ..view.objective import FailureModeResponse, GradeThresholdResponse, ObjectiveCreateRequest, \
-    ObjectiveListResponse, ObjectiveResponse, ObjectiveUpdateRequest, RubricCriterionCreateRequest, \
-    RubricCriterionResponse, RubricCriterionUpdateRequest
+from ..view.objective import ObjectiveCreateRequest, ObjectiveListResponse, ObjectiveResponse, ObjectiveUpdateRequest, \
+    ProficiencyLevelResponse, RubricCriterionCreateRequest, RubricCriterionResponse, RubricCriterionUpdateRequest
 
 router = APIRouter(prefix="/api/objectives", tags=["objectives"])
 
@@ -40,22 +39,12 @@ def _build_objective_response(
             objective_id=c.objective_id,
             name=c.name,
             description=c.description,
-            evidence_indicators=c.evidence_indicators,
-            failure_modes=[
-                FailureModeResponse(
-                    name=fm.name,
-                    description=fm.description,
-                    indicators=fm.indicators,
+            proficiency_levels=[
+                ProficiencyLevelResponse(
+                    grade=pl.grade,
+                    description=pl.description,
                 )
-                for fm in c.failure_modes
-            ],
-            grade_thresholds=[
-                GradeThresholdResponse(
-                    grade=gt.grade,
-                    description=gt.description,
-                    min_evidence_count=gt.min_evidence_count,
-                )
-                for gt in c.grade_thresholds
+                for pl in c.proficiency_levels
             ],
             weight=c.weight,
         )
@@ -112,22 +101,12 @@ def create_objective(
                 objective_id=obj.objective_id,
                 name=criterion_req.name,
                 description=criterion_req.description,
-                evidence_indicators=criterion_req.evidence_indicators,
-                failure_modes=[
-                    FailureModeCreateParams(
-                        name=fm.name,
-                        description=fm.description,
-                        indicators=fm.indicators,
+                proficiency_levels=[
+                    ProficiencyLevelCreateParams(
+                        grade=pl.grade,
+                        description=pl.description,
                     )
-                    for fm in criterion_req.failure_modes
-                ],
-                grade_thresholds=[
-                    GradeThresholdCreateParams(
-                        grade=gt.grade,
-                        description=gt.description,
-                        min_evidence_count=gt.min_evidence_count,
-                    )
-                    for gt in criterion_req.grade_thresholds
+                    for pl in criterion_req.proficiency_levels
                 ],
                 weight=criterion_req.weight,
                 session=session,
@@ -315,22 +294,12 @@ def add_rubric_criterion(
             objective_id=objective_id,
             name=request.name,
             description=request.description,
-            evidence_indicators=request.evidence_indicators,
-            failure_modes=[
-                FailureModeCreateParams(
-                    name=fm.name,
-                    description=fm.description,
-                    indicators=fm.indicators,
+            proficiency_levels=[
+                ProficiencyLevelCreateParams(
+                    grade=pl.grade,
+                    description=pl.description,
                 )
-                for fm in request.failure_modes
-            ],
-            grade_thresholds=[
-                GradeThresholdCreateParams(
-                    grade=gt.grade,
-                    description=gt.description,
-                    min_evidence_count=gt.min_evidence_count,
-                )
-                for gt in request.grade_thresholds
+                for pl in request.proficiency_levels
             ],
             weight=request.weight,
             session=session,
@@ -341,22 +310,12 @@ def add_rubric_criterion(
             objective_id=criterion.objective_id,
             name=criterion.name,
             description=criterion.description,
-            evidence_indicators=criterion.evidence_indicators,
-            failure_modes=[
-                FailureModeResponse(
-                    name=fm.name,
-                    description=fm.description,
-                    indicators=fm.indicators,
+            proficiency_levels=[
+                ProficiencyLevelResponse(
+                    grade=pl.grade,
+                    description=pl.description,
                 )
-                for fm in criterion.failure_modes
-            ],
-            grade_thresholds=[
-                GradeThresholdResponse(
-                    grade=gt.grade,
-                    description=gt.description,
-                    min_evidence_count=gt.min_evidence_count,
-                )
-                for gt in criterion.grade_thresholds
+                for pl in criterion.proficiency_levels
             ],
             weight=criterion.weight,
         )
@@ -407,25 +366,13 @@ def update_rubric_criterion(
             update_kwargs["name"] = request.name
         if request.description is not None:
             update_kwargs["description"] = request.description
-        if request.evidence_indicators is not None:
-            update_kwargs["evidence_indicators"] = request.evidence_indicators
-        if request.failure_modes is not None:
-            update_kwargs["failure_modes"] = [
-                FailureModeCreateParams(
-                    name=fm.name,
-                    description=fm.description,
-                    indicators=fm.indicators,
+        if request.proficiency_levels is not None:
+            update_kwargs["proficiency_levels"] = [
+                ProficiencyLevelCreateParams(
+                    grade=pl.grade,
+                    description=pl.description,
                 )
-                for fm in request.failure_modes
-            ]
-        if request.grade_thresholds is not None:
-            update_kwargs["grade_thresholds"] = [
-                GradeThresholdCreateParams(
-                    grade=gt.grade,
-                    description=gt.description,
-                    min_evidence_count=gt.min_evidence_count,
-                )
-                for gt in request.grade_thresholds
+                for pl in request.proficiency_levels
             ]
         if request.weight is not None:
             update_kwargs["weight"] = request.weight
@@ -441,22 +388,12 @@ def update_rubric_criterion(
             objective_id=updated.objective_id,
             name=updated.name,
             description=updated.description,
-            evidence_indicators=updated.evidence_indicators,
-            failure_modes=[
-                FailureModeResponse(
-                    name=fm.name,
-                    description=fm.description,
-                    indicators=fm.indicators,
+            proficiency_levels=[
+                ProficiencyLevelResponse(
+                    grade=pl.grade,
+                    description=pl.description,
                 )
-                for fm in updated.failure_modes
-            ],
-            grade_thresholds=[
-                GradeThresholdResponse(
-                    grade=gt.grade,
-                    description=gt.description,
-                    min_evidence_count=gt.min_evidence_count,
-                )
-                for gt in updated.grade_thresholds
+                for pl in updated.proficiency_levels
             ],
             weight=updated.weight,
         )

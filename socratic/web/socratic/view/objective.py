@@ -10,20 +10,11 @@ import pydantic as p
 from socratic.model import ExtensionPolicy, ObjectiveID, ObjectiveStatus, OrganizationID, RubricCriterionID, UserID
 
 
-class GradeThresholdRequest(p.BaseModel):
-    """Grade threshold input."""
+class ProficiencyLevelRequest(p.BaseModel):
+    """Proficiency level input."""
 
     grade: str
     description: str
-    min_evidence_count: int | None = None
-
-
-class FailureModeRequest(p.BaseModel):
-    """Failure mode input."""
-
-    name: str
-    description: str
-    indicators: list[str] = []
 
 
 class RubricCriterionRequest(p.BaseModel):
@@ -31,9 +22,7 @@ class RubricCriterionRequest(p.BaseModel):
 
     name: str
     description: str
-    evidence_indicators: list[str] = []
-    failure_modes: list[FailureModeRequest] = []
-    grade_thresholds: list[GradeThresholdRequest] = []
+    proficiency_levels: list[ProficiencyLevelRequest] = []
     weight: decimal.Decimal = decimal.Decimal("1.0")
 
 
@@ -63,20 +52,11 @@ class ObjectiveUpdateRequest(p.BaseModel):
     status: ObjectiveStatus | None = None
 
 
-class GradeThresholdResponse(p.BaseModel):
-    """Grade threshold output."""
+class ProficiencyLevelResponse(p.BaseModel):
+    """Proficiency level output."""
 
     grade: str
     description: str
-    min_evidence_count: int | None = None
-
-
-class FailureModeResponse(p.BaseModel):
-    """Failure mode output."""
-
-    name: str
-    description: str
-    indicators: list[str] = []
 
 
 class RubricCriterionResponse(p.BaseModel):
@@ -86,9 +66,7 @@ class RubricCriterionResponse(p.BaseModel):
     objective_id: ObjectiveID
     name: str
     description: str
-    evidence_indicators: list[str] = []
-    failure_modes: list[FailureModeResponse] = []
-    grade_thresholds: list[GradeThresholdResponse] = []
+    proficiency_levels: list[ProficiencyLevelResponse] = []
     weight: decimal.Decimal
 
 
@@ -123,9 +101,7 @@ class RubricCriterionCreateRequest(p.BaseModel):
 
     name: str
     description: str
-    evidence_indicators: list[str] = []
-    failure_modes: list[FailureModeRequest] = []
-    grade_thresholds: list[GradeThresholdRequest] = []
+    proficiency_levels: list[ProficiencyLevelRequest] = []
     weight: decimal.Decimal = decimal.Decimal("1.0")
 
 
@@ -134,7 +110,5 @@ class RubricCriterionUpdateRequest(p.BaseModel):
 
     name: str | None = None
     description: str | None = None
-    evidence_indicators: list[str] | None = None
-    failure_modes: list[FailureModeRequest] | None = None
-    grade_thresholds: list[GradeThresholdRequest] | None = None
+    proficiency_levels: list[ProficiencyLevelRequest] | None = None
     weight: decimal.Decimal | None = None

@@ -107,13 +107,12 @@ async def _grade_single_criterion(
     criterion_context = {
         "name": criterion.name,
         "description": criterion.description,
-        "grade_thresholds": [
+        "proficiency_levels": [
             {
-                "grade": gt.grade,
-                "description": gt.description,
-                "min_evidence_count": gt.min_evidence_count,
+                "grade": pl.grade,
+                "description": pl.description,
             }
-            for gt in criterion.grade_thresholds
+            for pl in criterion.proficiency_levels
         ],
     }
 

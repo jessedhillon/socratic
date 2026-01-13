@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from socratic.model import Objective, Organization, RubricCriterion, RubricCriterionID, User, UserRole
 from socratic.storage import rubric as rubric_storage
-from socratic.storage.rubric import FailureModeCreateParams, GradeThresholdCreateParams
+from socratic.storage.rubric import ProficiencyLevelCreateParams
 
 
 class TestGet(object):
@@ -119,23 +119,22 @@ class TestCreate(object):
         test_objective: Objective,
     ) -> None:
         """create() accepts optional fields."""
-        failure_modes = [
-            FailureModeCreateParams(
-                name="Common Mistake",
-                description="A common mistake students make",
-                indicators=["indicator 1", "indicator 2"],
-            )
-        ]
-        grade_thresholds = [
-            GradeThresholdCreateParams(
-                grade="A",
-                description="Excellent understanding",
-                min_evidence_count=3,
+        proficiency_levels = [
+            ProficiencyLevelCreateParams(
+                grade="S",
+                description="Demonstrates mastery of the concept",
             ),
-            GradeThresholdCreateParams(
+            ProficiencyLevelCreateParams(
+                grade="A",
+                description="Shows good understanding with minor gaps",
+            ),
+            ProficiencyLevelCreateParams(
                 grade="C",
-                description="Good understanding",
-                min_evidence_count=2,
+                description="Partial understanding with some misconceptions",
+            ),
+            ProficiencyLevelCreateParams(
+                grade="F",
+                description="Does not demonstrate understanding",
             ),
         ]
 
@@ -144,17 +143,14 @@ class TestCreate(object):
                 objective_id=test_objective.objective_id,
                 name="Full Criterion",
                 description="Complete criterion",
-                evidence_indicators=["evidence 1", "evidence 2"],
-                failure_modes=failure_modes,
-                grade_thresholds=grade_thresholds,
+                proficiency_levels=proficiency_levels,
                 weight=decimal.Decimal("2.0"),
                 session=db_session,
             )
 
-        assert criterion.evidence_indicators == ["evidence 1", "evidence 2"]
-        assert len(criterion.failure_modes) == 1
-        assert criterion.failure_modes[0].name == "Common Mistake"
-        assert len(criterion.grade_thresholds) == 2
+        assert len(criterion.proficiency_levels) == 4
+        assert criterion.proficiency_levels[0].grade == "S"
+        assert criterion.proficiency_levels[1].grade == "A"
         assert criterion.weight == decimal.Decimal("2.0")
 
     def test_create_defaults(
@@ -171,9 +167,7 @@ class TestCreate(object):
                 session=db_session,
             )
 
-        assert criterion.evidence_indicators == []
-        assert criterion.failure_modes == []
-        assert criterion.grade_thresholds == []
+        assert criterion.proficiency_levels == []
         assert criterion.weight == decimal.Decimal("1.0")
 
 
@@ -251,86 +245,37 @@ class TestUpdate(object):
         assert result.description == "New Description"
         assert result.weight == decimal.Decimal("2.5")
 
-    def test_update_evidence_indicators(
+    def test_update_proficiency_levels(
         self,
         db_session: Session,
         criterion_factory: t.Callable[..., RubricCriterion],
     ) -> None:
-        """update() updates evidence_indicators list."""
-        criterion = criterion_factory(evidence_indicators=["old indicator"])
-
-        with db_session.begin():
-            rubric_storage.update(
-                criterion.criterion_id,
-                evidence_indicators=["new indicator 1", "new indicator 2"],
-                session=db_session,
-            )
-            result = rubric_storage.get(criterion.criterion_id, session=db_session)
-
-        assert result is not None
-        assert result.evidence_indicators == ["new indicator 1", "new indicator 2"]
-
-    def test_update_failure_modes(
-        self,
-        db_session: Session,
-        criterion_factory: t.Callable[..., RubricCriterion],
-    ) -> None:
-        """update() updates failure_modes list."""
+        """update() updates proficiency_levels list."""
         criterion = criterion_factory()
 
-        new_failure_modes = [
-            FailureModeCreateParams(
-                name="New Failure Mode",
-                description="Description of new failure mode",
-                indicators=["indicator 1"],
-            )
-        ]
-
-        with db_session.begin():
-            rubric_storage.update(
-                criterion.criterion_id,
-                failure_modes=new_failure_modes,
-                session=db_session,
-            )
-            result = rubric_storage.get(criterion.criterion_id, session=db_session)
-
-        assert result is not None
-        assert len(result.failure_modes) == 1
-        assert result.failure_modes[0].name == "New Failure Mode"
-
-    def test_update_grade_thresholds(
-        self,
-        db_session: Session,
-        criterion_factory: t.Callable[..., RubricCriterion],
-    ) -> None:
-        """update() updates grade_thresholds list."""
-        criterion = criterion_factory()
-
-        new_thresholds = [
-            GradeThresholdCreateParams(
+        new_levels = [
+            ProficiencyLevelCreateParams(
+                grade="S",
+                description="Demonstrates mastery",
+            ),
+            ProficiencyLevelCreateParams(
                 grade="A",
-                description="Excellent",
-                min_evidence_count=3,
-            ),
-            GradeThresholdCreateParams(
-                grade="B",
-                description="Good",
-                min_evidence_count=2,
+                description="Shows good understanding",
             ),
         ]
 
         with db_session.begin():
             rubric_storage.update(
                 criterion.criterion_id,
-                grade_thresholds=new_thresholds,
+                proficiency_levels=new_levels,
                 session=db_session,
             )
             result = rubric_storage.get(criterion.criterion_id, session=db_session)
 
         assert result is not None
-        assert len(result.grade_thresholds) == 2
-        assert result.grade_thresholds[0].grade == "A"
-        assert result.grade_thresholds[1].grade == "B"
+        assert len(result.proficiency_levels) == 2
+        assert result.proficiency_levels[0].grade == "S"
+        assert result.proficiency_levels[1].grade == "A"
 
     def test_update_nonexistent_raises_keyerror(self, db_session: Session) -> None:
         """update() raises KeyError for nonexistent criterion."""
@@ -433,9 +378,7 @@ def criterion_factory(
         name: str = "Test Criterion",
         description: str = "A test criterion description",
         objective_id: t.Any = None,
-        evidence_indicators: list[str] | None = None,
-        failure_modes: list[FailureModeCreateParams] | None = None,
-        grade_thresholds: list[GradeThresholdCreateParams] | None = None,
+        proficiency_levels: list[ProficiencyLevelCreateParams] | None = None,
         weight: decimal.Decimal = decimal.Decimal("1.0"),
     ) -> RubricCriterion:
         with db_session.begin():
@@ -443,9 +386,7 @@ def criterion_factory(
                 objective_id=objective_id or test_objective.objective_id,
                 name=name,
                 description=description,
-                evidence_indicators=evidence_indicators,
-                failure_modes=failure_modes,
-                grade_thresholds=grade_thresholds,
+                proficiency_levels=proficiency_levels,
                 weight=weight,
                 session=db_session,
             )
