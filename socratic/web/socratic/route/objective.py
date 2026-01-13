@@ -9,14 +9,14 @@ from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator
 from socratic.core import di
-from socratic.model import ObjectiveID, ObjectiveStatus
+from socratic.model import ObjectiveID, ObjectiveStatus, RubricCriterionID
 from socratic.storage import objective as obj_storage
 from socratic.storage import rubric as rubric_storage
 from socratic.storage.rubric import FailureModeCreateParams, GradeThresholdCreateParams
 
 from ..view.objective import FailureModeResponse, GradeThresholdResponse, ObjectiveCreateRequest, \
     ObjectiveListResponse, ObjectiveResponse, ObjectiveUpdateRequest, RubricCriterionCreateRequest, \
-    RubricCriterionResponse
+    RubricCriterionResponse, RubricCriterionUpdateRequest
 
 router = APIRouter(prefix="/api/objectives", tags=["objectives"])
 
@@ -360,3 +360,146 @@ def add_rubric_criterion(
             ],
             weight=criterion.weight,
         )
+
+
+@router.put(
+    "/{objective_id}/criteria/{criterion_id}",
+    operation_id="update_rubric_criterion",
+)
+@di.inject
+def update_rubric_criterion(
+    objective_id: ObjectiveID,
+    criterion_id: RubricCriterionID,
+    request: RubricCriterionUpdateRequest,
+    auth: AuthContext = Depends(require_educator),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+) -> RubricCriterionResponse:
+    """Update a rubric criterion.
+
+    Only educators can update rubric criteria.
+    """
+    with session.begin():
+        obj = obj_storage.get(objective_id, session=session)
+        if obj is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Objective not found",
+            )
+
+        # Verify organization access
+        if obj.organization_id != auth.organization_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot modify objectives from other organizations",
+            )
+
+        # Verify criterion exists and belongs to this objective
+        criterion = rubric_storage.get(criterion_id, session=session)
+        if criterion is None or criterion.objective_id != objective_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Rubric criterion not found",
+            )
+
+        # Build update kwargs from request (only include fields that are set)
+        update_kwargs: dict[str, t.Any] = {}
+        if request.name is not None:
+            update_kwargs["name"] = request.name
+        if request.description is not None:
+            update_kwargs["description"] = request.description
+        if request.evidence_indicators is not None:
+            update_kwargs["evidence_indicators"] = request.evidence_indicators
+        if request.failure_modes is not None:
+            update_kwargs["failure_modes"] = [
+                FailureModeCreateParams(
+                    name=fm.name,
+                    description=fm.description,
+                    indicators=fm.indicators,
+                )
+                for fm in request.failure_modes
+            ]
+        if request.grade_thresholds is not None:
+            update_kwargs["grade_thresholds"] = [
+                GradeThresholdCreateParams(
+                    grade=gt.grade,
+                    description=gt.description,
+                    min_evidence_count=gt.min_evidence_count,
+                )
+                for gt in request.grade_thresholds
+            ]
+        if request.weight is not None:
+            update_kwargs["weight"] = request.weight
+
+        rubric_storage.update(criterion_id, **update_kwargs, session=session)
+
+        # Fetch the updated criterion
+        updated = rubric_storage.get(criterion_id, session=session)
+        assert updated is not None
+
+        return RubricCriterionResponse(
+            criterion_id=updated.criterion_id,
+            objective_id=updated.objective_id,
+            name=updated.name,
+            description=updated.description,
+            evidence_indicators=updated.evidence_indicators,
+            failure_modes=[
+                FailureModeResponse(
+                    name=fm.name,
+                    description=fm.description,
+                    indicators=fm.indicators,
+                )
+                for fm in updated.failure_modes
+            ],
+            grade_thresholds=[
+                GradeThresholdResponse(
+                    grade=gt.grade,
+                    description=gt.description,
+                    min_evidence_count=gt.min_evidence_count,
+                )
+                for gt in updated.grade_thresholds
+            ],
+            weight=updated.weight,
+        )
+
+
+@router.delete(
+    "/{objective_id}/criteria/{criterion_id}",
+    operation_id="delete_rubric_criterion",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
+@di.inject
+def delete_rubric_criterion(
+    objective_id: ObjectiveID,
+    criterion_id: RubricCriterionID,
+    auth: AuthContext = Depends(require_educator),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+) -> None:
+    """Delete a rubric criterion.
+
+    Only educators can delete rubric criteria.
+    """
+    with session.begin():
+        obj = obj_storage.get(objective_id, session=session)
+        if obj is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Objective not found",
+            )
+
+        # Verify organization access
+        if obj.organization_id != auth.organization_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot modify objectives from other organizations",
+            )
+
+        # Verify criterion exists and belongs to this objective
+        criterion = rubric_storage.get(criterion_id, session=session)
+        if criterion is None or criterion.objective_id != objective_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Rubric criterion not found",
+            )
+
+        rubric_storage.delete(criterion_id, session=session)

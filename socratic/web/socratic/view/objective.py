@@ -127,3 +127,14 @@ class RubricCriterionCreateRequest(p.BaseModel):
     failure_modes: list[FailureModeRequest] = []
     grade_thresholds: list[GradeThresholdRequest] = []
     weight: decimal.Decimal = decimal.Decimal("1.0")
+
+
+class RubricCriterionUpdateRequest(p.BaseModel):
+    """Request to update a rubric criterion."""
+
+    name: str | None = None
+    description: str | None = None
+    evidence_indicators: list[str] | None = None
+    failure_modes: list[FailureModeRequest] | None = None
+    grade_thresholds: list[GradeThresholdRequest] | None = None
+    weight: decimal.Decimal | None = None
