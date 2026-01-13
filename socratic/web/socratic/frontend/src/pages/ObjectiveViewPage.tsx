@@ -14,6 +14,7 @@ import {
   type ObjectiveStatus,
   type RubricCriterionResponse,
   type RubricCriterionCreateRequest,
+  type ProficiencyLevelRequest,
 } from '../api';
 import { getLoginUrl } from '../auth';
 import EditableText, {
@@ -46,6 +47,18 @@ const statusOptions = [
   { value: 'draft', label: 'Draft' },
   { value: 'published', label: 'Published' },
   { value: 'archived', label: 'Archived' },
+];
+
+// Grade levels for proficiency descriptions
+const gradeLevels = [
+  { grade: 'S', label: 'Exemplary (S)', color: 'bg-green-50 border-green-200' },
+  { grade: 'A', label: 'Proficient (A)', color: 'bg-blue-50 border-blue-200' },
+  {
+    grade: 'C',
+    label: 'Developing (C)',
+    color: 'bg-yellow-50 border-yellow-200',
+  },
+  { grade: 'F', label: 'Beginning (F)', color: 'bg-red-50 border-red-200' },
 ];
 
 // Default values for a new objective
@@ -792,19 +805,37 @@ const CriterionForm: React.FC<{
 }> = ({ criterion, onSave, onCancel, disabled }) => {
   const [name, setName] = useState(criterion?.name || '');
   const [description, setDescription] = useState(criterion?.description || '');
-  const [weight, setWeight] = useState(criterion?.weight?.toString() || '1.0');
-  const [evidenceIndicators, setEvidenceIndicators] = useState<string[]>(
-    criterion?.evidence_indicators || []
-  );
+
+  // Initialize proficiency levels from existing criterion or create empty ones
+  const initProficiencyLevels = (): Record<string, string> => {
+    const levels: Record<string, string> = { S: '', A: '', C: '', F: '' };
+    if (criterion?.proficiency_levels) {
+      for (const pl of criterion.proficiency_levels) {
+        levels[pl.grade] = pl.description;
+      }
+    }
+    return levels;
+  };
+  const [proficiencyLevels, setProficiencyLevels] = useState<
+    Record<string, string>
+  >(initProficiencyLevels);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !description.trim()) return;
+
+    // Convert proficiency levels to array format, filtering out empty descriptions
+    const proficiencyLevelsArray: ProficiencyLevelRequest[] = gradeLevels
+      .filter((gl) => proficiencyLevels[gl.grade]?.trim())
+      .map((gl) => ({
+        grade: gl.grade,
+        description: proficiencyLevels[gl.grade].trim(),
+      }));
+
     onSave({
       name: name.trim(),
       description: description.trim(),
-      weight: parseFloat(weight) || 1.0,
-      evidence_indicators: evidenceIndicators.filter((i) => i.trim()),
+      proficiency_levels: proficiencyLevelsArray,
     });
   };
 
@@ -841,73 +872,33 @@ const CriterionForm: React.FC<{
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Weight
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Proficiency Levels
         </label>
-        <input
-          type="number"
-          step="0.1"
-          min="0.1"
-          value={weight}
-          onChange={(e) => setWeight(e.target.value)}
-          className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          disabled={disabled}
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Evidence Indicators
-        </label>
-        <div className="space-y-2">
-          {evidenceIndicators.map((indicator, index) => (
-            <div key={index} className="flex gap-2">
-              <input
-                type="text"
-                value={indicator}
-                onChange={(e) => {
-                  const newIndicators = [...evidenceIndicators];
-                  newIndicators[index] = e.target.value;
-                  setEvidenceIndicators(newIndicators);
-                }}
-                placeholder="What demonstrates understanding..."
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        <p className="text-sm text-gray-500 mb-3">
+          Describe what a learner response looks like at each grade level.
+        </p>
+        <div className="space-y-3">
+          {gradeLevels.map((gl) => (
+            <div key={gl.grade} className={`border rounded-md p-3 ${gl.color}`}>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {gl.label}
+              </label>
+              <textarea
+                value={proficiencyLevels[gl.grade] || ''}
+                onChange={(e) =>
+                  setProficiencyLevels({
+                    ...proficiencyLevels,
+                    [gl.grade]: e.target.value,
+                  })
+                }
+                placeholder={`Describe what ${gl.label.toLowerCase()} performance looks like...`}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                 disabled={disabled}
               />
-              <button
-                type="button"
-                onClick={() => {
-                  setEvidenceIndicators(
-                    evidenceIndicators.filter((_, i) => i !== index)
-                  );
-                }}
-                className="p-2 text-gray-400 hover:text-red-600"
-                disabled={disabled}
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
             </div>
           ))}
-          <button
-            type="button"
-            onClick={() => setEvidenceIndicators([...evidenceIndicators, ''])}
-            className="text-sm text-blue-600 hover:text-blue-800"
-            disabled={disabled}
-          >
-            + Add indicator
-          </button>
         </div>
       </div>
 
@@ -970,9 +961,6 @@ const CriterionCard: React.FC<{
       <div className="flex justify-between items-start mb-2">
         <h3 className="text-lg font-medium text-gray-800">{criterion.name}</h3>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">
-            Weight: {criterion.weight}
-          </span>
           {!disabled && (
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
@@ -1019,66 +1007,41 @@ const CriterionCard: React.FC<{
       </div>
       <p className="text-gray-600 mb-4">{criterion.description}</p>
 
-      {/* Evidence Indicators */}
-      {criterion.evidence_indicators &&
-        criterion.evidence_indicators.length > 0 && (
-          <div className="mb-4">
+      {/* Proficiency Levels */}
+      {criterion.proficiency_levels &&
+        criterion.proficiency_levels.length > 0 && (
+          <div>
             <h4 className="text-sm font-medium text-gray-700 mb-2">
-              Evidence Indicators
+              Proficiency Levels
             </h4>
-            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
-              {criterion.evidence_indicators.map((indicator, index) => (
-                <li key={index}>{indicator}</li>
-              ))}
-            </ul>
+            <div className="space-y-2">
+              {gradeLevels
+                .filter((gl) =>
+                  criterion.proficiency_levels?.some(
+                    (pl) => pl.grade === gl.grade
+                  )
+                )
+                .map((gl) => {
+                  const level = criterion.proficiency_levels?.find(
+                    (pl) => pl.grade === gl.grade
+                  );
+                  return (
+                    <div
+                      key={gl.grade}
+                      className={`border rounded p-3 ${gl.color}`}
+                    >
+                      <span className="font-medium text-gray-800">
+                        {gl.label}:
+                      </span>{' '}
+                      <span className="text-gray-700">
+                        {level?.description}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
           </div>
         )}
-
-      {/* Failure Modes */}
-      {criterion.failure_modes && criterion.failure_modes.length > 0 && (
-        <div className="mb-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">
-            Failure Modes
-          </h4>
-          <div className="space-y-2">
-            {criterion.failure_modes.map((mode, index) => (
-              <div
-                key={index}
-                className="bg-red-50 border border-red-100 rounded p-3"
-              >
-                <span className="font-medium text-red-800">{mode.name}:</span>{' '}
-                <span className="text-red-700">{mode.description}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Grade Thresholds */}
-      {criterion.grade_thresholds && criterion.grade_thresholds.length > 0 && (
-        <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-2">
-            Grade Thresholds
-          </h4>
-          <div className="grid grid-cols-2 gap-2">
-            {criterion.grade_thresholds.map((threshold, index) => (
-              <div
-                key={index}
-                className="bg-gray-50 border border-gray-200 rounded p-2 text-sm"
-              >
-                <span className="font-medium">{threshold.grade}:</span>{' '}
-                {threshold.description}
-                {threshold.min_evidence_count && (
-                  <span className="text-gray-500">
-                    {' '}
-                    (min {threshold.min_evidence_count} evidence)
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

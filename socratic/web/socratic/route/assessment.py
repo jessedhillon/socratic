@@ -98,8 +98,7 @@ async def start_assessment_route(
             "criterion_id": str(c.criterion_id),
             "name": c.name,
             "description": c.description,
-            "evidence_indicators": c.evidence_indicators,
-            "failure_modes": c.failure_modes,
+            "proficiency_levels": [{"grade": pl.grade, "description": pl.description} for pl in c.proficiency_levels],
         }
         for c in rubric_criteria
     ]

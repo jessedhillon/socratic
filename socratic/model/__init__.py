@@ -37,8 +37,7 @@ __all__ = [
     "DependencyType",
     # Rubrics
     "RubricCriterion",
-    "GradeThreshold",
-    "FailureMode",
+    "ProficiencyLevel",
     # Assignments
     "Assignment",
     "RetakePolicy",
@@ -68,7 +67,7 @@ from .id import AssignmentID, AttemptID, EvaluationResultID, ExampleID, Objectiv
 from .objective import ExtensionPolicy, Objective, ObjectiveStatus
 from .organization import Organization
 from .override import EducatorOverride
-from .rubric import FailureMode, GradeThreshold, RubricCriterion
+from .rubric import ProficiencyLevel, RubricCriterion
 from .strand import DependencyType, ObjectiveDependency, ObjectiveInStrand, Strand
 from .transcript import TranscriptSegment, UtteranceType
 from .user import OrganizationMembership, User, UserRole, UserWithMemberships

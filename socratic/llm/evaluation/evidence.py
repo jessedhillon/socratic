@@ -83,14 +83,12 @@ async def _extract_criterion_evidence(
     criterion_context = {
         "name": criterion.name,
         "description": criterion.description,
-        "evidence_indicators": criterion.evidence_indicators,
-        "failure_modes": [
+        "proficiency_levels": [
             {
-                "name": fm.name,
-                "description": fm.description,
-                "indicators": fm.indicators,
+                "grade": pl.grade,
+                "description": pl.description,
             }
-            for fm in criterion.failure_modes
+            for pl in criterion.proficiency_levels
         ],
     }
 
