@@ -21,6 +21,7 @@ repos:
         language: system
         files: \.(nix|py|ya?ml|md|tsx?|jsx?|json|s?css|html)$
         pass_filenames: true
+        stages: [pre-commit]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.2
