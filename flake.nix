@@ -114,6 +114,7 @@
         '';
 
         packages = with pkgs; [
+          bubblewrap
           claude-code
           fzf
           gh
