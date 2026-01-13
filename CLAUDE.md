@@ -733,6 +733,18 @@ fix authentication bug in `LoginForm`
 Refactor storage.objective to New Patterns  # unnecessary caps, missing backticks
 ```
 
+### Issue Status Workflow
+
+Move issues through statuses as work progresses:
+
+| Status      | When to use                        |
+| ----------- | ---------------------------------- |
+| In Progress | Actively working on the issue      |
+| In Review   | PR opened, awaiting review/merge   |
+| Done        | Code merged to master (not before) |
+
+Do not mark issues as Done when opening a PR — they are only Done after the code is merged.
+
 ## Debugging
 
 ### Python Debugger
