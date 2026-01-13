@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import decimal
 import typing as t
 
 import pydantic as p
@@ -53,7 +52,6 @@ def create(
     name: str,
     description: str,
     proficiency_levels: list[ProficiencyLevelCreateParams] | None = None,
-    weight: decimal.Decimal = decimal.Decimal("1.0"),
     session: Session = di.Provide["storage.persistent.session"],
 ) -> RubricCriterion:
     """Create a new rubric criterion."""
@@ -66,7 +64,6 @@ def create(
         name=name,
         description=description,
         proficiency_levels=proficiency_levels_data,
-        weight=weight,
     )
     session.execute(stmt)
     session.flush()
@@ -81,7 +78,6 @@ def update(
     name: str | NotSet = NotSet(),
     description: str | NotSet = NotSet(),
     proficiency_levels: list[ProficiencyLevelCreateParams] | NotSet = NotSet(),
-    weight: decimal.Decimal | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
 ) -> None:
     """Update a rubric criterion.
@@ -99,8 +95,6 @@ def update(
         values["description"] = description
     if not isinstance(proficiency_levels, NotSet):
         values["proficiency_levels"] = [pl.model_dump() for pl in proficiency_levels]
-    if not isinstance(weight, NotSet):
-        values["weight"] = weight
 
     if values:
         stmt = sqla.update(rubric_criteria).where(rubric_criteria.criterion_id == criterion_id).values(**values)

@@ -46,7 +46,6 @@ def _build_objective_response(
                 )
                 for pl in c.proficiency_levels
             ],
-            weight=c.weight,
         )
         for c in criteria
     ]
@@ -108,7 +107,6 @@ def create_objective(
                     )
                     for pl in criterion_req.proficiency_levels
                 ],
-                weight=criterion_req.weight,
                 session=session,
             )
 
@@ -301,7 +299,6 @@ def add_rubric_criterion(
                 )
                 for pl in request.proficiency_levels
             ],
-            weight=request.weight,
             session=session,
         )
 
@@ -317,7 +314,6 @@ def add_rubric_criterion(
                 )
                 for pl in criterion.proficiency_levels
             ],
-            weight=criterion.weight,
         )
 
 
@@ -374,8 +370,6 @@ def update_rubric_criterion(
                 )
                 for pl in request.proficiency_levels
             ]
-        if request.weight is not None:
-            update_kwargs["weight"] = request.weight
 
         rubric_storage.update(criterion_id, **update_kwargs, session=session)
 
@@ -395,7 +389,6 @@ def update_rubric_criterion(
                 )
                 for pl in updated.proficiency_levels
             ],
-            weight=updated.weight,
         )
 
 

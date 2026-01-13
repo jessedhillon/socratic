@@ -805,7 +805,6 @@ const CriterionForm: React.FC<{
 }> = ({ criterion, onSave, onCancel, disabled }) => {
   const [name, setName] = useState(criterion?.name || '');
   const [description, setDescription] = useState(criterion?.description || '');
-  const [weight, setWeight] = useState(criterion?.weight?.toString() || '1.0');
 
   // Initialize proficiency levels from existing criterion or create empty ones
   const initProficiencyLevels = (): Record<string, string> => {
@@ -836,7 +835,6 @@ const CriterionForm: React.FC<{
     onSave({
       name: name.trim(),
       description: description.trim(),
-      weight: parseFloat(weight) || 1.0,
       proficiency_levels: proficiencyLevelsArray,
     });
   };
@@ -870,21 +868,6 @@ const CriterionForm: React.FC<{
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           disabled={disabled}
           required
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Weight
-        </label>
-        <input
-          type="number"
-          step="0.1"
-          min="0.1"
-          value={weight}
-          onChange={(e) => setWeight(e.target.value)}
-          className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          disabled={disabled}
         />
       </div>
 
@@ -978,9 +961,6 @@ const CriterionCard: React.FC<{
       <div className="flex justify-between items-start mb-2">
         <h3 className="text-lg font-medium text-gray-800">{criterion.name}</h3>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">
-            Weight: {criterion.weight}
-          </span>
           {!disabled && (
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button

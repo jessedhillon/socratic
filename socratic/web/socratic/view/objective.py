@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import decimal
 
 import pydantic as p
 
@@ -23,7 +22,6 @@ class RubricCriterionRequest(p.BaseModel):
     name: str
     description: str
     proficiency_levels: list[ProficiencyLevelRequest] = []
-    weight: decimal.Decimal = decimal.Decimal("1.0")
 
 
 class ObjectiveCreateRequest(p.BaseModel):
@@ -67,7 +65,6 @@ class RubricCriterionResponse(p.BaseModel):
     name: str
     description: str
     proficiency_levels: list[ProficiencyLevelResponse] = []
-    weight: decimal.Decimal
 
 
 class ObjectiveResponse(p.BaseModel):
@@ -102,7 +99,6 @@ class RubricCriterionCreateRequest(p.BaseModel):
     name: str
     description: str
     proficiency_levels: list[ProficiencyLevelRequest] = []
-    weight: decimal.Decimal = decimal.Decimal("1.0")
 
 
 class RubricCriterionUpdateRequest(p.BaseModel):
@@ -111,4 +107,3 @@ class RubricCriterionUpdateRequest(p.BaseModel):
     name: str | None = None
     description: str | None = None
     proficiency_levels: list[ProficiencyLevelRequest] | None = None
-    weight: decimal.Decimal | None = None

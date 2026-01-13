@@ -145,7 +145,6 @@ class rubric_criteria(base):
     name: Mapped[str]
     description: Mapped[str]
     proficiency_levels: Mapped[list[dict[str, t.Any]]] = mapped_column(JSONB, default_factory=list)
-    weight: Mapped[decimal.Decimal] = mapped_column(Numeric(4, 2), default=decimal.Decimal("1.0"))
 
 
 # Assignments

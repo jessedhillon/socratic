@@ -1,5 +1,3 @@
-import decimal
-
 from .base import BaseModel
 from .id import ObjectiveID, RubricCriterionID
 
@@ -18,4 +16,3 @@ class RubricCriterion(BaseModel):
     name: str
     description: str
     proficiency_levels: list[ProficiencyLevel] = []
-    weight: decimal.Decimal = decimal.Decimal("1.0")

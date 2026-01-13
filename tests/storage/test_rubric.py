@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import decimal
 import typing as t
 
 import pytest
@@ -144,14 +143,12 @@ class TestCreate(object):
                 name="Full Criterion",
                 description="Complete criterion",
                 proficiency_levels=proficiency_levels,
-                weight=decimal.Decimal("2.0"),
                 session=db_session,
             )
 
         assert len(criterion.proficiency_levels) == 4
         assert criterion.proficiency_levels[0].grade == "S"
         assert criterion.proficiency_levels[1].grade == "A"
-        assert criterion.weight == decimal.Decimal("2.0")
 
     def test_create_defaults(
         self,
@@ -168,7 +165,6 @@ class TestCreate(object):
             )
 
         assert criterion.proficiency_levels == []
-        assert criterion.weight == decimal.Decimal("1.0")
 
 
 class TestDelete(object):
@@ -235,7 +231,6 @@ class TestUpdate(object):
                 criterion.criterion_id,
                 name="New Name",
                 description="New Description",
-                weight=decimal.Decimal("2.5"),
                 session=db_session,
             )
             result = rubric_storage.get(criterion.criterion_id, session=db_session)
@@ -243,7 +238,6 @@ class TestUpdate(object):
         assert result is not None
         assert result.name == "New Name"
         assert result.description == "New Description"
-        assert result.weight == decimal.Decimal("2.5")
 
     def test_update_proficiency_levels(
         self,
@@ -379,7 +373,6 @@ def criterion_factory(
         description: str = "A test criterion description",
         objective_id: t.Any = None,
         proficiency_levels: list[ProficiencyLevelCreateParams] | None = None,
-        weight: decimal.Decimal = decimal.Decimal("1.0"),
     ) -> RubricCriterion:
         with db_session.begin():
             criterion = rubric_storage.create(
@@ -387,7 +380,6 @@ def criterion_factory(
                 name=name,
                 description=description,
                 proficiency_levels=proficiency_levels,
-                weight=weight,
                 session=db_session,
             )
             return criterion

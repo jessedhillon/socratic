@@ -479,7 +479,6 @@ export type RubricCriterionCreateRequest = {
   name: string;
   description: string;
   proficiency_levels?: Array<ProficiencyLevelRequest>;
-  weight?: number | string;
 };
 
 /**
@@ -489,7 +488,6 @@ export type RubricCriterionRequest = {
   name: string;
   description: string;
   proficiency_levels?: Array<ProficiencyLevelRequest>;
-  weight?: number | string;
 };
 
 /**
@@ -501,7 +499,6 @@ export type RubricCriterionResponse = {
   name: string;
   description: string;
   proficiency_levels?: Array<ProficiencyLevelResponse>;
-  weight: string;
 };
 
 /**
@@ -511,7 +508,6 @@ export type RubricCriterionUpdateRequest = {
   name?: string | null;
   description?: string | null;
   proficiency_levels?: Array<ProficiencyLevelRequest> | null;
-  weight?: number | string | null;
 };
 
 /**
