@@ -11,7 +11,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   {
     label: 'Assignments',
-    path: '/',
+    path: '/assignments',
     icon: (
       <svg
         className="w-5 h-5"
@@ -102,7 +102,7 @@ function LearnerLayoutContent(): React.ReactElement {
               <li key={item.path}>
                 <NavLink
                   to={item.path}
-                  end={item.path === '/'}
+                  end={item.path === '/assignments'}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                       isActive
