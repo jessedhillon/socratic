@@ -127,6 +127,18 @@ def create_assignment(
                 detail="Learner is not in your organization",
             )
 
+        # Check for duplicate assignment
+        existing = assignment_storage.find(
+            objective_id=request.objective_id,
+            assigned_to=request.assigned_to,
+            session=session,
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This objective is already assigned to this learner",
+            )
+
         assignment = assignment_storage.create(
             organization_id=auth.organization_id,
             objective_id=request.objective_id,
@@ -183,6 +195,15 @@ def create_bulk_assignments(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Learner {learner_id} is not in your organization",
                 )
+
+            # Skip if assignment already exists for this learner
+            existing = assignment_storage.find(
+                objective_id=request.objective_id,
+                assigned_to=learner_id,
+                session=session,
+            )
+            if existing:
+                continue
 
             assignment = assignment_storage.create(
                 organization_id=auth.organization_id,
