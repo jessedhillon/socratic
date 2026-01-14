@@ -210,6 +210,8 @@ export type LearnerAssignmentSummary = {
   assignment_id: string;
   objective_id: string;
   objective_title: string;
+  objective_description?: string | null;
+  expected_duration_minutes?: number | null;
   status: AttemptStatus;
   grade?: Grade | null;
   attempts_used: number;
@@ -218,6 +220,14 @@ export type LearnerAssignmentSummary = {
   available_until?: string | null;
   is_available?: boolean;
   is_locked?: boolean;
+};
+
+/**
+ * List of assignments for a learner.
+ */
+export type LearnerAssignmentsListResponse = {
+  assignments: Array<LearnerAssignmentSummary>;
+  total: number;
 };
 
 /**
@@ -1517,6 +1527,23 @@ export type GetLearnerAssignmentsResponses = {
 
 export type GetLearnerAssignmentsResponse =
   GetLearnerAssignmentsResponses[keyof GetLearnerAssignmentsResponses];
+
+export type ListMyAssignmentsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/learners/me/assignments';
+};
+
+export type ListMyAssignmentsResponses = {
+  /**
+   * Successful Response
+   */
+  200: LearnerAssignmentsListResponse;
+};
+
+export type ListMyAssignmentsResponse =
+  ListMyAssignmentsResponses[keyof ListMyAssignmentsResponses];
 
 export type GetLearnerDashboardData = {
   body?: never;
