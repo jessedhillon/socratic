@@ -12,11 +12,12 @@ Usage:
 
 from __future__ import annotations
 
+import datetime
 import os
 import typing as t
 from pathlib import Path
 
-import bcrypt
+import jwt
 import pydantic as p
 import pytest
 from fastapi import FastAPI
@@ -24,9 +25,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 import socratic
-from socratic.core import SocraticContainer
-from socratic.model import DeploymentEnvironment, Organization, OrganizationID, User, UserID, UserRole
-from socratic.storage.table import organization_memberships, organizations, users
+from socratic.core import di, SocraticContainer, TimestampProvider
+from socratic.model import DeploymentEnvironment, Organization, OrganizationID, User, UserRole
+from socratic.storage import organization as organization_storage
+from socratic.storage import user as user_storage
 
 
 @pytest.fixture(scope="session")
@@ -48,12 +50,15 @@ def container() -> t.Generator[SocraticContainer]:
         override=(),
     )
 
+    # Override JWT secret and config for testing
+    # Use dict for nested override since secrets.auth may be None in test env
+    ct.secrets.override({"auth": {"jwt": p.Secret("test-jwt-secret-for-integration-tests")}})
+    ct.config.web.socratic.auth.jwt_algorithm.override("HS256")
+    ct.config.web.socratic.auth.access_token_expire_minutes.override(30)
+
     yield ct
 
     ct.shutdown_resources()
-
-
-TEST_JWT_SECRET = "test-jwt-secret-for-integration-tests"
 
 
 @pytest.fixture(scope="session")
@@ -61,24 +66,21 @@ def app(container: SocraticContainer) -> FastAPI:
     """Create the FastAPI application for testing.
 
     Uses the booted container to create the app with proper wiring.
-    Overrides JWT secrets and config since test env has no secrets file.
     """
     from socratic.core.config.web import SocraticWebSettings
     from socratic.web.socratic.main import _create_app  # pyright: ignore[reportPrivateUsage]
-
-    # Override JWT secret and config for testing
-    # Use dict for nested override since secrets.auth may be None in test env
-    container.secrets.override({"auth": {"jwt": p.Secret(TEST_JWT_SECRET)}})
-    container.config.web.socratic.auth.jwt_algorithm.override("HS256")
-    container.config.web.socratic.auth.access_token_expire_minutes.override(30)
 
     container.wire(
         modules=[
             "socratic.web.socratic.main",
             "socratic.web.socratic.route.auth",
             "socratic.web.socratic.route.organization",
+            "socratic.web.socratic.route.assignment",
+            "socratic.web.socratic.route.learner",
             "socratic.auth.middleware",
             "socratic.auth.jwt",
+            "tests.conftest",
+            "tests.test_auth_api",
         ]
     )
 
@@ -156,26 +158,16 @@ def org_factory(db_session: Session) -> t.Callable[..., Organization]:
         name: str = "Test Organization",
         slug: str | None = None,
     ) -> Organization:
-        from sqlalchemy import select
-
         # Generate unique slug if not provided
-        org_id = OrganizationID()
         if slug is None:
-            slug = f"test-org-{org_id.key[:8]}"
+            slug = f"test-org-{OrganizationID().key[:8]}"
 
         with db_session.begin():
-            org = organizations(
-                organization_id=org_id,
+            return organization_storage.create(
                 name=name,
                 slug=slug,
+                session=db_session,
             )
-            db_session.add(org)
-            db_session.flush()
-
-            # Re-fetch as mapping to properly construct pydantic model
-            stmt = select(organizations.__table__).where(organizations.organization_id == org_id)
-            row = db_session.execute(stmt).mappings().one()
-            return Organization(**row)
 
     return create_organization
 
@@ -215,35 +207,28 @@ def user_factory(
         organization_id: OrganizationID | None = None,
         role: UserRole = UserRole.Learner,
     ) -> User:
-        from sqlalchemy import select
-
-        user_id = UserID()
-        password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
         with db_session.begin():
-            user = users(
-                user_id=user_id,
+            user = user_storage.create(
                 email=email,
                 name=name,
-                password_hash=password_hash,
+                password=p.Secret(password),
+                session=db_session,
             )
-            db_session.add(user)
-            db_session.flush()
 
             # Add to organization if specified
             if organization_id is not None:
-                membership = organization_memberships(
-                    user_id=user_id,
-                    organization_id=organization_id,
-                    role=role.value,
+                user_storage.update(
+                    user.user_id,
+                    add_memberships={
+                        user_storage.MembershipCreateParams(
+                            organization_id=organization_id,
+                            role=role,
+                        )
+                    },
+                    session=db_session,
                 )
-                db_session.add(membership)
-                db_session.flush()
 
-            # Re-fetch to construct pydantic model
-            stmt = select(users.__table__).where(users.user_id == user_id)
-            row = db_session.execute(stmt).mappings().one()
-            return User(**row)
+            return user
 
     return create_user
 
@@ -266,18 +251,22 @@ def test_user(
     )
 
 
-class JWTConfig(t.NamedTuple):
-    """JWT configuration for tests."""
-
-    secret_key: str
-    algorithm: str
-
-
-@pytest.fixture
-def jwt_manager(app: FastAPI) -> JWTConfig:
-    """Provide JWT configuration for creating test tokens.
-
-    Depends on app fixture to ensure JWT config overrides are in place.
-    Returns an object with secret_key and algorithm for test token creation.
-    """
-    return JWTConfig(secret_key=TEST_JWT_SECRET, algorithm="HS256")
+@di.inject
+def create_auth_token(
+    user: User,
+    organization_id: OrganizationID,
+    role: UserRole,
+    utcnow: TimestampProvider = di.Provide["utcnow"],
+    jwt_secret: p.Secret[str] = di.Provide["secrets.auth.jwt"],
+    jwt_algorithm: str = di.Provide["config.web.socratic.auth.jwt_algorithm"],
+) -> str:
+    """Create a JWT token for testing."""
+    now = utcnow()
+    payload = {
+        "sub": str(user.user_id),
+        "org": str(organization_id),
+        "role": role.value,
+        "exp": now + datetime.timedelta(hours=1),
+        "iat": now,
+    }
+    return jwt.encode(payload, jwt_secret.get_secret_value(), algorithm=jwt_algorithm)

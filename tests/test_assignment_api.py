@@ -2,24 +2,17 @@
 
 from __future__ import annotations
 
-import datetime
 import typing as t
 
-import jwt
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from socratic.model import Assignment, AssignmentID, Objective, ObjectiveID, ObjectiveStatus, Organization, \
-    OrganizationID, User, UserID, UserRole
-from socratic.storage.table import assignments, objectives
+from socratic.model import Assignment, Objective, ObjectiveStatus, Organization, OrganizationID, User, UserID, UserRole
+from socratic.storage import assignment as assignment_storage
+from socratic.storage import objective as objective_storage
 
-
-class JWTConfig(t.NamedTuple):
-    """JWT configuration for tests."""
-
-    secret_key: str
-    algorithm: str
+from .conftest import create_auth_token
 
 
 @pytest.fixture
@@ -35,25 +28,15 @@ def objective_factory(
         description: str = "A test objective",
         status: ObjectiveStatus = ObjectiveStatus.Published,
     ) -> Objective:
-        from sqlalchemy import select
-
-        objective_id = ObjectiveID()
-
         with db_session.begin():
-            obj = objectives(
-                objective_id=objective_id,
+            return objective_storage.create(
                 organization_id=organization_id,
+                created_by=created_by,
                 title=title,
                 description=description,
-                status=status.value,
-                created_by=created_by,
+                status=status,
+                session=db_session,
             )
-            db_session.add(obj)
-            db_session.flush()
-
-            stmt = select(objectives.__table__).where(objectives.objective_id == objective_id)
-            row = db_session.execute(stmt).mappings().one()
-            return Objective(**row)
 
     return create_objective
 
@@ -66,51 +49,22 @@ def assignment_factory(
 
     def create_assignment(
         organization_id: OrganizationID,
-        objective_id: ObjectiveID,
+        objective_id: t.Any,
         assigned_by: UserID,
         assigned_to: UserID,
         max_attempts: int = 3,
     ) -> Assignment:
-        from sqlalchemy import select
-
-        assignment_id = AssignmentID()
-
         with db_session.begin():
-            asgn = assignments(
-                assignment_id=assignment_id,
+            return assignment_storage.create(
                 organization_id=organization_id,
                 objective_id=objective_id,
                 assigned_by=assigned_by,
                 assigned_to=assigned_to,
                 max_attempts=max_attempts,
-                retake_policy="none",
+                session=db_session,
             )
-            db_session.add(asgn)
-            db_session.flush()
-
-            stmt = select(assignments.__table__).where(assignments.assignment_id == assignment_id)
-            row = db_session.execute(stmt).mappings().one()
-            return Assignment(**row)
 
     return create_assignment
-
-
-def create_auth_token(
-    user: User,
-    organization_id: OrganizationID,
-    role: UserRole,
-    jwt_config: JWTConfig,
-) -> str:
-    """Create a JWT token for testing."""
-    now = datetime.datetime.now(datetime.UTC)
-    payload = {
-        "sub": str(user.user_id),
-        "org": str(organization_id),
-        "role": role.value,
-        "exp": now + datetime.timedelta(hours=1),
-        "iat": now,
-    }
-    return jwt.encode(payload, jwt_config.secret_key, algorithm=jwt_config.algorithm)
 
 
 class TestCreateAssignment(object):
@@ -123,7 +77,6 @@ class TestCreateAssignment(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        jwt_manager: JWTConfig,
     ) -> None:
         """Returns 409 when assigning same objective to same learner twice."""
         # Create educator and learner
@@ -156,7 +109,7 @@ class TestCreateAssignment(object):
         )
 
         # Try to create duplicate
-        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, jwt_manager)
+        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator)
         response = client.post(
             "/api/assignments",
             json={
@@ -178,7 +131,6 @@ class TestCreateAssignment(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        jwt_manager: JWTConfig,
     ) -> None:
         """Allows assigning same objective to different learners."""
         educator = user_factory(
@@ -214,7 +166,7 @@ class TestCreateAssignment(object):
         )
 
         # Assign to second learner (should succeed)
-        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, jwt_manager)
+        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator)
         response = client.post(
             "/api/assignments",
             json={
@@ -239,7 +191,6 @@ class TestBulkCreateAssignments(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        jwt_manager: JWTConfig,
     ) -> None:
         """Bulk creation skips learners who already have the assignment."""
         educator = user_factory(
@@ -275,7 +226,7 @@ class TestBulkCreateAssignments(object):
         )
 
         # Bulk assign to both learners
-        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, jwt_manager)
+        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator)
         response = client.post(
             "/api/assignments/bulk",
             json={

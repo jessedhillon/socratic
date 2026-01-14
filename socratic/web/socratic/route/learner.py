@@ -80,7 +80,7 @@ def list_my_assignments(
             session=session,
         )
 
-        now = utcnow().replace(tzinfo=None)
+        now = utcnow()
         summaries: list[LearnerAssignmentSummary] = []
 
         for assignment in assignments:
@@ -178,7 +178,7 @@ def get_learner_dashboard(
             session=session,
         )
 
-        now = utcnow().replace(tzinfo=None)
+        now = utcnow()
         summaries: list[LearnerAssignmentSummary] = []
         total_completed = 0
         total_in_progress = 0
