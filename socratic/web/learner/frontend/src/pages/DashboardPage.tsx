@@ -1,8 +1,95 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listMyAssignments } from '../api';
-import type { LearnerAssignmentsListResponse } from '../api';
+import type {
+  LearnerAssignmentSummary,
+  LearnerAssignmentsListResponse,
+} from '../api';
 import { useAuth } from '../contexts/AuthContext';
+
+type AssignmentDisplayStatus =
+  | 'available'
+  | 'locked'
+  | 'completed'
+  | 'not_yet_available'
+  | 'expired';
+
+interface StatusInfo {
+  status: AssignmentDisplayStatus;
+  label: string;
+  badgeClass: string;
+  dateHint?: string;
+}
+
+/**
+ * Calculate detailed assignment status for display.
+ */
+const getAssignmentStatus = (
+  assignment: LearnerAssignmentSummary
+): StatusInfo => {
+  const now = new Date();
+  const availableFrom = assignment.available_from
+    ? new Date(assignment.available_from)
+    : null;
+  const availableUntil = assignment.available_until
+    ? new Date(assignment.available_until)
+    : null;
+
+  // Completed takes precedence
+  if (assignment.status === 'completed') {
+    return {
+      status: 'completed',
+      label: 'Completed',
+      badgeClass: 'bg-blue-100 text-blue-700',
+    };
+  }
+
+  // Check if expired (past available_until)
+  if (availableUntil && now > availableUntil) {
+    return {
+      status: 'expired',
+      label: 'Expired',
+      badgeClass: 'bg-red-100 text-red-700',
+      dateHint: `Ended ${formatDate(assignment.available_until)}`,
+    };
+  }
+
+  // Check if not yet available (before available_from)
+  if (availableFrom && now < availableFrom) {
+    return {
+      status: 'not_yet_available',
+      label: 'Not Yet Available',
+      badgeClass: 'bg-gray-200 text-gray-600',
+      dateHint: `Starts ${formatDate(assignment.available_from)}`,
+    };
+  }
+
+  // Check if locked (prerequisites not met or retake policy)
+  if (assignment.is_locked) {
+    return {
+      status: 'locked',
+      label: 'Locked',
+      badgeClass: 'bg-gray-200 text-gray-600',
+      dateHint: 'Prerequisites not met',
+    };
+  }
+
+  // Check if no attempts remaining
+  if (assignment.attempts_remaining <= 0) {
+    return {
+      status: 'completed',
+      label: 'Max Attempts Reached',
+      badgeClass: 'bg-blue-100 text-blue-700',
+    };
+  }
+
+  // Available
+  return {
+    status: 'available',
+    label: 'Available',
+    badgeClass: 'bg-green-100 text-green-700',
+  };
+};
 
 /**
  * Format duration in minutes to a human-readable string.
@@ -108,15 +195,22 @@ const DashboardPage: React.FC = () => {
             const duration = formatDuration(
               assignment.expected_duration_minutes
             );
-            const availableFrom = formatDate(assignment.available_from);
-            const availableUntil = formatDate(assignment.available_until);
-            const hasAvailabilityWindow = availableFrom || availableUntil;
+            const statusInfo = getAssignmentStatus(assignment);
+            const isClickable = statusInfo.status === 'available';
 
             return (
               <div
                 key={assignment.assignment_id}
-                onClick={() => viewAssignment(assignment.assignment_id)}
-                className="bg-white rounded-lg p-6 shadow hover:shadow-md transition-shadow cursor-pointer"
+                onClick={
+                  isClickable
+                    ? () => viewAssignment(assignment.assignment_id)
+                    : undefined
+                }
+                className={`bg-white rounded-lg p-6 shadow transition-shadow ${
+                  isClickable
+                    ? 'hover:shadow-md cursor-pointer'
+                    : 'opacity-75 cursor-not-allowed'
+                }`}
               >
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
@@ -125,24 +219,19 @@ const DashboardPage: React.FC = () => {
                         {assignment.objective_title}
                       </h3>
                       {/* Status badge */}
-                      {assignment.is_locked ? (
-                        <span className="px-2 py-1 rounded-full text-xs bg-gray-200 text-gray-600">
-                          Locked
-                        </span>
-                      ) : assignment.status === 'completed' ? (
-                        <span className="px-2 py-1 rounded-full text-xs bg-green-100 text-green-700">
-                          Completed
-                        </span>
-                      ) : !assignment.is_available ? (
-                        <span className="px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-700">
-                          Unavailable
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700">
-                          Available
-                        </span>
-                      )}
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs ${statusInfo.badgeClass}`}
+                      >
+                        {statusInfo.label}
+                      </span>
                     </div>
+
+                    {/* Status hint (unlock time, start date, etc.) */}
+                    {statusInfo.dateHint && (
+                      <p className="mt-1 text-sm text-gray-500">
+                        {statusInfo.dateHint}
+                      </p>
+                    )}
 
                     {/* Description preview */}
                     {assignment.objective_description && (
@@ -180,34 +269,25 @@ const DashboardPage: React.FC = () => {
                           assignment.attempts_remaining}{' '}
                         attempts used
                       </span>
-
-                      {/* Availability window */}
-                      {hasAvailabilityWindow && (
-                        <span className="text-gray-400">
-                          {availableFrom && availableUntil
-                            ? `${availableFrom} – ${availableUntil}`
-                            : availableFrom
-                              ? `From ${availableFrom}`
-                              : `Until ${availableUntil}`}
-                        </span>
-                      )}
                     </div>
                   </div>
 
-                  {/* Arrow indicator */}
-                  <svg
-                    className="w-5 h-5 text-gray-400 ml-4 flex-shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  {/* Arrow indicator - only show for clickable items */}
+                  {isClickable && (
+                    <svg
+                      className="w-5 h-5 text-gray-400 ml-4 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  )}
                 </div>
               </div>
             );
