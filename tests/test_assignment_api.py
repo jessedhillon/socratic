@@ -13,7 +13,7 @@ from socratic.model import Assignment, Objective, ObjectiveStatus, Organization,
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import objective as objective_storage
 
-from .conftest import create_auth_token, JWTConfig
+from .conftest import create_auth_token
 
 
 @pytest.fixture
@@ -78,7 +78,6 @@ class TestCreateAssignment(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        jwt_manager: JWTConfig,
         utcnow: TimestampProvider,
     ) -> None:
         """Returns 409 when assigning same objective to same learner twice."""
@@ -112,7 +111,7 @@ class TestCreateAssignment(object):
         )
 
         # Try to create duplicate
-        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, jwt_manager, utcnow)
+        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, utcnow)
         response = client.post(
             "/api/assignments",
             json={
@@ -134,7 +133,6 @@ class TestCreateAssignment(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        jwt_manager: JWTConfig,
         utcnow: TimestampProvider,
     ) -> None:
         """Allows assigning same objective to different learners."""
@@ -171,7 +169,7 @@ class TestCreateAssignment(object):
         )
 
         # Assign to second learner (should succeed)
-        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, jwt_manager, utcnow)
+        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, utcnow)
         response = client.post(
             "/api/assignments",
             json={
@@ -196,7 +194,6 @@ class TestBulkCreateAssignments(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        jwt_manager: JWTConfig,
         utcnow: TimestampProvider,
     ) -> None:
         """Bulk creation skips learners who already have the assignment."""
@@ -233,7 +230,7 @@ class TestBulkCreateAssignments(object):
         )
 
         # Bulk assign to both learners
-        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, jwt_manager, utcnow)
+        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, utcnow)
         response = client.post(
             "/api/assignments/bulk",
             json={

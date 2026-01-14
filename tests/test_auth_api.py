@@ -6,9 +6,31 @@ import datetime
 import typing as t
 
 import jwt as pyjwt
+import pydantic as p
 from fastapi.testclient import TestClient
 
+from socratic.core import di
 from socratic.model import Organization, User, UserRole
+
+
+@di.inject
+def encode_jwt(
+    payload: dict[str, t.Any],
+    jwt_secret: p.Secret[str] = di.Provide["secrets.auth.jwt"],
+    jwt_algorithm: str = di.Provide["config.web.socratic.auth.jwt_algorithm"],
+) -> str:
+    """Encode a JWT token using injected config."""
+    return pyjwt.encode(payload, jwt_secret.get_secret_value(), algorithm=jwt_algorithm)
+
+
+@di.inject
+def decode_jwt(
+    token: str,
+    jwt_secret: p.Secret[str] = di.Provide["secrets.auth.jwt"],
+    jwt_algorithm: str = di.Provide["config.web.socratic.auth.jwt_algorithm"],
+) -> dict[str, t.Any]:
+    """Decode a JWT token using injected config."""
+    return pyjwt.decode(token, jwt_secret.get_secret_value(), algorithms=[jwt_algorithm])
 
 
 class TestLogin:
@@ -106,7 +128,6 @@ class TestLogin:
         client: TestClient,
         test_user: User,
         test_org: Organization,
-        jwt_manager: t.Any,
     ) -> None:
         """Token returned from login is valid and contains expected claims."""
         response = client.post(
@@ -121,11 +142,7 @@ class TestLogin:
         token = response.json()["token"]["access_token"]
 
         # Decode and verify token
-        payload = pyjwt.decode(
-            token,
-            jwt_manager.secret_key,
-            algorithms=[jwt_manager.algorithm],
-        )
+        payload = decode_jwt(token)
 
         assert payload["sub"] == str(test_user.user_id)
         assert payload["org"] == str(test_org.organization_id)
@@ -141,7 +158,6 @@ class TestRegister:
         self,
         client: TestClient,
         test_org: Organization,
-        jwt_manager: t.Any,
         user_factory: t.Callable[..., User],
     ) -> None:
         """Successfully register with a valid invite token."""
@@ -162,11 +178,7 @@ class TestRegister:
             "inviter": str(inviter.user_id),
             "exp": int(expires_at.timestamp()),
         }
-        invite_token = pyjwt.encode(
-            invite_payload,
-            jwt_manager.secret_key,
-            algorithm=jwt_manager.algorithm,
-        )
+        invite_token = encode_jwt(invite_payload)
 
         response = client.post(
             "/api/auth/register",
@@ -194,7 +206,6 @@ class TestRegister:
         self,
         client: TestClient,
         test_org: Organization,
-        jwt_manager: t.Any,
     ) -> None:
         """Return 400 for expired invite token."""
         # Create expired invite token
@@ -207,11 +218,7 @@ class TestRegister:
             "inviter": "some-user-id",
             "exp": int(expired_at.timestamp()),
         }
-        invite_token = pyjwt.encode(
-            invite_payload,
-            jwt_manager.secret_key,
-            algorithm=jwt_manager.algorithm,
-        )
+        invite_token = encode_jwt(invite_payload)
 
         response = client.post(
             "/api/auth/register",
@@ -248,7 +255,6 @@ class TestRegister:
         self,
         client: TestClient,
         test_org: Organization,
-        jwt_manager: t.Any,
     ) -> None:
         """Return 400 when email doesn't match invite."""
         expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=7)
@@ -260,11 +266,7 @@ class TestRegister:
             "inviter": "some-user-id",
             "exp": int(expires_at.timestamp()),
         }
-        invite_token = pyjwt.encode(
-            invite_payload,
-            jwt_manager.secret_key,
-            algorithm=jwt_manager.algorithm,
-        )
+        invite_token = encode_jwt(invite_payload)
 
         response = client.post(
             "/api/auth/register",
@@ -283,7 +285,6 @@ class TestRegister:
         self,
         client: TestClient,
         test_org: Organization,
-        jwt_manager: t.Any,
     ) -> None:
         """Return 400 when token is not an invite type."""
         expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=7)
@@ -295,11 +296,7 @@ class TestRegister:
             "exp": int(expires_at.timestamp()),
             "iat": int(datetime.datetime.now(datetime.UTC).timestamp()),
         }
-        token = pyjwt.encode(
-            payload,
-            jwt_manager.secret_key,
-            algorithm=jwt_manager.algorithm,
-        )
+        token = encode_jwt(payload)
 
         response = client.post(
             "/api/auth/register",

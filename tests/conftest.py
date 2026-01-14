@@ -26,9 +26,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 import socratic
-from socratic.core import SocraticContainer, TimestampProvider
+from socratic.core import di, SocraticContainer, TimestampProvider
 from socratic.model import DeploymentEnvironment, Organization, OrganizationID, User, UserID, UserRole
-from socratic.model.base import BaseModel
 from socratic.storage.table import organization_memberships, organizations, users
 
 
@@ -51,12 +50,15 @@ def container() -> t.Generator[SocraticContainer]:
         override=(),
     )
 
+    # Override JWT secret and config for testing
+    # Use dict for nested override since secrets.auth may be None in test env
+    ct.secrets.override({"auth": {"jwt": p.Secret("test-jwt-secret-for-integration-tests")}})
+    ct.config.web.socratic.auth.jwt_algorithm.override("HS256")
+    ct.config.web.socratic.auth.access_token_expire_minutes.override(30)
+
     yield ct
 
     ct.shutdown_resources()
-
-
-TEST_JWT_SECRET = "test-jwt-secret-for-integration-tests"
 
 
 @pytest.fixture(scope="session")
@@ -64,24 +66,21 @@ def app(container: SocraticContainer) -> FastAPI:
     """Create the FastAPI application for testing.
 
     Uses the booted container to create the app with proper wiring.
-    Overrides JWT secrets and config since test env has no secrets file.
     """
     from socratic.core.config.web import SocraticWebSettings
     from socratic.web.socratic.main import _create_app  # pyright: ignore[reportPrivateUsage]
-
-    # Override JWT secret and config for testing
-    # Use dict for nested override since secrets.auth may be None in test env
-    container.secrets.override({"auth": {"jwt": p.Secret(TEST_JWT_SECRET)}})
-    container.config.web.socratic.auth.jwt_algorithm.override("HS256")
-    container.config.web.socratic.auth.access_token_expire_minutes.override(30)
 
     container.wire(
         modules=[
             "socratic.web.socratic.main",
             "socratic.web.socratic.route.auth",
             "socratic.web.socratic.route.organization",
+            "socratic.web.socratic.route.assignment",
+            "socratic.web.socratic.route.learner",
             "socratic.auth.middleware",
             "socratic.auth.jwt",
+            "tests.conftest",
+            "tests.test_auth_api",
         ]
     )
 
@@ -269,29 +268,14 @@ def test_user(
     )
 
 
-class JWTConfig(BaseModel):
-    """JWT configuration for tests."""
-
-    secret_key: str
-    algorithm: str
-
-
-@pytest.fixture
-def jwt_manager(app: FastAPI) -> JWTConfig:
-    """Provide JWT configuration for creating test tokens.
-
-    Depends on app fixture to ensure JWT config overrides are in place.
-    Returns an object with secret_key and algorithm for test token creation.
-    """
-    return JWTConfig(secret_key=TEST_JWT_SECRET, algorithm="HS256")
-
-
+@di.inject
 def create_auth_token(
     user: User,
     organization_id: OrganizationID,
     role: UserRole,
-    jwt_config: JWTConfig,
     utcnow: TimestampProvider,
+    jwt_secret: p.Secret[str] = di.Provide["secrets.auth.jwt"],
+    jwt_algorithm: str = di.Provide["config.web.socratic.auth.jwt_algorithm"],
 ) -> str:
     """Create a JWT token for testing."""
     now = utcnow()
@@ -302,7 +286,7 @@ def create_auth_token(
         "exp": now + datetime.timedelta(hours=1),
         "iat": now,
     }
-    return jwt.encode(payload, jwt_config.secret_key, algorithm=jwt_config.algorithm)
+    return jwt.encode(payload, jwt_secret.get_secret_value(), algorithm=jwt_algorithm)
 
 
 @pytest.fixture
