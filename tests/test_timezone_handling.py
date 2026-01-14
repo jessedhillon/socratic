@@ -14,7 +14,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from socratic.core import TimestampProvider
 from socratic.model import Assignment, Objective, ObjectiveStatus, Organization, OrganizationID, User, UserID, UserRole
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import objective as objective_storage
@@ -224,7 +223,6 @@ class TestAssignmentAvailability(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        utcnow: TimestampProvider,
     ) -> None:
         """Assignment with future available_from in UTC is not available."""
         educator = user_factory(
@@ -255,7 +253,7 @@ class TestAssignmentAvailability(object):
         )
 
         # Learner requests their assignments
-        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner, utcnow)
+        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner)
         response = client.get(
             "/api/learners/me/assignments",
             headers={"Authorization": f"Bearer {token}"},
@@ -273,7 +271,6 @@ class TestAssignmentAvailability(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        utcnow: TimestampProvider,
     ) -> None:
         """Assignment with past available_until is not available."""
         educator = user_factory(
@@ -304,7 +301,7 @@ class TestAssignmentAvailability(object):
         )
 
         # Learner requests their assignments
-        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner, utcnow)
+        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner)
         response = client.get(
             "/api/learners/me/assignments",
             headers={"Authorization": f"Bearer {token}"},
@@ -322,7 +319,6 @@ class TestAssignmentAvailability(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        utcnow: TimestampProvider,
     ) -> None:
         """Assignment within availability window is available."""
         educator = user_factory(
@@ -354,7 +350,7 @@ class TestAssignmentAvailability(object):
         )
 
         # Learner requests their assignments
-        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner, utcnow)
+        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner)
         response = client.get(
             "/api/learners/me/assignments",
             headers={"Authorization": f"Bearer {token}"},

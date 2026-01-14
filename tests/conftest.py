@@ -17,7 +17,6 @@ import os
 import typing as t
 from pathlib import Path
 
-import bcrypt
 import jwt
 import pydantic as p
 import pytest
@@ -27,8 +26,9 @@ from sqlalchemy.orm import Session
 
 import socratic
 from socratic.core import di, SocraticContainer, TimestampProvider
-from socratic.model import DeploymentEnvironment, Organization, OrganizationID, User, UserID, UserRole
-from socratic.storage.table import organization_memberships, organizations, users
+from socratic.model import DeploymentEnvironment, Organization, OrganizationID, User, UserRole
+from socratic.storage import organization as organization_storage
+from socratic.storage import user as user_storage
 
 
 @pytest.fixture(scope="session")
@@ -158,26 +158,16 @@ def org_factory(db_session: Session) -> t.Callable[..., Organization]:
         name: str = "Test Organization",
         slug: str | None = None,
     ) -> Organization:
-        from sqlalchemy import select
-
         # Generate unique slug if not provided
-        org_id = OrganizationID()
         if slug is None:
-            slug = f"test-org-{org_id.key[:8]}"
+            slug = f"test-org-{OrganizationID().key[:8]}"
 
         with db_session.begin():
-            org = organizations(
-                organization_id=org_id,
+            return organization_storage.create(
                 name=name,
                 slug=slug,
+                session=db_session,
             )
-            db_session.add(org)
-            db_session.flush()
-
-            # Re-fetch as mapping to properly construct pydantic model
-            stmt = select(organizations.__table__).where(organizations.organization_id == org_id)
-            row = db_session.execute(stmt).mappings().one()
-            return Organization(**row)
 
     return create_organization
 
@@ -217,35 +207,28 @@ def user_factory(
         organization_id: OrganizationID | None = None,
         role: UserRole = UserRole.Learner,
     ) -> User:
-        from sqlalchemy import select
-
-        user_id = UserID()
-        password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
         with db_session.begin():
-            user = users(
-                user_id=user_id,
+            user = user_storage.create(
                 email=email,
                 name=name,
-                password_hash=password_hash,
+                password=p.Secret(password),
+                session=db_session,
             )
-            db_session.add(user)
-            db_session.flush()
 
             # Add to organization if specified
             if organization_id is not None:
-                membership = organization_memberships(
-                    user_id=user_id,
-                    organization_id=organization_id,
-                    role=role.value,
+                user_storage.update(
+                    user.user_id,
+                    add_memberships={
+                        user_storage.MembershipCreateParams(
+                            organization_id=organization_id,
+                            role=role,
+                        )
+                    },
+                    session=db_session,
                 )
-                db_session.add(membership)
-                db_session.flush()
 
-            # Re-fetch to construct pydantic model
-            stmt = select(users.__table__).where(users.user_id == user_id)
-            row = db_session.execute(stmt).mappings().one()
-            return User(**row)
+            return user
 
     return create_user
 
@@ -273,7 +256,7 @@ def create_auth_token(
     user: User,
     organization_id: OrganizationID,
     role: UserRole,
-    utcnow: TimestampProvider,
+    utcnow: TimestampProvider = di.Provide["utcnow"],
     jwt_secret: p.Secret[str] = di.Provide["secrets.auth.jwt"],
     jwt_algorithm: str = di.Provide["config.web.socratic.auth.jwt_algorithm"],
 ) -> str:
@@ -287,9 +270,3 @@ def create_auth_token(
         "iat": now,
     }
     return jwt.encode(payload, jwt_secret.get_secret_value(), algorithm=jwt_algorithm)
-
-
-@pytest.fixture
-def utcnow() -> TimestampProvider:
-    """Provide a timestamp provider for tests."""
-    return lambda: datetime.datetime.now(datetime.UTC)

@@ -8,7 +8,6 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from socratic.core import TimestampProvider
 from socratic.model import Assignment, Objective, ObjectiveStatus, Organization, OrganizationID, User, UserID, UserRole
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import objective as objective_storage
@@ -78,7 +77,6 @@ class TestCreateAssignment(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        utcnow: TimestampProvider,
     ) -> None:
         """Returns 409 when assigning same objective to same learner twice."""
         # Create educator and learner
@@ -111,7 +109,7 @@ class TestCreateAssignment(object):
         )
 
         # Try to create duplicate
-        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, utcnow)
+        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator)
         response = client.post(
             "/api/assignments",
             json={
@@ -133,7 +131,6 @@ class TestCreateAssignment(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        utcnow: TimestampProvider,
     ) -> None:
         """Allows assigning same objective to different learners."""
         educator = user_factory(
@@ -169,7 +166,7 @@ class TestCreateAssignment(object):
         )
 
         # Assign to second learner (should succeed)
-        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, utcnow)
+        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator)
         response = client.post(
             "/api/assignments",
             json={
@@ -194,7 +191,6 @@ class TestBulkCreateAssignments(object):
         user_factory: t.Callable[..., User],
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
-        utcnow: TimestampProvider,
     ) -> None:
         """Bulk creation skips learners who already have the assignment."""
         educator = user_factory(
@@ -230,7 +226,7 @@ class TestBulkCreateAssignments(object):
         )
 
         # Bulk assign to both learners
-        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator, utcnow)
+        token = create_auth_token(educator, test_org.organization_id, UserRole.Educator)
         response = client.post(
             "/api/assignments/bulk",
             json={
