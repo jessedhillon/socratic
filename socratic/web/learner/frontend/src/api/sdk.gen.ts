@@ -95,16 +95,19 @@ import type {
   UpdateAssignmentError,
   ListLearnersData,
   ListLearnersResponse,
-  GetLearnerAssignmentsData,
-  GetLearnerAssignmentsResponse,
-  GetLearnerAssignmentsError,
   ListMyAssignmentsData,
   ListMyAssignmentsResponse,
+  ListMyAttemptsData,
+  ListMyAttemptsResponse,
+  ListMyAttemptsError,
   GetLearnerDashboardData,
   GetLearnerDashboardResponse,
   GetMyAssignmentData,
   GetMyAssignmentResponse,
   GetMyAssignmentError,
+  GetLearnerAssignmentsData,
+  GetLearnerAssignmentsResponse,
+  GetLearnerAssignmentsError,
   StartAssessmentData,
   StartAssessmentError,
   SendAssessmentMessageData,
@@ -971,31 +974,6 @@ export const listLearners = <ThrowOnError extends boolean = false>(
 };
 
 /**
- * Get Learner Assignments
- * Get all assignments for a specific learner.
- *
- * Only educators can view learner assignments.
- */
-export const getLearnerAssignments = <ThrowOnError extends boolean = false>(
-  options: Options<GetLearnerAssignmentsData, ThrowOnError>
-) => {
-  return (options.client ?? _heyApiClient).get<
-    GetLearnerAssignmentsResponse,
-    GetLearnerAssignmentsError,
-    ThrowOnError
-  >({
-    security: [
-      {
-        scheme: 'bearer',
-        type: 'http',
-      },
-    ],
-    url: '/api/learners/{learner_id}/assignments',
-    ...options,
-  });
-};
-
-/**
  * List My Assignments
  * Get all assignments for the current learner.
  *
@@ -1016,6 +994,34 @@ export const listMyAssignments = <ThrowOnError extends boolean = false>(
       },
     ],
     url: '/api/learners/me/assignments',
+    ...options,
+  });
+};
+
+/**
+ * List My Attempts
+ * Get all attempts for the current learner.
+ *
+ * Returns attempts with objective info, review status, and feedback (if reviewed).
+ *
+ * Args:
+ * assignment_id: Optional filter to show attempts for a specific assignment.
+ */
+export const listMyAttempts = <ThrowOnError extends boolean = false>(
+  options?: Options<ListMyAttemptsData, ThrowOnError>
+) => {
+  return (options?.client ?? _heyApiClient).get<
+    ListMyAttemptsResponse,
+    ListMyAttemptsError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/learners/me/attempts',
     ...options,
   });
 };
@@ -1064,6 +1070,31 @@ export const getMyAssignment = <ThrowOnError extends boolean = false>(
       },
     ],
     url: '/api/learners/me/assignments/{assignment_id}',
+    ...options,
+  });
+};
+
+/**
+ * Get Learner Assignments
+ * Get all assignments for a specific learner.
+ *
+ * Only educators can view learner assignments.
+ */
+export const getLearnerAssignments = <ThrowOnError extends boolean = false>(
+  options: Options<GetLearnerAssignmentsData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).get<
+    GetLearnerAssignmentsResponse,
+    GetLearnerAssignmentsError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/learners/{learner_id}/assignments',
     ...options,
   });
 };

@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import InstructorLayout from './components/InstructorLayout';
 import AssessmentPage from './pages/AssessmentPage';
 import AssignmentsPage from './pages/AssignmentsPage';
+import AttemptHistoryPage from './pages/AttemptHistoryPage';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
 import ObjectivesPage from './pages/ObjectivesPage';
@@ -18,6 +19,7 @@ const App: React.FC = () => {
 
         {/* Learner routes */}
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/history" element={<AttemptHistoryPage />} />
         <Route path="/assessment/:assignmentId" element={<AssessmentPage />} />
         <Route
           path="/assessment/:assignmentId/attempt/:attemptId"

@@ -63,9 +63,15 @@ const DashboardPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="max-w-4xl mx-auto px-4">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">
-          My Assignments
-        </h1>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">My Assignments</h1>
+          <button
+            onClick={() => navigate('/history')}
+            className="text-blue-600 hover:text-blue-800"
+          >
+            View Attempt History →
+          </button>
+        </div>
 
         {/* Summary stats */}
         {data && (

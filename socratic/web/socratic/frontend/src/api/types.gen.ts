@@ -90,6 +90,35 @@ export type AssignmentWithAttemptsResponse = {
   attempts_remaining?: number;
 };
 
+/**
+ * Feedback from an evaluated/reviewed attempt.
+ */
+export type AttemptFeedback = {
+  strengths?: Array<string>;
+  gaps?: Array<string>;
+  reasoning_summary?: string | null;
+};
+
+/**
+ * Attempt with assignment and objective context for history view.
+ */
+export type AttemptHistoryItem = {
+  attempt_id: string;
+  assignment_id: string;
+  objective_id: string;
+  objective_title: string;
+  objective_description?: string | null;
+  status: AttemptStatus;
+  grade?: Grade | null;
+  confidence_score?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  create_time: string;
+  has_evaluation?: boolean;
+  evaluation_id?: string | null;
+  feedback?: AttemptFeedback | null;
+};
+
 export type AttemptStatus =
   | 'not_started'
   | 'in_progress'
@@ -227,6 +256,14 @@ export type LearnerAssignmentSummary = {
  */
 export type LearnerAssignmentsListResponse = {
   assignments: Array<LearnerAssignmentSummary>;
+  total: number;
+};
+
+/**
+ * List of attempts for a learner.
+ */
+export type LearnerAttemptsListResponse = {
+  attempts: Array<AttemptHistoryItem>;
   total: number;
 };
 
@@ -1499,35 +1536,6 @@ export type ListLearnersResponses = {
 export type ListLearnersResponse =
   ListLearnersResponses[keyof ListLearnersResponses];
 
-export type GetLearnerAssignmentsData = {
-  body?: never;
-  path: {
-    learner_id: string;
-  };
-  query?: never;
-  url: '/api/learners/{learner_id}/assignments';
-};
-
-export type GetLearnerAssignmentsErrors = {
-  /**
-   * Validation Error
-   */
-  422: HttpValidationError;
-};
-
-export type GetLearnerAssignmentsError =
-  GetLearnerAssignmentsErrors[keyof GetLearnerAssignmentsErrors];
-
-export type GetLearnerAssignmentsResponses = {
-  /**
-   * Successful Response
-   */
-  200: Array<AssignmentWithAttemptsResponse>;
-};
-
-export type GetLearnerAssignmentsResponse =
-  GetLearnerAssignmentsResponses[keyof GetLearnerAssignmentsResponses];
-
 export type ListMyAssignmentsData = {
   body?: never;
   path?: never;
@@ -1544,6 +1552,35 @@ export type ListMyAssignmentsResponses = {
 
 export type ListMyAssignmentsResponse =
   ListMyAssignmentsResponses[keyof ListMyAssignmentsResponses];
+
+export type ListMyAttemptsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    assignment_id?: string | null;
+  };
+  url: '/api/learners/me/attempts';
+};
+
+export type ListMyAttemptsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListMyAttemptsError =
+  ListMyAttemptsErrors[keyof ListMyAttemptsErrors];
+
+export type ListMyAttemptsResponses = {
+  /**
+   * Successful Response
+   */
+  200: LearnerAttemptsListResponse;
+};
+
+export type ListMyAttemptsResponse =
+  ListMyAttemptsResponses[keyof ListMyAttemptsResponses];
 
 export type GetLearnerDashboardData = {
   body?: never;
@@ -1590,6 +1627,35 @@ export type GetMyAssignmentResponses = {
 
 export type GetMyAssignmentResponse =
   GetMyAssignmentResponses[keyof GetMyAssignmentResponses];
+
+export type GetLearnerAssignmentsData = {
+  body?: never;
+  path: {
+    learner_id: string;
+  };
+  query?: never;
+  url: '/api/learners/{learner_id}/assignments';
+};
+
+export type GetLearnerAssignmentsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetLearnerAssignmentsError =
+  GetLearnerAssignmentsErrors[keyof GetLearnerAssignmentsErrors];
+
+export type GetLearnerAssignmentsResponses = {
+  /**
+   * Successful Response
+   */
+  200: Array<AssignmentWithAttemptsResponse>;
+};
+
+export type GetLearnerAssignmentsResponse =
+  GetLearnerAssignmentsResponses[keyof GetLearnerAssignmentsResponses];
 
 export type StartAssessmentData = {
   body?: never;
