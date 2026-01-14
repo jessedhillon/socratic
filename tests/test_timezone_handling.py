@@ -10,23 +10,16 @@ import datetime
 import typing as t
 from zoneinfo import ZoneInfo
 
-import jwt
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from socratic.model import Assignment, AssignmentID, Objective, ObjectiveID, ObjectiveStatus, Organization, \
-    OrganizationID, User, UserID, UserRole
+from socratic.core import TimestampProvider
+from socratic.model import Assignment, Objective, ObjectiveStatus, Organization, OrganizationID, User, UserID, UserRole
 from socratic.storage import assignment as assignment_storage
-from socratic.storage.table import assignments, objectives
+from socratic.storage import objective as objective_storage
 
-
-class JWTConfig(t.NamedTuple):
-    """JWT configuration for tests."""
-
-    secret_key: str
-    algorithm: str
+from .conftest import create_auth_token, JWTConfig
 
 
 @pytest.fixture
@@ -42,23 +35,15 @@ def objective_factory(
         description: str = "A test objective",
         status: ObjectiveStatus = ObjectiveStatus.Published,
     ) -> Objective:
-        objective_id = ObjectiveID()
-
         with db_session.begin():
-            obj = objectives(
-                objective_id=objective_id,
+            return objective_storage.create(
                 organization_id=organization_id,
+                created_by=created_by,
                 title=title,
                 description=description,
-                status=status.value,
-                created_by=created_by,
+                status=status,
+                session=db_session,
             )
-            db_session.add(obj)
-            db_session.flush()
-
-            stmt = select(objectives.__table__).where(objectives.objective_id == objective_id)
-            row = db_session.execute(stmt).mappings().one()
-            return Objective(**row)
 
     return create_objective
 
@@ -71,18 +56,15 @@ def assignment_factory(
 
     def create_assignment(
         organization_id: OrganizationID,
-        objective_id: ObjectiveID,
+        objective_id: t.Any,
         assigned_by: UserID,
         assigned_to: UserID,
         max_attempts: int = 3,
         available_from: datetime.datetime | None = None,
         available_until: datetime.datetime | None = None,
     ) -> Assignment:
-        assignment_id = AssignmentID()
-
         with db_session.begin():
-            asgn = assignments(
-                assignment_id=assignment_id,
+            return assignment_storage.create(
                 organization_id=organization_id,
                 objective_id=objective_id,
                 assigned_by=assigned_by,
@@ -90,34 +72,10 @@ def assignment_factory(
                 max_attempts=max_attempts,
                 available_from=available_from,
                 available_until=available_until,
-                retake_policy="none",
+                session=db_session,
             )
-            db_session.add(asgn)
-            db_session.flush()
-
-            stmt = select(assignments.__table__).where(assignments.assignment_id == assignment_id)
-            row = db_session.execute(stmt).mappings().one()
-            return Assignment(**row)
 
     return create_assignment
-
-
-def create_auth_token(
-    user: User,
-    organization_id: OrganizationID,
-    role: UserRole,
-    jwt_config: JWTConfig,
-) -> str:
-    """Create a JWT token for testing."""
-    now = datetime.datetime.now(datetime.UTC)
-    payload = {
-        "sub": str(user.user_id),
-        "org": str(organization_id),
-        "role": role.value,
-        "exp": now + datetime.timedelta(hours=1),
-        "iat": now,
-    }
-    return jwt.encode(payload, jwt_config.secret_key, algorithm=jwt_config.algorithm)
 
 
 class TestTimezoneStorage(object):
@@ -267,6 +225,7 @@ class TestAssignmentAvailability(object):
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
         jwt_manager: JWTConfig,
+        utcnow: TimestampProvider,
     ) -> None:
         """Assignment with future available_from in UTC is not available."""
         educator = user_factory(
@@ -297,7 +256,7 @@ class TestAssignmentAvailability(object):
         )
 
         # Learner requests their assignments
-        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner, jwt_manager)
+        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner, jwt_manager, utcnow)
         response = client.get(
             "/api/learners/me/assignments",
             headers={"Authorization": f"Bearer {token}"},
@@ -316,6 +275,7 @@ class TestAssignmentAvailability(object):
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
         jwt_manager: JWTConfig,
+        utcnow: TimestampProvider,
     ) -> None:
         """Assignment with past available_until is not available."""
         educator = user_factory(
@@ -346,7 +306,7 @@ class TestAssignmentAvailability(object):
         )
 
         # Learner requests their assignments
-        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner, jwt_manager)
+        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner, jwt_manager, utcnow)
         response = client.get(
             "/api/learners/me/assignments",
             headers={"Authorization": f"Bearer {token}"},
@@ -365,6 +325,7 @@ class TestAssignmentAvailability(object):
         objective_factory: t.Callable[..., Objective],
         assignment_factory: t.Callable[..., Assignment],
         jwt_manager: JWTConfig,
+        utcnow: TimestampProvider,
     ) -> None:
         """Assignment within availability window is available."""
         educator = user_factory(
@@ -396,7 +357,7 @@ class TestAssignmentAvailability(object):
         )
 
         # Learner requests their assignments
-        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner, jwt_manager)
+        token = create_auth_token(learner, test_org.organization_id, UserRole.Learner, jwt_manager, utcnow)
         response = client.get(
             "/api/learners/me/assignments",
             headers={"Authorization": f"Bearer {token}"},

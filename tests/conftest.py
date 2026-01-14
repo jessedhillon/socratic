@@ -12,11 +12,13 @@ Usage:
 
 from __future__ import annotations
 
+import datetime
 import os
 import typing as t
 from pathlib import Path
 
 import bcrypt
+import jwt
 import pydantic as p
 import pytest
 from fastapi import FastAPI
@@ -24,8 +26,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 import socratic
-from socratic.core import SocraticContainer
+from socratic.core import SocraticContainer, TimestampProvider
 from socratic.model import DeploymentEnvironment, Organization, OrganizationID, User, UserID, UserRole
+from socratic.model.base import BaseModel
 from socratic.storage.table import organization_memberships, organizations, users
 
 
@@ -266,7 +269,7 @@ def test_user(
     )
 
 
-class JWTConfig(t.NamedTuple):
+class JWTConfig(BaseModel):
     """JWT configuration for tests."""
 
     secret_key: str
@@ -281,3 +284,28 @@ def jwt_manager(app: FastAPI) -> JWTConfig:
     Returns an object with secret_key and algorithm for test token creation.
     """
     return JWTConfig(secret_key=TEST_JWT_SECRET, algorithm="HS256")
+
+
+def create_auth_token(
+    user: User,
+    organization_id: OrganizationID,
+    role: UserRole,
+    jwt_config: JWTConfig,
+    utcnow: TimestampProvider,
+) -> str:
+    """Create a JWT token for testing."""
+    now = utcnow()
+    payload = {
+        "sub": str(user.user_id),
+        "org": str(organization_id),
+        "role": role.value,
+        "exp": now + datetime.timedelta(hours=1),
+        "iat": now,
+    }
+    return jwt.encode(payload, jwt_config.secret_key, algorithm=jwt_config.algorithm)
+
+
+@pytest.fixture
+def utcnow() -> TimestampProvider:
+    """Provide a timestamp provider for tests."""
+    return lambda: datetime.datetime.now(datetime.UTC)
