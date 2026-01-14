@@ -1,9 +1,12 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import LearnerLayout from './components/LearnerLayout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import AssignmentDetailPage from './pages/AssignmentDetailPage';
 import HistoryPage from './pages/HistoryPage';
+import AttemptDetailPage from './pages/AttemptDetailPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 const App: React.FC = () => {
   return (
@@ -13,8 +16,22 @@ const App: React.FC = () => {
 
       {/* Learner routes - protected by LearnerLayout */}
       <Route element={<LearnerLayout />}>
-        <Route path="/" element={<DashboardPage />} />
+        {/* Redirect root to assignments */}
+        <Route path="/" element={<Navigate to="/assignments" replace />} />
+
+        {/* Assignments */}
+        <Route path="/assignments" element={<DashboardPage />} />
+        <Route
+          path="/assignments/:assignmentId"
+          element={<AssignmentDetailPage />}
+        />
+
+        {/* History */}
         <Route path="/history" element={<HistoryPage />} />
+        <Route path="/history/:attemptId" element={<AttemptDetailPage />} />
+
+        {/* 404 */}
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
   );
