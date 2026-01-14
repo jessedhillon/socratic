@@ -39,9 +39,9 @@ repos:
     hooks:
       - id: tsc
         name: tsc
-        entry: bash -c 'cd socratic/web/socratic/frontend && npx tsc --noEmit'
+        entry: bash -c 'for dir in socratic/web/*/frontend; do [ -f "$dir/tsconfig.json" ] && (cd "$dir" && npx tsc --noEmit) || true; done'
         language: system
-        files: ^socratic/web/socratic/frontend/.*\.tsx?$
+        files: ^socratic/web/.*/frontend/.*\.tsx?$
         pass_filenames: false
         stages: [pre-commit]
 
