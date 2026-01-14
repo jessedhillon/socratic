@@ -81,103 +81,7 @@ def list_my_assignments(
             session=session,
         )
 
-        now = datetime.datetime.now(datetime.UTC)
-        summaries: list[LearnerAssignmentSummary] = []
-
-        for assignment in assignments:
-            objective = obj_storage.get(assignment.objective_id, session=session)
-            if objective is None:
-                continue
-
-            attempts = attempt_storage.find(assignment_id=assignment.assignment_id, session=session)
-            attempts_used = len(attempts)
-            attempts_remaining = max(0, assignment.max_attempts - attempts_used)
-
-            latest_attempt = max(attempts, key=lambda a: a.create_time) if attempts else None
-
-            if latest_attempt is None:
-                current_status = AttemptStatus.NotStarted
-            elif latest_attempt.status in (AttemptStatus.Evaluated, AttemptStatus.Reviewed):
-                current_status = AttemptStatus.Completed
-            elif latest_attempt.status == AttemptStatus.InProgress:
-                current_status = AttemptStatus.InProgress
-            else:
-                current_status = latest_attempt.status
-
-            is_available = True
-            if assignment.available_from and now < assignment.available_from:
-                is_available = False
-            if assignment.available_until and now > assignment.available_until:
-                is_available = False
-            if attempts_remaining <= 0 and current_status != AttemptStatus.Completed:
-                is_available = False
-
-            is_locked = False
-            dependencies = strand_storage.get_dependencies(assignment.objective_id, session=session)
-            for dep in dependencies:
-                prereq_assignments = assignment_storage.find(
-                    organization_id=auth.organization_id,
-                    objective_id=dep.depends_on_objective_id,
-                    assigned_to=auth.user.user_id,
-                    session=session,
-                )
-                prereq_completed = False
-                for prereq in prereq_assignments:
-                    prereq_attempts = attempt_storage.find(assignment_id=prereq.assignment_id, session=session)
-                    for prereq_attempt in prereq_attempts:
-                        if prereq_attempt.status in (AttemptStatus.Evaluated, AttemptStatus.Reviewed):
-                            prereq_completed = True
-                            break
-                    if prereq_completed:
-                        break
-                if not prereq_completed and dependencies:
-                    is_locked = True
-                    break
-
-            grade = latest_attempt.grade if latest_attempt else None
-
-            summaries.append(
-                LearnerAssignmentSummary(
-                    assignment_id=assignment.assignment_id,
-                    objective_id=assignment.objective_id,
-                    objective_title=objective.title,
-                    objective_description=objective.description,
-                    expected_duration_minutes=objective.time_expectation_minutes,
-                    status=current_status,
-                    grade=grade,
-                    attempts_used=attempts_used,
-                    attempts_remaining=attempts_remaining,
-                    available_from=assignment.available_from,
-                    available_until=assignment.available_until,
-                    is_available=is_available and not is_locked,
-                    is_locked=is_locked,
-                )
-            )
-
-        return LearnerAssignmentsListResponse(
-            assignments=summaries,
-            total=len(summaries),
-        )
-
-
-@router.get("/me/assignments", operation_id="list_my_assignments")
-@di.inject
-def list_my_assignments(
-    auth: AuthContext = Depends(require_learner),
-    session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> LearnerAssignmentsListResponse:
-    """Get all assignments for the current learner.
-
-    Returns assignments with objective info, attempt counts, and availability status.
-    """
-    with session.begin():
-        assignments = assignment_storage.find(
-            organization_id=auth.organization_id,
-            assigned_to=auth.user.user_id,
-            session=session,
-        )
-
-        now = datetime.datetime.now(datetime.UTC)
+        now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
         summaries: list[LearnerAssignmentSummary] = []
 
         for assignment in assignments:
@@ -274,7 +178,7 @@ def get_learner_dashboard(
             session=session,
         )
 
-        now = datetime.datetime.now(datetime.UTC)
+        now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
         summaries: list[LearnerAssignmentSummary] = []
         total_completed = 0
         total_in_progress = 0
