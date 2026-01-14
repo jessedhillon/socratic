@@ -93,3 +93,22 @@ processes:
     shutdown:
       signal: 15 # TERM
       timeout_seconds: 10
+
+  learner-vite:
+    command: 'npm run dev --prefix socratic/web/learner/frontend -- --host 127.0.0.1 --port 9098'
+    working_dir: .
+    environment:
+      - 'VITE_API_URL=http://127.0.0.1:8089'
+    depends_on:
+      socratic-dev:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 9098
+        path: /static
+      period_seconds: 30
+      initial_delay_seconds: 2
+    shutdown:
+      signal: 15 # TERM
+      timeout_seconds: 10
