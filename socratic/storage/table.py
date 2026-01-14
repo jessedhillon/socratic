@@ -6,7 +6,7 @@ import typing as t
 from sqlalchemy import ForeignKey, func, MetaData
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, MappedAsDataclass
-from sqlalchemy.types import Numeric, String
+from sqlalchemy.types import DateTime, Numeric, String
 
 from socratic.model import AssignmentID, AttemptID, EvaluationResultID, ExampleID, ObjectiveID, OrganizationID, \
     OverrideID, RubricCriterionID, StrandID, TranscriptSegmentID, UserID
@@ -29,6 +29,7 @@ class base(MappedAsDataclass, DeclarativeBase):
         TranscriptSegmentID: ShortUUIDKeyType(TranscriptSegmentID),
         EvaluationResultID: ShortUUIDKeyType(EvaluationResultID),
         OverrideID: ShortUUIDKeyType(OverrideID),
+        datetime.datetime: DateTime(timezone=True),
         list[str]: ARRAY(String),
         enum.Enum: ValueEnumMapper,
     }
