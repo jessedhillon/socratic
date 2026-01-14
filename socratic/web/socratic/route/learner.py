@@ -69,7 +69,7 @@ def list_learners(
 def list_my_assignments(
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-    utcnow: TimestampProvider = di.Provide["utcnow"],
+    utcnow: TimestampProvider = Depends(di.Provide["utcnow"]),
 ) -> LearnerAssignmentsListResponse:
     """Get all assignments for the current learner.
 
@@ -262,7 +262,7 @@ def list_my_attempts(
 def get_learner_dashboard(
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-    utcnow: TimestampProvider = di.Provide["utcnow"],
+    utcnow: TimestampProvider = Depends(di.Provide["utcnow"]),
 ) -> LearnerDashboardResponse:
     """Get the current learner's dashboard with all assignments.
 
