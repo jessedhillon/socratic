@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getLearnerDashboard } from '../api';
 import type { LearnerDashboardResponse } from '../api';
-import { getLoginUrl } from '../auth';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
  * Learner dashboard page showing available assignments.
@@ -12,7 +12,7 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const location = useLocation();
+  const { logout } = useAuth();
 
   useEffect(() => {
     fetchDashboard();
@@ -23,7 +23,8 @@ const DashboardPage: React.FC = () => {
       const { data: dashboardData, response } = await getLearnerDashboard();
       if (!response.ok) {
         if (response.status === 401) {
-          navigate(getLoginUrl(location.pathname));
+          // Auth handled by AuthContext - just logout
+          logout();
           return;
         }
         setError('Failed to load dashboard');
@@ -44,15 +45,15 @@ const DashboardPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">Loading...</div>
+      <div className="flex items-center justify-center py-12">
+        <div className="text-gray-500">Loading assignments...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
         </div>
@@ -61,7 +62,7 @@ const DashboardPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
+    <div className="py-8">
       <div className="max-w-4xl mx-auto px-4">
         <h1 className="text-2xl font-bold text-gray-800 mb-6">
           My Assignments
