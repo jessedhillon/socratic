@@ -754,6 +754,16 @@ Do not mark issues as Done when opening a PR — they are only Done after the co
 3. Open a PR that closes that issue
 4. Merge, then mark the issue Done
 
+**PR titles:** Use conventional commit format without issue numbers. The issue reference belongs in the PR body (e.g., "Closes SOC-XX"), not the title.
+
+```
+# Good PR title
+feat(frontend): add user authentication flow
+
+# Bad PR title
+feat(frontend): add user authentication flow [SOC-70]
+```
+
 **Why this matters:**
 
 - Smaller PRs are easier to review
