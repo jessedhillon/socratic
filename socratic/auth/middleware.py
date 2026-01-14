@@ -28,7 +28,8 @@ class AuthContext(t.NamedTuple):
     token_data: TokenData
 
 
-async def get_current_user(
+@di.inject
+def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AuthContext:
@@ -53,13 +54,14 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = local_auth.get_user(token_data.user_id, session=session)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    with session.begin():
+        user = local_auth.get_user(token_data.user_id, session=session)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     return AuthContext(
         user=user,
@@ -69,7 +71,8 @@ async def get_current_user(
     )
 
 
-async def get_optional_user(
+@di.inject
+def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AuthContext | None:
@@ -84,9 +87,10 @@ async def get_optional_user(
     if token_data is None:
         return None
 
-    user = local_auth.get_user(token_data.user_id, session=session)
-    if user is None:
-        return None
+    with session.begin():
+        user = local_auth.get_user(token_data.user_id, session=session)
+        if user is None:
+            return None
 
     return AuthContext(
         user=user,
@@ -98,7 +102,7 @@ async def get_optional_user(
 
 def require_role(
     *allowed_roles: str,
-) -> t.Callable[..., t.Coroutine[t.Any, t.Any, AuthContext]]:
+) -> t.Callable[..., AuthContext]:
     """Dependency factory to require specific roles.
 
     Usage:
@@ -107,7 +111,7 @@ def require_role(
             ...
     """
 
-    async def check_role(auth: AuthContext = Depends(get_current_user)) -> AuthContext:
+    def check_role(auth: AuthContext = Depends(get_current_user)) -> AuthContext:
         if auth.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

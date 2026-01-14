@@ -13,7 +13,7 @@ import sqlalchemy
 import sqlalchemy.event
 import sqlalchemy.orm
 from dependency_injector.containers import DeclarativeContainer
-from dependency_injector.providers import Configuration, Container, Object, Provider, Resource, Singleton
+from dependency_injector.providers import Configuration, Container, Factory, Object, Provider, Resource, Singleton
 from psycopg.adapt import Buffer, Loader
 from psycopg.types import TypeInfo
 from psycopg.types.array import register_array
@@ -82,15 +82,14 @@ def provide_engine(
     return engine
 
 
-def provide_session(debug: bool, engine: sqlalchemy.Engine) -> t.Generator[sqlalchemy.orm.Session]:
+def provide_session(debug: bool, engine: sqlalchemy.Engine) -> sqlalchemy.orm.Session:
+    """Create a new session. Caller is responsible for closing it (via di.Manage)."""
     if debug:
         maker = sqlalchemy.orm.sessionmaker(engine, class_=DebugSession, expire_on_commit=False, autoflush=False)
-        session: sqlalchemy.orm.Session = maker(query_cls=DebugQuery, autobegin=False)
+        return maker(query_cls=DebugQuery, autobegin=False)
     else:
         maker = sqlalchemy.orm.sessionmaker(engine, expire_on_commit=False, autoflush=False)
-        session: sqlalchemy.orm.Session = maker(autobegin=False)
-    yield session
-    session.close()
+        return maker(autobegin=False)
 
 
 def provide_fixtures(root: Path | NotReady) -> types.ModuleType:
@@ -128,7 +127,7 @@ class PersistentContainer(DeclarativeContainer):
         secrets=secrets.postgresql.as_(PostgresqlSecrets),
         logging=logging,
     )
-    session: Provider[sqlalchemy.orm.Session] = Resource(provide_session, debug=debug, engine=engine)
+    session: Provider[sqlalchemy.orm.Session] = Factory(provide_session, debug=debug, engine=engine)
 
 
 class StorageContainer(DeclarativeContainer):

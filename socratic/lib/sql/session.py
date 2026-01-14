@@ -20,11 +20,6 @@ class DebugSession(sqlalchemy.orm.Session):
     def copy_query(self, q: sqlalchemy.orm.Query[t.Any]):
         util.clipboard_notify("SQL query", self.format_query(q))
 
-    def close(self):
-        # Override close to prevent our API middleware from closing the underlying test DB session, which results in
-        # all test data being discarded whenever a test makes an API call.
-        pass
-
 
 class DebugQuery(sqlalchemy.orm.Query[t.Any]):
     def __str__(self) -> str:

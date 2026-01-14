@@ -72,9 +72,13 @@ def get_user(
     user_id: UserID,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> User | None:
-    """Get user by ID."""
-    with session.begin():
-        return user_storage.get(user_id=user_id, session=session)
+    """Get user by ID.
+
+    Note: This function does not manage its own transaction. The caller
+    (typically the auth middleware or route handler) should ensure an
+    active transaction exists via session.begin().
+    """
+    return user_storage.get(user_id=user_id, session=session)
 
 
 def set_password(
