@@ -123,6 +123,8 @@ class LearnerAssignmentSummary(p.BaseModel):
     assignment_id: AssignmentID
     objective_id: ObjectiveID
     objective_title: str
+    objective_description: str | None = None
+    expected_duration_minutes: int | None = None
     status: AttemptStatus
     grade: Grade | None = None
     attempts_used: int
@@ -131,6 +133,13 @@ class LearnerAssignmentSummary(p.BaseModel):
     available_until: datetime.datetime | None = None
     is_available: bool = True
     is_locked: bool = False  # True if prerequisites not met
+
+
+class LearnerAssignmentsListResponse(p.BaseModel):
+    """List of assignments for a learner."""
+
+    assignments: list[LearnerAssignmentSummary]
+    total: int
 
 
 class LearnerDashboardResponse(p.BaseModel):

@@ -98,6 +98,8 @@ import type {
   GetLearnerAssignmentsData,
   GetLearnerAssignmentsResponse,
   GetLearnerAssignmentsError,
+  ListMyAssignmentsData,
+  ListMyAssignmentsResponse,
   GetLearnerDashboardData,
   GetLearnerDashboardResponse,
   GetMyAssignmentData,
@@ -989,6 +991,31 @@ export const getLearnerAssignments = <ThrowOnError extends boolean = false>(
       },
     ],
     url: '/api/learners/{learner_id}/assignments',
+    ...options,
+  });
+};
+
+/**
+ * List My Assignments
+ * Get all assignments for the current learner.
+ *
+ * Returns assignments with objective info, attempt counts, and availability status.
+ */
+export const listMyAssignments = <ThrowOnError extends boolean = false>(
+  options?: Options<ListMyAssignmentsData, ThrowOnError>
+) => {
+  return (options?.client ?? _heyApiClient).get<
+    ListMyAssignmentsResponse,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/learners/me/assignments',
     ...options,
   });
 };
