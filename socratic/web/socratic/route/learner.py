@@ -7,15 +7,17 @@ from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator, require_learner
 from socratic.core import di, TimestampProvider
-from socratic.model import AssignmentID, AttemptStatus, UserID, UserRole
+from socratic.model import Assignment, AssignmentID, AttemptStatus, Objective, ObjectiveID, UserID, UserRole
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
+from socratic.storage import evaluation as evaluation_storage
 from socratic.storage import objective as obj_storage
 from socratic.storage import strand as strand_storage
 from socratic.storage import user as user_storage
 
-from ..view.assignment import AssignmentWithAttemptsResponse, AttemptResponse, LearnerAssignmentsListResponse, \
-    LearnerAssignmentSummary, LearnerDashboardResponse, LearnerListResponse, LearnerResponse
+from ..view.assignment import AssignmentWithAttemptsResponse, AttemptFeedback, AttemptHistoryItem, AttemptResponse, \
+    LearnerAssignmentsListResponse, LearnerAssignmentSummary, LearnerAttemptsListResponse, LearnerDashboardResponse, \
+    LearnerListResponse, LearnerResponse
 
 router = APIRouter(prefix="/api/learners", tags=["learners"])
 
@@ -156,6 +158,102 @@ def list_my_assignments(
         return LearnerAssignmentsListResponse(
             assignments=summaries,
             total=len(summaries),
+        )
+
+
+@router.get("/me/attempts", operation_id="list_my_attempts")
+@di.inject
+def list_my_attempts(
+    assignment_id: str | None = None,
+    auth: AuthContext = Depends(require_learner),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+) -> LearnerAttemptsListResponse:
+    """Get all attempts for the current learner.
+
+    Returns attempts with objective info, review status, and feedback (if reviewed).
+
+    Args:
+        assignment_id: Optional filter to show attempts for a specific assignment.
+    """
+    with session.begin():
+        # Query attempts - optionally filter by assignment
+        if assignment_id is not None:
+            attempts = attempt_storage.find(
+                learner_id=auth.user.user_id,
+                assignment_id=AssignmentID(assignment_id),
+                session=session,
+            )
+        else:
+            attempts = attempt_storage.find(
+                learner_id=auth.user.user_id,
+                session=session,
+            )
+
+        # Sort by create_time descending (latest first)
+        sorted_attempts = sorted(attempts, key=lambda a: a.create_time, reverse=True)
+
+        # Cache for assignments and objectives to avoid repeated lookups
+        assignments_cache: dict[AssignmentID, Assignment | None] = {}
+        objectives_cache: dict[ObjectiveID, Objective | None] = {}
+
+        items: list[AttemptHistoryItem] = []
+        for attempt in sorted_attempts:
+            # Get assignment (with caching)
+            if attempt.assignment_id not in assignments_cache:
+                assignments_cache[attempt.assignment_id] = assignment_storage.get(
+                    attempt.assignment_id, session=session
+                )
+            assignment = assignments_cache[attempt.assignment_id]
+
+            if assignment is None:
+                continue
+
+            # Get objective (with caching)
+            if assignment.objective_id not in objectives_cache:
+                objectives_cache[assignment.objective_id] = obj_storage.get(assignment.objective_id, session=session)
+            objective = objectives_cache[assignment.objective_id]
+
+            if objective is None:
+                continue
+
+            # Check for evaluation
+            evaluation = None
+            has_evaluation = False
+            if attempt.status in (AttemptStatus.Evaluated, AttemptStatus.Reviewed):
+                evaluation = evaluation_storage.get(attempt_id=attempt.attempt_id, session=session)
+                has_evaluation = evaluation is not None
+
+            # Build feedback only for reviewed attempts
+            feedback = None
+            if attempt.status == AttemptStatus.Reviewed and evaluation is not None:
+                feedback = AttemptFeedback(
+                    strengths=evaluation.strengths,
+                    gaps=evaluation.gaps,
+                    reasoning_summary=evaluation.reasoning_summary,
+                )
+
+            items.append(
+                AttemptHistoryItem(
+                    attempt_id=attempt.attempt_id,
+                    assignment_id=attempt.assignment_id,
+                    objective_id=assignment.objective_id,
+                    objective_title=objective.title,
+                    objective_description=objective.description,
+                    status=attempt.status,
+                    grade=attempt.grade,
+                    confidence_score=attempt.confidence_score,
+                    started_at=attempt.started_at,
+                    completed_at=attempt.completed_at,
+                    create_time=attempt.create_time,
+                    has_evaluation=has_evaluation,
+                    evaluation_id=evaluation.evaluation_id if evaluation else None,
+                    feedback=feedback,
+                )
+            )
+
+        return LearnerAttemptsListResponse(
+            attempts=items,
+            total=len(items),
         )
 
 

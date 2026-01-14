@@ -7,8 +7,8 @@ import decimal
 
 import pydantic as p
 
-from socratic.model import AssignmentID, AttemptID, AttemptStatus, Grade, ObjectiveID, OrganizationID, RetakePolicy, \
-    UserID
+from socratic.model import AssignmentID, AttemptID, AttemptStatus, EvaluationResultID, Grade, ObjectiveID, \
+    OrganizationID, RetakePolicy, UserID
 
 
 class AssignmentCreateRequest(p.BaseModel):
@@ -149,3 +149,39 @@ class LearnerDashboardResponse(p.BaseModel):
     total_completed: int
     total_in_progress: int
     total_pending: int
+
+
+class AttemptFeedback(p.BaseModel):
+    """Feedback from an evaluated/reviewed attempt."""
+
+    strengths: list[str] = []
+    gaps: list[str] = []
+    reasoning_summary: str | None = None
+
+
+class AttemptHistoryItem(p.BaseModel):
+    """Attempt with assignment and objective context for history view."""
+
+    attempt_id: AttemptID
+    assignment_id: AssignmentID
+    objective_id: ObjectiveID
+    objective_title: str
+    objective_description: str | None = None
+    status: AttemptStatus
+    grade: Grade | None = None
+    confidence_score: decimal.Decimal | None = None
+    started_at: datetime.datetime | None = None
+    completed_at: datetime.datetime | None = None
+    create_time: datetime.datetime
+    # Review status
+    has_evaluation: bool = False
+    evaluation_id: EvaluationResultID | None = None
+    # Feedback (only included if reviewed)
+    feedback: AttemptFeedback | None = None
+
+
+class LearnerAttemptsListResponse(p.BaseModel):
+    """List of attempts for a learner."""
+
+    attempts: list[AttemptHistoryItem]
+    total: int
