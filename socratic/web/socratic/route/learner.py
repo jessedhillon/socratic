@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import datetime
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator, require_learner
-from socratic.core import di
+from socratic.core import di, TimestampProvider
 from socratic.model import AssignmentID, AttemptStatus, UserID, UserRole
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
@@ -69,6 +67,7 @@ def list_learners(
 def list_my_assignments(
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
+    utcnow: TimestampProvider = di.Provide["utcnow"],
 ) -> LearnerAssignmentsListResponse:
     """Get all assignments for the current learner.
 
@@ -81,7 +80,7 @@ def list_my_assignments(
             session=session,
         )
 
-        now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+        now = utcnow().replace(tzinfo=None)
         summaries: list[LearnerAssignmentSummary] = []
 
         for assignment in assignments:
@@ -165,6 +164,7 @@ def list_my_assignments(
 def get_learner_dashboard(
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
+    utcnow: TimestampProvider = di.Provide["utcnow"],
 ) -> LearnerDashboardResponse:
     """Get the current learner's dashboard with all assignments.
 
@@ -178,7 +178,7 @@ def get_learner_dashboard(
             session=session,
         )
 
-        now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+        now = utcnow().replace(tzinfo=None)
         summaries: list[LearnerAssignmentSummary] = []
         total_completed = 0
         total_in_progress = 0
