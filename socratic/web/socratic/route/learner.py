@@ -22,6 +22,11 @@ from ..view.assignment import AssignmentWithAttemptsResponse, AttemptResponse, L
 router = APIRouter(prefix="/api/learners", tags=["learners"])
 
 
+# ==============================================================================
+# Educator routes (list learners)
+# ==============================================================================
+
+
 @router.get("", operation_id="list_learners")
 @di.inject
 def list_learners(
@@ -54,77 +59,9 @@ def list_learners(
         )
 
 
-@router.get("/{learner_id}/assignments", operation_id="get_learner_assignments")
-@di.inject
-def get_learner_assignments(
-    learner_id: UserID,
-    auth: AuthContext = Depends(require_educator),
-    session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> list[AssignmentWithAttemptsResponse]:
-    """Get all assignments for a specific learner.
-
-    Only educators can view learner assignments.
-    """
-    with session.begin():
-        # Verify learner exists and belongs to organization
-        learner = user_storage.get(user_id=learner_id, with_memberships=True, session=session)
-        if learner is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Learner not found",
-            )
-
-        if not any(m.organization_id == auth.organization_id for m in learner.memberships):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Learner is not in your organization",
-            )
-
-        # Get all assignments for this learner
-        assignments = assignment_storage.find(
-            organization_id=auth.organization_id,
-            assigned_to=learner_id,
-            session=session,
-        )
-
-        result: list[AssignmentWithAttemptsResponse] = []
-        for assignment in assignments:
-            attempts = attempt_storage.find(assignment_id=assignment.assignment_id, session=session)
-            attempt_responses = [
-                AttemptResponse(
-                    attempt_id=a.attempt_id,
-                    assignment_id=a.assignment_id,
-                    learner_id=a.learner_id,
-                    status=a.status,
-                    started_at=a.started_at,
-                    completed_at=a.completed_at,
-                    grade=a.grade,
-                    confidence_score=a.confidence_score,
-                    create_time=a.create_time,
-                )
-                for a in attempts
-            ]
-
-            result.append(
-                AssignmentWithAttemptsResponse(
-                    assignment_id=assignment.assignment_id,
-                    organization_id=assignment.organization_id,
-                    objective_id=assignment.objective_id,
-                    assigned_by=assignment.assigned_by,
-                    assigned_to=assignment.assigned_to,
-                    available_from=assignment.available_from,
-                    available_until=assignment.available_until,
-                    max_attempts=assignment.max_attempts,
-                    retake_policy=assignment.retake_policy,
-                    retake_delay_hours=assignment.retake_delay_hours,
-                    create_time=assignment.create_time,
-                    update_time=assignment.update_time,
-                    attempts=attempt_responses,
-                    attempts_remaining=max(0, assignment.max_attempts - len(attempts)),
-                )
-            )
-
-        return result
+# ==============================================================================
+# Learner "me" routes - MUST come before parameterized routes
+# ==============================================================================
 
 
 @router.get("/me/assignments", operation_id="list_my_assignments")
@@ -394,3 +331,81 @@ def get_my_assignment(
             attempts=attempt_responses,
             attempts_remaining=max(0, assignment.max_attempts - len(attempts)),
         )
+
+
+# ==============================================================================
+# Educator routes for specific learners - MUST come after /me/* routes
+# ==============================================================================
+
+
+@router.get("/{learner_id}/assignments", operation_id="get_learner_assignments")
+@di.inject
+def get_learner_assignments(
+    learner_id: UserID,
+    auth: AuthContext = Depends(require_educator),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+) -> list[AssignmentWithAttemptsResponse]:
+    """Get all assignments for a specific learner.
+
+    Only educators can view learner assignments.
+    """
+    with session.begin():
+        # Verify learner exists and belongs to organization
+        learner = user_storage.get(user_id=learner_id, with_memberships=True, session=session)
+        if learner is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Learner not found",
+            )
+
+        if not any(m.organization_id == auth.organization_id for m in learner.memberships):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Learner is not in your organization",
+            )
+
+        # Get all assignments for this learner
+        assignments = assignment_storage.find(
+            organization_id=auth.organization_id,
+            assigned_to=learner_id,
+            session=session,
+        )
+
+        result: list[AssignmentWithAttemptsResponse] = []
+        for assignment in assignments:
+            attempts = attempt_storage.find(assignment_id=assignment.assignment_id, session=session)
+            attempt_responses = [
+                AttemptResponse(
+                    attempt_id=a.attempt_id,
+                    assignment_id=a.assignment_id,
+                    learner_id=a.learner_id,
+                    status=a.status,
+                    started_at=a.started_at,
+                    completed_at=a.completed_at,
+                    grade=a.grade,
+                    confidence_score=a.confidence_score,
+                    create_time=a.create_time,
+                )
+                for a in attempts
+            ]
+
+            result.append(
+                AssignmentWithAttemptsResponse(
+                    assignment_id=assignment.assignment_id,
+                    organization_id=assignment.organization_id,
+                    objective_id=assignment.objective_id,
+                    assigned_by=assignment.assigned_by,
+                    assigned_to=assignment.assigned_to,
+                    available_from=assignment.available_from,
+                    available_until=assignment.available_until,
+                    max_attempts=assignment.max_attempts,
+                    retake_policy=assignment.retake_policy,
+                    retake_delay_hours=assignment.retake_delay_hours,
+                    create_time=assignment.create_time,
+                    update_time=assignment.update_time,
+                    attempts=attempt_responses,
+                    attempts_remaining=max(0, assignment.max_attempts - len(attempts)),
+                )
+            )
+
+        return result
