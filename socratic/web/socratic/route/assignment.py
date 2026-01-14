@@ -100,47 +100,47 @@ def create_assignment(
 
     Only educators can create assignments.
     """
-    # Verify objective exists and belongs to organization
-    objective = obj_storage.get(request.objective_id, session=session)
-    if objective is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Objective not found",
-        )
-    if objective.organization_id != auth.organization_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot assign objectives from other organizations",
+    with session.begin():
+        # Verify objective exists and belongs to organization
+        objective = obj_storage.get(request.objective_id, session=session)
+        if objective is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Objective not found",
+            )
+        if objective.organization_id != auth.organization_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot assign objectives from other organizations",
+            )
+
+        # Verify learner exists and belongs to organization
+        learner = user_storage.get(user_id=request.assigned_to, with_memberships=True, session=session)
+        if learner is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Learner not found",
+            )
+        if not any(m.organization_id == auth.organization_id for m in learner.memberships):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Learner is not in your organization",
+            )
+
+        assignment = assignment_storage.create(
+            organization_id=auth.organization_id,
+            objective_id=request.objective_id,
+            assigned_by=auth.user.user_id,
+            assigned_to=request.assigned_to,
+            available_from=request.available_from,
+            available_until=request.available_until,
+            max_attempts=request.max_attempts,
+            retake_policy=request.retake_policy,
+            retake_delay_hours=request.retake_delay_hours,
+            session=session,
         )
 
-    # Verify learner exists and belongs to organization
-    learner = user_storage.get(user_id=request.assigned_to, with_memberships=True, session=session)
-    if learner is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Learner not found",
-        )
-    if not any(m.organization_id == auth.organization_id for m in learner.memberships):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Learner is not in your organization",
-        )
-
-    assignment = assignment_storage.create(
-        organization_id=auth.organization_id,
-        objective_id=request.objective_id,
-        assigned_by=auth.user.user_id,
-        assigned_to=request.assigned_to,
-        available_from=request.available_from,
-        available_until=request.available_until,
-        max_attempts=request.max_attempts,
-        retake_policy=request.retake_policy,
-        retake_delay_hours=request.retake_delay_hours,
-        session=session,
-    )
-
-    session.commit()
-    return _build_assignment_response(assignment.assignment_id, session)
+        return _build_assignment_response(assignment.assignment_id, session)
 
 
 @router.post("/bulk", operation_id="create_bulk_assignments", status_code=status.HTTP_201_CREATED)
@@ -154,55 +154,54 @@ def create_bulk_assignments(
 
     Only educators can create assignments.
     """
-    # Verify objective exists and belongs to organization
-    objective = obj_storage.get(request.objective_id, session=session)
-    if objective is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Objective not found",
-        )
-    if objective.organization_id != auth.organization_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot assign objectives from other organizations",
-        )
-
-    created_assignments: list[AssignmentResponse] = []
-
-    for learner_id in request.assigned_to:
-        # Verify each learner exists and belongs to organization
-        learner = user_storage.get(user_id=learner_id, with_memberships=True, session=session)
-        if learner is None:
+    with session.begin():
+        # Verify objective exists and belongs to organization
+        objective = obj_storage.get(request.objective_id, session=session)
+        if objective is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Learner {learner_id} not found",
+                detail="Objective not found",
             )
-        if not any(m.organization_id == auth.organization_id for m in learner.memberships):
+        if objective.organization_id != auth.organization_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Learner {learner_id} is not in your organization",
+                detail="Cannot assign objectives from other organizations",
             )
 
-        assignment = assignment_storage.create(
-            organization_id=auth.organization_id,
-            objective_id=request.objective_id,
-            assigned_by=auth.user.user_id,
-            assigned_to=learner_id,
-            available_from=request.available_from,
-            available_until=request.available_until,
-            max_attempts=request.max_attempts,
-            retake_policy=request.retake_policy,
-            retake_delay_hours=request.retake_delay_hours,
-            session=session,
+        created_assignments: list[AssignmentResponse] = []
+
+        for learner_id in request.assigned_to:
+            # Verify each learner exists and belongs to organization
+            learner = user_storage.get(user_id=learner_id, with_memberships=True, session=session)
+            if learner is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Learner {learner_id} not found",
+                )
+            if not any(m.organization_id == auth.organization_id for m in learner.memberships):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Learner {learner_id} is not in your organization",
+                )
+
+            assignment = assignment_storage.create(
+                organization_id=auth.organization_id,
+                objective_id=request.objective_id,
+                assigned_by=auth.user.user_id,
+                assigned_to=learner_id,
+                available_from=request.available_from,
+                available_until=request.available_until,
+                max_attempts=request.max_attempts,
+                retake_policy=request.retake_policy,
+                retake_delay_hours=request.retake_delay_hours,
+                session=session,
+            )
+            created_assignments.append(_build_assignment_response(assignment.assignment_id, session))
+
+        return AssignmentListResponse(
+            assignments=created_assignments,
+            total=len(created_assignments),
         )
-        created_assignments.append(_build_assignment_response(assignment.assignment_id, session))
-
-    session.commit()
-
-    return AssignmentListResponse(
-        assignments=created_assignments,
-        total=len(created_assignments),
-    )
 
 
 @router.get("", operation_id="list_assignments")
@@ -217,30 +216,31 @@ def list_assignments(
 
     Educators can filter by objective or learner.
     """
-    assignments = assignment_storage.find(
-        organization_id=auth.organization_id,
-        objective_id=objective_id,
-        assigned_to=assigned_to,
-        session=session,
-    )
-
-    assignment_responses = [
-        AssignmentResponse(
-            assignment_id=a.assignment_id,
-            organization_id=a.organization_id,
-            objective_id=a.objective_id,
-            assigned_by=a.assigned_by,
-            assigned_to=a.assigned_to,
-            available_from=a.available_from,
-            available_until=a.available_until,
-            max_attempts=a.max_attempts,
-            retake_policy=a.retake_policy,
-            retake_delay_hours=a.retake_delay_hours,
-            create_time=a.create_time,
-            update_time=a.update_time,
+    with session.begin():
+        assignments = assignment_storage.find(
+            organization_id=auth.organization_id,
+            objective_id=objective_id,
+            assigned_to=assigned_to,
+            session=session,
         )
-        for a in assignments
-    ]
+
+        assignment_responses = [
+            AssignmentResponse(
+                assignment_id=a.assignment_id,
+                organization_id=a.organization_id,
+                objective_id=a.objective_id,
+                assigned_by=a.assigned_by,
+                assigned_to=a.assigned_to,
+                available_from=a.available_from,
+                available_until=a.available_until,
+                max_attempts=a.max_attempts,
+                retake_policy=a.retake_policy,
+                retake_delay_hours=a.retake_delay_hours,
+                create_time=a.create_time,
+                update_time=a.update_time,
+            )
+            for a in assignments
+        ]
 
     return AssignmentListResponse(
         assignments=assignment_responses,
@@ -259,20 +259,21 @@ def get_assignment(
 
     Educators can view any assignment in their organization.
     """
-    assignment = assignment_storage.get(assignment_id, session=session)
-    if assignment is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Assignment not found",
-        )
+    with session.begin():
+        assignment = assignment_storage.get(assignment_id, session=session)
+        if assignment is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assignment not found",
+            )
 
-    if assignment.organization_id != auth.organization_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access assignments from other organizations",
-        )
+        if assignment.organization_id != auth.organization_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot access assignments from other organizations",
+            )
 
-    return _build_assignment_with_attempts_response(assignment_id, session)
+        return _build_assignment_with_attempts_response(assignment_id, session)
 
 
 @router.put("/{assignment_id}", operation_id="update_assignment")
@@ -287,31 +288,31 @@ def update_assignment(
 
     Only educators can update assignments.
     """
-    assignment = assignment_storage.get(assignment_id, session=session)
-    if assignment is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Assignment not found",
+    with session.begin():
+        assignment = assignment_storage.get(assignment_id, session=session)
+        if assignment is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assignment not found",
+            )
+
+        if assignment.organization_id != auth.organization_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot update assignments from other organizations",
+            )
+
+        assignment_storage.update(
+            assignment_id,
+            available_from=request.available_from if request.available_from is not None else NotSet(),
+            available_until=request.available_until if request.available_until is not None else NotSet(),
+            max_attempts=request.max_attempts if request.max_attempts is not None else NotSet(),
+            retake_policy=request.retake_policy if request.retake_policy is not None else NotSet(),
+            retake_delay_hours=request.retake_delay_hours if request.retake_delay_hours is not None else NotSet(),
+            session=session,
         )
 
-    if assignment.organization_id != auth.organization_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot update assignments from other organizations",
-        )
-
-    assignment_storage.update(
-        assignment_id,
-        available_from=request.available_from if request.available_from is not None else NotSet(),
-        available_until=request.available_until if request.available_until is not None else NotSet(),
-        max_attempts=request.max_attempts if request.max_attempts is not None else NotSet(),
-        retake_policy=request.retake_policy if request.retake_policy is not None else NotSet(),
-        retake_delay_hours=request.retake_delay_hours if request.retake_delay_hours is not None else NotSet(),
-        session=session,
-    )
-
-    session.commit()
-    return _build_assignment_response(assignment_id, session)
+        return _build_assignment_response(assignment_id, session)
 
 
 @router.delete(
@@ -327,26 +328,26 @@ def cancel_assignment(
 
     Only educators can cancel assignments. This is a hard delete.
     """
-    assignment = assignment_storage.get(assignment_id, session=session)
-    if assignment is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Assignment not found",
-        )
+    with session.begin():
+        assignment = assignment_storage.get(assignment_id, session=session)
+        if assignment is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assignment not found",
+            )
 
-    if assignment.organization_id != auth.organization_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot cancel assignments from other organizations",
-        )
+        if assignment.organization_id != auth.organization_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot cancel assignments from other organizations",
+            )
 
-    # Check if there are any attempts
-    attempts = attempt_storage.find(assignment_id=assignment_id, session=session)
-    if attempts:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot cancel assignment with existing attempts",
-        )
+        # Check if there are any attempts
+        attempts = attempt_storage.find(assignment_id=assignment_id, session=session)
+        if attempts:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot cancel assignment with existing attempts",
+            )
 
-    assignment_storage.delete(assignment_id, session=session)
-    session.commit()
+        assignment_storage.delete(assignment_id, session=session)
