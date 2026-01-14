@@ -83,8 +83,9 @@ export function AuthProvider({
       );
       // For learner app, if user is not a learner, they shouldn't be here
       if (requireRole === 'learner' && user.role === 'educator') {
-        // Redirect educators to instructor app
-        window.location.href = 'http://127.0.0.1:9099/static/reviews';
+        // Redirect educators to instructor app, preserving org context
+        const orgSlug = localStorage.getItem('login_org') || 'default';
+        window.location.href = `http://127.0.0.1:9099/static/${orgSlug}/instructor`;
       }
     }
   }, [user, isLoading, requireRole, navigate, location.pathname]);
