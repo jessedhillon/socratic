@@ -11,7 +11,7 @@ from socratic.streaming.redis import RedisStreamBroker
 from ..config.storage import RedisSettings, StreamsSettings
 
 
-def provide_redis_client(config: RedisSettings) -> aioredis.Redis:  # type: ignore[type-arg]
+def provide_redis_client(config: RedisSettings) -> aioredis.Redis:
     """Create an async Redis client.
 
     Uses Unix socket if configured, otherwise TCP connection.
@@ -36,7 +36,7 @@ class StreamsContainer(DeclarativeContainer):
 
     config: Provider[StreamsSettings] = Configuration()
 
-    redis: Provider[aioredis.Redis] = Singleton(  # type: ignore[type-arg]
+    redis: Provider[aioredis.Redis] = Singleton(
         provide_redis_client,
         config=config.redis.as_(RedisSettings),
     )
