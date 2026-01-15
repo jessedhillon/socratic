@@ -4,6 +4,7 @@ import LearnerLayout from './components/LearnerLayout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AssignmentDetailPage from './pages/AssignmentDetailPage';
+import AssessmentPage from './pages/AssessmentPage';
 import HistoryPage from './pages/HistoryPage';
 import AttemptDetailPage from './pages/AttemptDetailPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -31,6 +32,9 @@ const App: React.FC = () => {
           path="/assignments/:assignmentId"
           element={<AssignmentDetailPage />}
         />
+
+        {/* Assessments - full-screen assessment experience */}
+        <Route path="/assessments/:assignmentId" element={<AssessmentPage />} />
 
         {/* History */}
         <Route path="/history" element={<HistoryPage />} />
