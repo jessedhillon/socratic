@@ -8,7 +8,7 @@ from dependency_injector.providers import Configuration, Factory, Provider, Sing
 
 from socratic.storage.streaming.redis import RedisStreamBroker
 
-from ..config.storage import RedisSettings, StreamingSettings
+from ..config.storage import RedisSettings
 
 
 def provide_redis_client(config: RedisSettings) -> aioredis.Redis:
@@ -34,7 +34,7 @@ def provide_redis_client(config: RedisSettings) -> aioredis.Redis:
 class StreamingContainer(DeclarativeContainer):
     """Container for streaming infrastructure (Redis Streams pub/sub)."""
 
-    config: Provider[StreamingSettings] = Configuration()
+    config = Configuration()
 
     redis: Provider[aioredis.Redis] = Singleton(
         provide_redis_client,

@@ -25,6 +25,27 @@ class StartAssessmentResponse(p.BaseModel):
     message: str  # Initial orientation message (collected after SSE stream completes)
 
 
+class StartAssessmentOkResponse(p.BaseModel):
+    """Immediate response when starting an assessment.
+
+    The orientation message will be streamed via the /stream endpoint.
+    """
+
+    attempt_id: AttemptID
+    assignment_id: AssignmentID
+    objective_id: ObjectiveID
+    objective_title: str
+
+
+class MessageAcceptedResponse(p.BaseModel):
+    """Response when a message is accepted for processing.
+
+    The AI response will be streamed via the /stream endpoint.
+    """
+
+    message_id: TranscriptSegmentID
+
+
 class SendMessageRequest(p.BaseModel):
     """Request to send a learner message."""
 
