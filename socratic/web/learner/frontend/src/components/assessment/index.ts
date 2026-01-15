@@ -6,3 +6,8 @@ export {
   type AssessmentState,
   type AssessmentActions,
 } from './useAssessmentState';
+export {
+  useAssessmentApi,
+  type StartAssessmentResult,
+  type SendMessageResult,
+} from './useAssessmentApi';
