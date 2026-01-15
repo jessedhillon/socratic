@@ -1,10 +1,17 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChatInterface, useAssessmentState } from '../components/assessment';
+import {
+  ChatInterface,
+  useAssessmentState,
+  useAssessmentApi,
+} from '../components/assessment';
+
+// Set to true to use mock service for development without backend
+const USE_MOCK_SERVICE = false;
 
 /**
  * Mock service for development.
- * TODO: Replace with real API integration when backend is ready.
+ * Used when USE_MOCK_SERVICE is true or backend is unavailable.
  */
 const mockService = {
   // Simulated prompts for the assessment
@@ -71,6 +78,13 @@ const AssessmentPage: React.FC = () => {
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const navigate = useNavigate();
   const { state, actions } = useAssessmentState();
+  const api = useAssessmentApi();
+
+  // Track if we've started initialization to prevent double-starts
+  const initStartedRef = useRef(false);
+
+  // Track streamed content for the current message
+  const streamedContentRef = useRef('');
 
   // Initialize assessment when component mounts
   useEffect(() => {
@@ -84,22 +98,52 @@ const AssessmentPage: React.FC = () => {
     const startAssessmentFlow = async () => {
       if (state.phase !== 'initializing' || !state.assignmentId) return;
 
+      // Prevent double-start due to React strict mode
+      if (initStartedRef.current) return;
+      initStartedRef.current = true;
+
       try {
         // For now, skip permissions and go straight to starting
         // TODO: Add permission request flow for a/v capture
 
-        const result = await mockService.startAssessment(state.assignmentId);
+        if (USE_MOCK_SERVICE) {
+          // Use mock service
+          const result = await mockService.startAssessment(state.assignmentId);
+          actions.startAssessment(result.attemptId, result.objectiveTitle);
+          actions.addInterviewerMessage(result.initialPrompt);
+          actions.responseComplete();
+        } else {
+          // Use real API with SSE streaming
+          // Create a streaming message placeholder
+          streamedContentRef.current = '';
+          const messageId = actions.addInterviewerMessage('', true);
 
-        actions.startAssessment(result.attemptId, result.objectiveTitle);
-        actions.addInterviewerMessage(result.initialPrompt);
-        actions.responseComplete();
+          const result = await api.startAssessment(
+            state.assignmentId,
+            (token) => {
+              // Update streaming message with each token
+              streamedContentRef.current += token;
+              actions.updateStreamingMessage(
+                messageId,
+                streamedContentRef.current
+              );
+            }
+          );
+
+          // Finalize the message
+          actions.finishStreamingMessage(messageId);
+          actions.startAssessment(result.attemptId, result.objectiveTitle);
+          actions.responseComplete();
+        }
       } catch (err) {
+        console.error('Failed to start assessment:', err);
         actions.setError('Failed to start assessment. Please try again.');
+        initStartedRef.current = false;
       }
     };
 
     startAssessmentFlow();
-  }, [state.phase, state.assignmentId, actions]);
+  }, [state.phase, state.assignmentId, actions, api]);
 
   // Handle sending messages
   const handleSendMessage = useCallback(
@@ -110,28 +154,57 @@ const AssessmentPage: React.FC = () => {
       actions.sendMessage(content);
 
       try {
-        const result = await mockService.sendMessage(state.attemptId, content);
-
-        // Add interviewer response
-        actions.addInterviewerMessage(result.response);
-        actions.responseComplete();
-
-        // Check if assessment is complete
-        if (result.isComplete) {
-          actions.addSystemMessage(
-            'Assessment complete. Submitting your responses...'
+        if (USE_MOCK_SERVICE) {
+          // Use mock service
+          const result = await mockService.sendMessage(
+            state.attemptId,
+            content
           );
-          actions.beginCompletion();
 
-          // Simulate submission delay
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          actions.completeAssessment();
+          // Add interviewer response
+          actions.addInterviewerMessage(result.response);
+          actions.responseComplete();
+
+          // Check if assessment is complete
+          if (result.isComplete) {
+            actions.addSystemMessage(
+              'Assessment complete. Submitting your responses...'
+            );
+            actions.beginCompletion();
+
+            // Simulate submission delay
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            actions.completeAssessment();
+          }
+        } else {
+          // Use real API with SSE streaming
+          // Create a streaming message placeholder
+          streamedContentRef.current = '';
+          const messageId = actions.addInterviewerMessage('', true);
+
+          await api.sendMessage(state.attemptId, content, (token) => {
+            // Update streaming message with each token
+            streamedContentRef.current += token;
+            actions.updateStreamingMessage(
+              messageId,
+              streamedContentRef.current
+            );
+          });
+
+          // Finalize the message
+          actions.finishStreamingMessage(messageId);
+          actions.responseComplete();
+
+          // TODO: Check for completion signal from backend
+          // The backend should signal when the assessment is complete
+          // For now, we continue until the backend indicates completion
         }
       } catch (err) {
+        console.error('Failed to send message:', err);
         actions.setError('Failed to send message. Please try again.');
       }
     },
-    [state.attemptId, actions]
+    [state.attemptId, actions, api]
   );
 
   // Render loading state
