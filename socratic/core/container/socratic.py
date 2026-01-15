@@ -22,6 +22,7 @@ from ..provider import LoggingProvider, TimestampProvider
 from .auth import AuthContainer
 from .llm import LLMContainer
 from .storage import StorageContainer
+from .streaming import StreamingContainer
 from .template import TemplateContainer
 from .vendor import VendorContainer
 
@@ -81,6 +82,12 @@ class SocraticContainer(DeclarativeContainer):
         LLMContainer,
         config=config.llm,
         secrets=secrets.openai,
+    )
+
+    # Streaming container for real-time event pub/sub
+    streaming: Provider[StreamingContainer] = Container(
+        StreamingContainer,
+        config=config.storage.redis,
     )
 
     utcnow: Provider[TimestampProvider] = Object(lambda: datetime.datetime.now(datetime.UTC))
