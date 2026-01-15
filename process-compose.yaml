@@ -30,6 +30,20 @@ processes:
         command: 'ss -tanl | grep 11211'
       period_seconds: 5
 
+  redis:
+    command: |
+      mkdir -p ${XDG_STATE_HOME}/redis
+      redis-server --unixsocket ${REDIS_SOCKET_PATH} --unixsocketperm 700 --port 0 --daemonize no
+    is_daemon: false
+    readiness_probe:
+      exec:
+        command: 'redis-cli -s ${REDIS_SOCKET_PATH} ping'
+      initial_delay_seconds: 1
+      period_seconds: 10
+    shutdown:
+      signal: 15 # TERM
+      timeout_seconds: 10
+
   rabbitmq:
     command: 'rabbitmq-server'
     disabled: true
@@ -48,6 +62,8 @@ processes:
     depends_on:
       postgres:
         condition: process_healthy
+      redis:
+        condition: process_healthy
     readiness_probe:
       http_get:
         host: 127.0.0.1
@@ -63,6 +79,8 @@ processes:
     command: 'socratic-cli web develop socratic'
     depends_on:
       postgres:
+        condition: process_healthy
+      redis:
         condition: process_healthy
     readiness_probe:
       http_get:

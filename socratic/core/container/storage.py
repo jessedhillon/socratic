@@ -25,9 +25,10 @@ import socratic.lib.uuid as uuid
 from socratic.lib.sql import DebugQuery, DebugSession
 
 from ..config.secrets import PostgresqlSecrets
-from ..config.storage import PersistentSettings, PostgresqlSettings, StorageSettings
+from ..config.storage import PostgresqlSettings, StorageSettings, StreamingSettings
 from ..di import NotReady
 from ..provider import LoggingProvider
+from .streaming import StreamingContainer
 
 
 def provide_alembic_conf(
@@ -131,7 +132,7 @@ class PersistentContainer(DeclarativeContainer):
 
 
 class StorageContainer(DeclarativeContainer):
-    config: Provider[PersistentSettings] = Configuration(strict=True)
+    config: Provider[StorageSettings] = Configuration(strict=True)
     secrets: Provider[StorageSettings] = Configuration(strict=True)
     debug: Provider[bool] = Object()
     logging: Provider[LoggingProvider] = Resource()
@@ -140,6 +141,9 @@ class StorageContainer(DeclarativeContainer):
     fixtures: Provider[types.ModuleType] = Singleton(provide_fixtures, root=root)
     persistent: Provider[PersistentContainer] = Container(
         PersistentContainer, config=config.persistent, secrets=secrets, debug=debug, logging=logging, root=root
+    )
+    streaming: Provider[StreamingContainer] = Container(
+        StreamingContainer, config=config.streaming.as_(StreamingSettings)
     )
 
 

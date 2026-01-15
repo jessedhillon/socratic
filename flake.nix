@@ -76,6 +76,10 @@
             eval = "$XDG_STATE_HOME";
           }
           {
+            name = "REDIS_SOCKET_PATH";
+            eval = "$XDG_STATE_HOME/redis/redis.sock";
+          }
+          {
             name = "RABBITMQ_NODENAME";
             value = "rabbit@localhost";
           }
@@ -114,7 +118,7 @@
         ];
 
         devshell.startup.create-dirs.text = ''
-          mkdir -p "$RABBITMQ_HOME" "$RABBITMQ_MNESIA_BASE" "$(dirname "$RABBITMQ_LOGS")"
+          mkdir -p "$RABBITMQ_HOME" "$RABBITMQ_MNESIA_BASE" "$(dirname "$RABBITMQ_LOGS")" "$XDG_STATE_HOME/redis"
         '';
 
         packages = with pkgs; [
@@ -130,6 +134,7 @@
           pyright
           python313
           nodejs
+          redis
           ruff
           uv
           yq
