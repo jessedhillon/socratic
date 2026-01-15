@@ -44,10 +44,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
             Interviewer
           </div>
         )}
-        <div className="whitespace-pre-wrap">{message.content}</div>
-        {message.isStreaming && (
-          <span className="inline-block ml-1 animate-pulse">▊</span>
-        )}
+        <div className="whitespace-pre-wrap">
+          {message.content}
+          {message.isStreaming && <span className="ml-1 animate-pulse">▊</span>}
+        </div>
       </div>
     </div>
   );

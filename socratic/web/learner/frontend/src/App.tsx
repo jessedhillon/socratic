@@ -7,10 +7,14 @@ import AssignmentDetailPage from './pages/AssignmentDetailPage';
 import HistoryPage from './pages/HistoryPage';
 import AttemptDetailPage from './pages/AttemptDetailPage';
 import NotFoundPage from './pages/NotFoundPage';
+import DevChatTestPage from './pages/DevChatTestPage';
 
 const App: React.FC = () => {
   return (
     <Routes>
+      {/* Dev test routes */}
+      <Route path="/dev/chat-test" element={<DevChatTestPage />} />
+
       {/* Authentication routes */}
       <Route path="/:orgSlug/:role" element={<LoginPage />} />
 
