@@ -6,7 +6,7 @@ import redis.asyncio as aioredis
 from dependency_injector.containers import DeclarativeContainer
 from dependency_injector.providers import Configuration, Factory, Provider, Singleton
 
-from socratic.streaming.redis import RedisStreamBroker
+from socratic.storage.streaming.redis import RedisStreamBroker
 
 from ..config.storage import RedisSettings, StreamingSettings
 
