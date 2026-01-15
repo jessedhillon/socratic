@@ -3,7 +3,10 @@ import {
   useAssessmentApi,
   type ConnectionState,
 } from '../hooks/useAssessmentApi';
-import { ChatInterface, type Message } from '../components/assessment';
+import {
+  ChatInterface,
+  type ChatMessageData as Message,
+} from '../components/assessment';
 
 const connectionColors: Record<ConnectionState, string> = {
   disconnected: 'bg-gray-400',
@@ -87,10 +90,12 @@ const DevApiTestPage: React.FC = () => {
               },
             ]);
           }
+          // Capture ID before async state update
+          const currentId = streamingMessageId.current;
           // Append token to streaming message
           setMessages((prev) =>
             prev.map((msg) =>
-              msg.id === streamingMessageId.current
+              msg.id === currentId
                 ? { ...msg, content: msg.content + content }
                 : msg
             )
@@ -98,13 +103,13 @@ const DevApiTestPage: React.FC = () => {
         },
         onMessageDone: () => {
           addLog('Message complete');
-          // Finalize streaming message
-          if (streamingMessageId.current) {
+          // Capture the ID before the async state update
+          // (the callback reads .current at execution time, which would be null)
+          const currentId = streamingMessageId.current;
+          if (currentId) {
             setMessages((prev) =>
               prev.map((msg) =>
-                msg.id === streamingMessageId.current
-                  ? { ...msg, isStreaming: false }
-                  : msg
+                msg.id === currentId ? { ...msg, isStreaming: false } : msg
               )
             );
             streamingMessageId.current = null;
