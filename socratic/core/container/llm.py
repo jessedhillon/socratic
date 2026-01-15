@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from dependency_injector.containers import DeclarativeContainer
 from dependency_injector.providers import Configuration, Factory, Provider, Singleton
+from langchain_core.language_models import BaseChatModel
 
 from socratic.llm import LLMSecrets, LLMSettings, ModelFactory
+
+
+def provide_dialogue_model(factory: ModelFactory) -> BaseChatModel:
+    """Create the dialogue model using the factory."""
+    return factory.create_dialogue_model()
 
 
 class LLMContainer(DeclarativeContainer):
@@ -28,4 +34,9 @@ class LLMContainer(DeclarativeContainer):
         ModelFactory,
         settings=settings,
         secrets=llm_secrets,
+    )
+
+    dialogue_model: Provider[BaseChatModel] = Singleton(
+        provide_dialogue_model,
+        factory=model_factory,
     )

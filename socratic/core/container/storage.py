@@ -25,7 +25,7 @@ import socratic.lib.uuid as uuid
 from socratic.lib.sql import DebugQuery, DebugSession
 
 from ..config.secrets import PostgresqlSecrets
-from ..config.storage import PostgresqlSettings, StorageSettings, StreamingSettings
+from ..config.storage import PostgresqlSettings, StorageSettings
 from ..di import NotReady
 from ..provider import LoggingProvider
 from .streaming import StreamingContainer
@@ -142,9 +142,7 @@ class StorageContainer(DeclarativeContainer):
     persistent: Provider[PersistentContainer] = Container(
         PersistentContainer, config=config.persistent, secrets=secrets, debug=debug, logging=logging, root=root
     )
-    streaming: Provider[StreamingContainer] = Container(
-        StreamingContainer, config=config.streaming.as_(StreamingSettings)
-    )
+    streaming: Provider[StreamingContainer] = Container(StreamingContainer, config=config.streaming)
 
 
 class UUIDLoader(Loader):

@@ -1,5 +1,6 @@
 import functools
 import getpass
+import os
 import typing as t
 from pathlib import Path
 
@@ -118,7 +119,9 @@ class YAMLCascadingSettingsSource(SettingsSource):
         if not isinstance(value, list):
             raise ValueError(field_name)
         yamls = t.cast(list[str], value)
-        return yaml.safe_load(yamls[-1])
+        # Expand environment variables in YAML content before parsing
+        expanded = os.path.expandvars(yamls[-1])
+        return yaml.safe_load(expanded)
 
 
 class AnsibleVaultSecretsSource(SettingsSource):
