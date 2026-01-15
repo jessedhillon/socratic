@@ -109,7 +109,10 @@ import type {
   GetLearnerAssignmentsResponse,
   GetLearnerAssignmentsError,
   StartAssessmentData,
+  StartAssessmentResponse,
   StartAssessmentError,
+  StreamAssessmentData,
+  StreamAssessmentError,
   SendAssessmentMessageData,
   SendAssessmentMessageError,
   GetAssessmentStatusData,
@@ -1103,13 +1106,14 @@ export const getLearnerAssignments = <ThrowOnError extends boolean = false>(
  * Start Assessment Route
  * Start a new assessment attempt.
  *
- * Streams the orientation message via SSE, then returns completion with attempt ID.
+ * Returns immediately with attempt metadata. The orientation message
+ * will be streamed via the GET /stream endpoint.
  */
 export const startAssessment = <ThrowOnError extends boolean = false>(
   options: Options<StartAssessmentData, ThrowOnError>
 ) => {
   return (options.client ?? _heyApiClient).post<
-    unknown,
+    StartAssessmentResponse,
     StartAssessmentError,
     ThrowOnError
   >({
@@ -1125,8 +1129,42 @@ export const startAssessment = <ThrowOnError extends boolean = false>(
 };
 
 /**
+ * Stream Assessment Route
+ * Stream assessment events via Server-Sent Events.
+ *
+ * Supports reconnection via Last-Event-ID header.
+ *
+ * Event types:
+ * - token: Partial content token {"content": "..."}
+ * - message_done: AI message complete
+ * - assessment_complete: Assessment finished {"evaluation_id": "..."}
+ * - error: Error occurred {"message": "...", "recoverable": bool}
+ */
+export const streamAssessment = <ThrowOnError extends boolean = false>(
+  options: Options<StreamAssessmentData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).get<
+    unknown,
+    StreamAssessmentError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/assessments/{attempt_id}/stream',
+    ...options,
+  });
+};
+
+/**
  * Send Message Route
- * Send a learner message and receive AI response via SSE stream.
+ * Send a learner message.
+ *
+ * Returns 202 Accepted immediately. The AI response will be
+ * streamed via the GET /stream endpoint.
  */
 export const sendAssessmentMessage = <ThrowOnError extends boolean = false>(
   options: Options<SendAssessmentMessageData, ThrowOnError>

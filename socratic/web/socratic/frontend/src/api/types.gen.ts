@@ -565,6 +565,18 @@ export type SendMessageRequest = {
 };
 
 /**
+ * Immediate response when starting an assessment.
+ *
+ * The orientation message will be streamed via the /stream endpoint.
+ */
+export type StartAssessmentOkResponse = {
+  attempt_id: string;
+  assignment_id: string;
+  objective_id: string;
+  objective_title: string;
+};
+
+/**
  * Request to create a new strand.
  */
 export type StrandCreateRequest = {
@@ -1677,6 +1689,35 @@ export type StartAssessmentError =
   StartAssessmentErrors[keyof StartAssessmentErrors];
 
 export type StartAssessmentResponses = {
+  /**
+   * Successful Response
+   */
+  200: StartAssessmentOkResponse;
+};
+
+export type StartAssessmentResponse =
+  StartAssessmentResponses[keyof StartAssessmentResponses];
+
+export type StreamAssessmentData = {
+  body?: never;
+  path: {
+    attempt_id: string;
+  };
+  query?: never;
+  url: '/api/assessments/{attempt_id}/stream';
+};
+
+export type StreamAssessmentErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StreamAssessmentError =
+  StreamAssessmentErrors[keyof StreamAssessmentErrors];
+
+export type StreamAssessmentResponses = {
   /**
    * Successful Response
    */
