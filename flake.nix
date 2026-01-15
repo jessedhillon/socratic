@@ -11,6 +11,7 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    process-compose.url = "github:jessedhillon/process-compose/jessedhillon/fix-process-ports";
   };
 
   outputs =
@@ -24,7 +25,10 @@
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
-        overlays = [ inputs.devshell.overlays.default ];
+        overlays = [
+          inputs.devshell.overlays.default
+          inputs.process-compose.overlays.default
+        ];
       };
       treefmtEval = treefmt-nix.lib.evalModule pkgs {
         projectRootFile = "flake.nix";
