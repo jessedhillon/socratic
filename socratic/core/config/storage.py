@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from pathlib import Path
 
 import pydantic as p
 
@@ -19,6 +20,7 @@ class MemcachedDsn(p.AnyUrl):
 
 class StorageSettings(BaseSettings):
     persistent: PersistentSettings
+    redis: RedisSettings | None = None
     # ephemeral: MemcachedDsn
     # messaging: p.AmqpDsn
 
@@ -32,3 +34,16 @@ class PostgresqlSettings(BaseSettings):
     port: int = 5432
     database: str
     driver: t.Literal["postgresql+psycopg"] = "postgresql+psycopg"
+
+
+class RedisSettings(BaseSettings):
+    """Redis connection settings.
+
+    Supports either Unix socket or TCP connection.
+    If socket_path is set, it takes precedence over host/port.
+    """
+
+    socket_path: Path | None = None
+    host: str = "localhost"
+    port: int = 6379
+    database: int = 0

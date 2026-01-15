@@ -2,5 +2,8 @@ persistent:
   postgresql:
     database: socratic
     port: 5432
+
+redis:
+  socket_path: ${REDIS_SOCKET_PATH}
 # ephemeral: "memcached://localhost:11211"
 # messaging: "amqp://localhost:5632"
