@@ -7,7 +7,7 @@ import json
 import typing as t
 
 import jinja2
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from langchain_core.language_models import BaseChatModel
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
@@ -24,9 +24,11 @@ from socratic.storage import evaluation as eval_storage
 from socratic.storage import objective as obj_storage
 from socratic.storage import rubric as rubric_storage
 from socratic.storage import transcript as transcript_storage
+from socratic.storage.streaming import AssessmentStreamBroker, StreamEvent
 
 from ..view.assessment import AssessmentStatusResponse, CompleteAssessmentOkResponse, CompleteAssessmentRequest, \
-    SendMessageRequest, TranscriptMessageResponse, TranscriptResponse
+    MessageAcceptedResponse, SendMessageRequest, StartAssessmentOkResponse, TranscriptMessageResponse, \
+    TranscriptResponse
 
 if t.TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -34,18 +36,143 @@ if t.TYPE_CHECKING:
 router = APIRouter(prefix="/api/assessments", tags=["assessments"])
 
 
+@di.inject
+async def run_orientation_task(
+    attempt_id: AttemptID,
+    objective_id: str,
+    objective_title: str,
+    objective_description: str,
+    initial_prompts: list[str],
+    rubric_criteria: list[dict[str, t.Any]],
+    scope_boundaries: str | None,
+    time_expectation_minutes: int | None,
+    challenge_prompts: list[str] | None,
+    extension_policy: str,
+    broker: AssessmentStreamBroker,
+    model: BaseChatModel,
+    env: jinja2.Environment,
+    session: Session = di.Manage["storage.persistent.session"],
+) -> None:
+    """Background task to generate and stream the orientation message."""
+    checkpointer = PostgresCheckpointer()
+    full_message = ""
+
+    try:
+        async for token in start_assessment(
+            attempt_id=attempt_id,
+            objective_id=objective_id,
+            objective_title=objective_title,
+            objective_description=objective_description,
+            initial_prompts=initial_prompts,
+            rubric_criteria=rubric_criteria,
+            checkpointer=checkpointer,
+            model=model,
+            env=env,
+            scope_boundaries=scope_boundaries,
+            time_expectation_minutes=time_expectation_minutes,
+            challenge_prompts=challenge_prompts,
+            extension_policy=extension_policy,
+        ):
+            full_message += token
+            await broker.publish(
+                attempt_id,
+                StreamEvent(event_type="token", data={"content": token}),
+            )
+
+        # Store transcript segment
+        transcript_storage.create(
+            attempt_id=attempt_id,
+            utterance_type=UtteranceType.Interviewer,
+            content=full_message,
+            start_time=datetime.datetime.now(datetime.UTC),
+            session=session,
+        )
+        session.commit()
+
+        # Send message done event
+        await broker.publish(
+            attempt_id,
+            StreamEvent(event_type="message_done", data={}),
+        )
+
+    except Exception as e:
+        await broker.publish(
+            attempt_id,
+            StreamEvent(
+                event_type="error",
+                data={"message": str(e), "recoverable": False},
+            ),
+        )
+
+
+@di.inject
+async def run_response_task(
+    attempt_id: AttemptID,
+    learner_message: str,
+    broker: AssessmentStreamBroker,
+    model: BaseChatModel,
+    env: jinja2.Environment,
+    session: Session = di.Manage["storage.persistent.session"],
+) -> None:
+    """Background task to generate and stream the AI response."""
+    checkpointer = PostgresCheckpointer()
+    full_response = ""
+
+    try:
+        async for token in run_assessment_turn(
+            attempt_id=attempt_id,
+            learner_message=learner_message,
+            checkpointer=checkpointer,
+            model=model,
+            env=env,
+        ):
+            full_response += token
+            await broker.publish(
+                attempt_id,
+                StreamEvent(event_type="token", data={"content": token}),
+            )
+
+        # Store AI response in transcript
+        transcript_storage.create(
+            attempt_id=attempt_id,
+            utterance_type=UtteranceType.Interviewer,
+            content=full_response,
+            start_time=datetime.datetime.now(datetime.UTC),
+            session=session,
+        )
+        session.commit()
+
+        # Send message done event
+        await broker.publish(
+            attempt_id,
+            StreamEvent(event_type="message_done", data={}),
+        )
+
+    except Exception as e:
+        await broker.publish(
+            attempt_id,
+            StreamEvent(
+                event_type="error",
+                data={"message": str(e), "recoverable": True},
+            ),
+        )
+
+
 @router.post("/{assignment_id}/start", operation_id="start_assessment")
 @di.inject
 async def start_assessment_route(
     assignment_id: str,
+    background_tasks: BackgroundTasks,
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
     model: BaseChatModel = Depends(di.Provide["llm.dialogue_model"]),
     env: jinja2.Environment = Depends(di.Provide["template.llm"]),
-) -> EventSourceResponse:
+    broker: AssessmentStreamBroker = Depends(di.Provide["storage.streaming.broker"]),
+) -> StartAssessmentOkResponse:
     """Start a new assessment attempt.
 
-    Streams the orientation message via SSE, then returns completion with attempt ID.
+    Returns immediately with attempt metadata. The orientation message
+    will be streamed via the GET /stream endpoint.
     """
     aid = AssignmentID(assignment_id)
 
@@ -113,49 +240,79 @@ async def start_assessment_route(
     session.commit()
 
     attempt_id = attempt.attempt_id
-    checkpointer = PostgresCheckpointer()
+
+    # Schedule background task to generate orientation
+    background_tasks.add_task(
+        run_orientation_task,
+        attempt_id=attempt_id,
+        objective_id=str(objective.objective_id),
+        objective_title=objective.title,
+        objective_description=objective.description,
+        initial_prompts=objective.initial_prompts,
+        rubric_criteria=serialized_criteria,
+        scope_boundaries=objective.scope_boundaries,
+        time_expectation_minutes=objective.time_expectation_minutes,
+        challenge_prompts=objective.challenge_prompts,
+        extension_policy=objective.extension_policy.value,
+        broker=broker,
+        model=model,
+        env=env,
+    )
+
+    return StartAssessmentOkResponse(
+        attempt_id=attempt_id,
+        assignment_id=aid,
+        objective_id=objective.objective_id,
+        objective_title=objective.title,
+    )
+
+
+@router.get("/{attempt_id}/stream", operation_id="stream_assessment")
+@di.inject
+async def stream_assessment_route(
+    attempt_id: str,
+    request: Request,
+    auth: AuthContext = Depends(require_learner),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+    broker: AssessmentStreamBroker = Depends(di.Provide["storage.streaming.broker"]),
+) -> EventSourceResponse:
+    """Stream assessment events via Server-Sent Events.
+
+    Supports reconnection via Last-Event-ID header.
+
+    Event types:
+    - token: Partial content token {"content": "..."}
+    - message_done: AI message complete
+    - assessment_complete: Assessment finished {"evaluation_id": "..."}
+    - error: Error occurred {"message": "...", "recoverable": bool}
+    """
+    aid = AttemptID(attempt_id)
+
+    # Validate attempt exists and belongs to the learner
+    attempt = attempt_storage.get(aid, session=session)
+    if attempt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assessment attempt not found",
+        )
+
+    if attempt.learner_id != auth.user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This assessment is not yours",
+        )
+
+    # Get Last-Event-ID for reconnection support
+    last_event_id = request.headers.get("Last-Event-ID")
 
     async def event_generator() -> AsyncIterator[dict[str, t.Any]]:
-        """Generate SSE events for the orientation message."""
-        full_message = ""
-        async for token in start_assessment(
-            attempt_id=attempt_id,
-            objective_id=str(objective.objective_id),
-            objective_title=objective.title,
-            objective_description=objective.description,
-            initial_prompts=objective.initial_prompts,
-            rubric_criteria=serialized_criteria,
-            checkpointer=checkpointer,
-            model=model,
-            env=env,
-            scope_boundaries=objective.scope_boundaries,
-            time_expectation_minutes=objective.time_expectation_minutes,
-            challenge_prompts=objective.challenge_prompts,
-            extension_policy=objective.extension_policy.value,
-        ):
-            full_message += token
-            yield {"event": "token", "data": json.dumps({"content": token})}
-
-        # Store transcript segment
-        with session:
-            transcript_storage.create(
-                attempt_id=attempt_id,
-                utterance_type=UtteranceType.Interviewer,
-                content=full_message,
-                start_time=datetime.datetime.now(datetime.UTC),
-                session=session,
-            )
-
-        # Send completion event with metadata
-        yield {
-            "event": "done",
-            "data": json.dumps({
-                "attempt_id": str(attempt_id),
-                "assignment_id": str(aid),
-                "objective_id": str(objective.objective_id),
-                "objective_title": objective.title,
-            }),
-        }
+        """Generate SSE events from the broker."""
+        async for event_id, event in broker.subscribe(aid, last_event_id):
+            yield {
+                "event": event.event_type,
+                "data": json.dumps(event.data),
+                "id": event_id,
+            }
 
     return EventSourceResponse(event_generator())
 
@@ -164,13 +321,19 @@ async def start_assessment_route(
 @di.inject
 async def send_message_route(
     attempt_id: str,
-    request: SendMessageRequest,
+    request_body: SendMessageRequest,
+    background_tasks: BackgroundTasks,
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
     model: BaseChatModel = Depends(di.Provide["llm.dialogue_model"]),
     env: jinja2.Environment = Depends(di.Provide["template.llm"]),
-) -> EventSourceResponse:
-    """Send a learner message and receive AI response via SSE stream."""
+    broker: AssessmentStreamBroker = Depends(di.Provide["storage.streaming.broker"]),
+) -> Response:
+    """Send a learner message.
+
+    Returns 202 Accepted immediately. The AI response will be
+    streamed via the GET /stream endpoint.
+    """
     aid = AttemptID(attempt_id)
 
     # Validate attempt exists and belongs to the learner
@@ -193,44 +356,32 @@ async def send_message_route(
             detail="Assessment is not in progress",
         )
 
-    checkpointer = PostgresCheckpointer()
-
     # Store learner message in transcript
-    transcript_storage.create(
+    segment = transcript_storage.create(
         attempt_id=aid,
         utterance_type=UtteranceType.Learner,
-        content=request.content,
+        content=request_body.content,
         start_time=datetime.datetime.now(datetime.UTC),
         session=session,
     )
     session.commit()
 
-    async def event_generator() -> AsyncIterator[dict[str, t.Any]]:
-        """Generate SSE events for the AI response."""
-        full_response = ""
-        async for token in run_assessment_turn(
-            attempt_id=aid,
-            learner_message=request.content,
-            checkpointer=checkpointer,
-            model=model,
-            env=env,
-        ):
-            full_response += token
-            yield {"event": "token", "data": json.dumps({"content": token})}
+    # Schedule background task to generate response
+    background_tasks.add_task(
+        run_response_task,
+        attempt_id=aid,
+        learner_message=request_body.content,
+        broker=broker,
+        model=model,
+        env=env,
+    )
 
-        # Store AI response in transcript
-        with session:
-            transcript_storage.create(
-                attempt_id=aid,
-                utterance_type=UtteranceType.Interviewer,
-                content=full_response,
-                start_time=datetime.datetime.now(datetime.UTC),
-                session=session,
-            )
-
-        yield {"event": "done", "data": ""}
-
-    return EventSourceResponse(event_generator())
+    response_body = MessageAcceptedResponse(message_id=segment.segment_id)
+    return Response(
+        content=response_body.model_dump_json(),
+        status_code=status.HTTP_202_ACCEPTED,
+        media_type="application/json",
+    )
 
 
 @router.get("/{attempt_id}/status", operation_id="get_assessment_status")
@@ -278,11 +429,12 @@ def get_status_route(
 
 @router.post("/{attempt_id}/complete", operation_id="complete_assessment")
 @di.inject
-def complete_assessment_route(
+async def complete_assessment_route(
     attempt_id: str,
-    request: CompleteAssessmentRequest,
+    request_body: CompleteAssessmentRequest,
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
+    broker: AssessmentStreamBroker = Depends(di.Provide["storage.streaming.broker"]),
 ) -> CompleteAssessmentOkResponse:
     """Complete an assessment attempt."""
     aid = AttemptID(attempt_id)
@@ -316,6 +468,15 @@ def complete_assessment_route(
         session=session,
     )
     session.commit()
+
+    # Publish assessment complete event
+    await broker.publish(
+        aid,
+        StreamEvent(event_type="assessment_complete", data={}),
+    )
+
+    # Close the stream
+    await broker.close_stream(aid)
 
     return CompleteAssessmentOkResponse(
         attempt_id=aid,
