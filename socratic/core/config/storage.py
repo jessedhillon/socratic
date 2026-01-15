@@ -20,13 +20,16 @@ class MemcachedDsn(p.AnyUrl):
 
 class StorageSettings(BaseSettings):
     persistent: PersistentSettings
-    redis: RedisSettings | None = None
+    streams: StreamsSettings | None = None
     # ephemeral: MemcachedDsn
-    # messaging: p.AmqpDsn
 
 
 class PersistentSettings(BaseSettings):
     postgresql: PostgresqlSettings
+
+
+class StreamsSettings(BaseSettings):
+    redis: RedisSettings
 
 
 class PostgresqlSettings(BaseSettings):
