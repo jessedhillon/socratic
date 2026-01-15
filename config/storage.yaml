@@ -5,5 +5,5 @@ persistent:
 
 streaming:
   redis:
-    socket_path: ${REDIS_SOCKET_PATH}
+    socket_path: .state/redis/redis.sock
 # ephemeral: "memcached://localhost:11211"

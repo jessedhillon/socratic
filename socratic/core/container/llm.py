@@ -26,8 +26,8 @@ class LLMContainer(DeclarativeContainer):
 
     llm_secrets: Provider[LLMSecrets] = Singleton(
         LLMSecrets,
-        openai_api_key=secrets.openai_api_key,
-        anthropic_api_key=secrets.anthropic_api_key,
+        openai_api_key=secrets.secret_key,
+        anthropic_api_key=None,
     )
 
     model_factory: Provider[ModelFactory] = Factory(

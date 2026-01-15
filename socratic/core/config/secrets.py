@@ -20,11 +20,10 @@ class AuthSecrets(BaseSecrets):
     jwt: p.Secret[str]
 
 
-class LLMSecrets(BaseSecrets):
-    """LLM API secrets."""
+class OpenAISecrets(BaseSecrets):
+    """OpenAI API secrets."""
 
-    openai_api_key: p.Secret[str] | None = None
-    anthropic_api_key: p.Secret[str] | None = None
+    secret_key: p.Secret[str] | None = None
 
 
 class GoogleServiceAccountSecrets(BaseSecrets):
@@ -40,7 +39,7 @@ class Secrets(BaseSecrets, BaseModel):  # pyright: ignore [reportIncompatibleVar
     env: DeploymentEnvironment
 
     auth: AuthSecrets | None = None
-    llm: LLMSecrets | None = None
+    openai: OpenAISecrets | None = None
     # google: GoogleSecrets = p.Field(default=..., validate_default=True)
     # postgresql: PostgresqlSecrets = p.Field(default_factory=PostgresqlSecrets, validate_default=True)
 
