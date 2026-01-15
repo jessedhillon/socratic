@@ -80,14 +80,14 @@ async def run_orientation_task(
             )
 
         # Store transcript segment
-        transcript_storage.create(
-            attempt_id=attempt_id,
-            utterance_type=UtteranceType.Interviewer,
-            content=full_message,
-            start_time=datetime.datetime.now(datetime.UTC),
-            session=session,
-        )
-        session.commit()
+        with session.begin():
+            transcript_storage.create(
+                attempt_id=attempt_id,
+                utterance_type=UtteranceType.Interviewer,
+                content=full_message,
+                start_time=datetime.datetime.now(datetime.UTC),
+                session=session,
+            )
 
         # Send message done event
         await broker.publish(
@@ -133,14 +133,14 @@ async def run_response_task(
             )
 
         # Store AI response in transcript
-        transcript_storage.create(
-            attempt_id=attempt_id,
-            utterance_type=UtteranceType.Interviewer,
-            content=full_response,
-            start_time=datetime.datetime.now(datetime.UTC),
-            session=session,
-        )
-        session.commit()
+        with session.begin():
+            transcript_storage.create(
+                attempt_id=attempt_id,
+                utterance_type=UtteranceType.Interviewer,
+                content=full_response,
+                start_time=datetime.datetime.now(datetime.UTC),
+                session=session,
+            )
 
         # Send message done event
         await broker.publish(

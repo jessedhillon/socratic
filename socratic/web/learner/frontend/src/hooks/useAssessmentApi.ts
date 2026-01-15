@@ -13,6 +13,7 @@ import {
   sendAssessmentMessage as sendMessageApi,
   completeAssessment as completeAssessmentApi,
 } from '../api/sdk.gen';
+import { getAuthToken } from '../auth';
 import type {
   StartAssessmentOkResponse,
   MessageAcceptedResponse,
@@ -133,7 +134,13 @@ export function useAssessmentApi(): UseAssessmentApiResult {
       callbacksRef.current = callbacks;
       setConnectionState('connecting');
 
-      const es = new EventSource(`/api/assessments/${attemptId}/stream`, {
+      // EventSource doesn't support custom headers, so we pass the token as a query param
+      const token = getAuthToken();
+      const url = token
+        ? `/api/assessments/${attemptId}/stream?token=${encodeURIComponent(token)}`
+        : `/api/assessments/${attemptId}/stream`;
+
+      const es = new EventSource(url, {
         withCredentials: true,
       });
 

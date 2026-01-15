@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typing as t
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -31,22 +31,34 @@ class AuthContext(t.NamedTuple):
 @di.inject
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    token: str | None = Query(None, description="JWT token (for EventSource which can't set headers)"),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AuthContext:
     """Dependency to get the current authenticated user.
+
+    Accepts token from either:
+    - Authorization: Bearer header (preferred)
+    - ?token= query parameter (for EventSource/SSE which can't set headers)
 
     Raises:
         HTTPException 401: If no token provided or token is invalid
         HTTPException 401: If user not found
     """
-    if credentials is None:
+    # Get token from header or query parameter
+    raw_token: str | None = None
+    if credentials is not None:
+        raw_token = credentials.credentials
+    elif token is not None:
+        raw_token = token
+
+    if raw_token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token_data = jwt_auth.decode_token(credentials.credentials)
+    token_data = jwt_auth.decode_token(raw_token)
     if token_data is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -74,16 +86,25 @@ def get_current_user(
 @di.inject
 def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    token: str | None = Query(None, description="JWT token (for EventSource which can't set headers)"),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> AuthContext | None:
     """Dependency to optionally get the current user.
 
+    Accepts token from either Authorization header or query parameter.
     Returns None if no valid authentication is provided.
     """
-    if credentials is None:
+    # Get token from header or query parameter
+    raw_token: str | None = None
+    if credentials is not None:
+        raw_token = credentials.credentials
+    elif token is not None:
+        raw_token = token
+
+    if raw_token is None:
         return None
 
-    token_data = jwt_auth.decode_token(credentials.credentials)
+    token_data = jwt_auth.decode_token(raw_token)
     if token_data is None:
         return None
 
