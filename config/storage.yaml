@@ -3,7 +3,7 @@ persistent:
     database: socratic
     port: 5432
 
-streams:
+streaming:
   redis:
     socket_path: ${REDIS_SOCKET_PATH}
 # ephemeral: "memcached://localhost:11211"

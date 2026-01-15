@@ -1,4 +1,4 @@
-"""Streams container for real-time event pub/sub."""
+"""Streaming container for real-time event pub/sub."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from dependency_injector.providers import Configuration, Factory, Provider, Sing
 
 from socratic.streaming.redis import RedisStreamBroker
 
-from ..config.storage import RedisSettings, StreamsSettings
+from ..config.storage import RedisSettings, StreamingSettings
 
 
 def provide_redis_client(config: RedisSettings) -> aioredis.Redis:
@@ -31,10 +31,10 @@ def provide_redis_client(config: RedisSettings) -> aioredis.Redis:
     )
 
 
-class StreamsContainer(DeclarativeContainer):
-    """Container for streams infrastructure (Redis Streams pub/sub)."""
+class StreamingContainer(DeclarativeContainer):
+    """Container for streaming infrastructure (Redis Streams pub/sub)."""
 
-    config: Provider[StreamsSettings] = Configuration()
+    config: Provider[StreamingSettings] = Configuration()
 
     redis: Provider[aioredis.Redis] = Singleton(
         provide_redis_client,

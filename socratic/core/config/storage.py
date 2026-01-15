@@ -20,7 +20,7 @@ class MemcachedDsn(p.AnyUrl):
 
 class StorageSettings(BaseSettings):
     persistent: PersistentSettings
-    streams: StreamsSettings | None = None
+    streaming: StreamingSettings | None = None
     # ephemeral: MemcachedDsn
 
 
@@ -28,7 +28,7 @@ class PersistentSettings(BaseSettings):
     postgresql: PostgresqlSettings
 
 
-class StreamsSettings(BaseSettings):
+class StreamingSettings(BaseSettings):
     redis: RedisSettings
 
 
