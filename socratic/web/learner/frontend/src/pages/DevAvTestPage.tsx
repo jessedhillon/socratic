@@ -1,6 +1,14 @@
-import React, { useRef, useEffect } from 'react';
-import { useMediaRecorder, type RecordingState } from '../hooks';
-import { CameraPreview, type CameraPreviewProps } from '../components';
+import React, { useRef, useEffect, useState } from 'react';
+import {
+  useMediaRecorder,
+  useMediaPermissions,
+  type RecordingState,
+} from '../hooks';
+import {
+  CameraPreview,
+  PermissionGate,
+  type CameraPreviewProps,
+} from '../components';
 
 const recordingStateColors: Record<RecordingState, string> = {
   idle: 'bg-gray-400',
@@ -39,13 +47,19 @@ const AudioOnlyPreview: React.FC<{ isRecording: boolean }> = ({
  * Tests:
  * - useMediaRecorder hook
  * - CameraPreview component (from PR #59)
+ * - useMediaPermissions hook (from PR #60)
+ * - PermissionGate component (from PR #60)
  * - Blob playback verification
  */
 const DevAvTestPage: React.FC = () => {
-  const [audioOnly, setAudioOnly] = React.useState(false);
-  const [playbackUrl, setPlaybackUrl] = React.useState<string | null>(null);
-  const [playbackStatus, setPlaybackStatus] = React.useState<string>('');
+  const [audioOnly, setAudioOnly] = useState(false);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+  const [playbackStatus, setPlaybackStatus] = useState<string>('');
   const playbackRef = useRef<HTMLVideoElement>(null);
+
+  // Permission gate test controls
+  const [showPermissionGate, setShowPermissionGate] = useState(false);
+  const [permissionWasGranted, setPermissionWasGranted] = useState(false);
 
   // CameraPreview test controls
   const [previewPosition, setPreviewPosition] =
@@ -57,6 +71,9 @@ const DevAvTestPage: React.FC = () => {
     video: !audioOnly,
     audio: true,
   });
+
+  // useMediaPermissions hook for direct testing
+  const permissions = useMediaPermissions();
 
   // Clean up blob URL when component unmounts or new recording starts
   useEffect(() => {
@@ -332,6 +349,178 @@ const DevAvTestPage: React.FC = () => {
           </section>
         )}
 
+        {/* Permission Hook Test (PR #60) */}
+        <section className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">
+            useMediaPermissions Hook (PR #60)
+          </h2>
+
+          {/* Permission States */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="bg-gray-50 rounded p-3">
+              <div className="text-sm text-gray-500">Camera</div>
+              <div
+                className={`font-medium ${
+                  permissions.camera === 'granted'
+                    ? 'text-green-600'
+                    : permissions.camera === 'denied'
+                      ? 'text-red-600'
+                      : 'text-yellow-600'
+                }`}
+              >
+                {permissions.camera}
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded p-3">
+              <div className="text-sm text-gray-500">Microphone</div>
+              <div
+                className={`font-medium ${
+                  permissions.microphone === 'granted'
+                    ? 'text-green-600'
+                    : permissions.microphone === 'denied'
+                      ? 'text-red-600'
+                      : 'text-yellow-600'
+                }`}
+              >
+                {permissions.microphone}
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded p-3">
+              <div className="text-sm text-gray-500">All Granted</div>
+              <div
+                className={`font-medium ${permissions.allGranted ? 'text-green-600' : 'text-gray-600'}`}
+              >
+                {permissions.allGranted ? 'Yes' : 'No'}
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded p-3">
+              <div className="text-sm text-gray-500">Any Denied</div>
+              <div
+                className={`font-medium ${permissions.anyDenied ? 'text-red-600' : 'text-gray-600'}`}
+              >
+                {permissions.anyDenied ? 'Yes' : 'No'}
+              </div>
+            </div>
+          </div>
+
+          {/* Status Message */}
+          <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
+            <div className="text-sm text-blue-800">
+              <strong>Status:</strong> {permissions.getStatusMessage()}
+            </div>
+            {permissions.anyDenied && (
+              <div className="text-sm text-blue-700 mt-2">
+                <strong>Instructions:</strong>{' '}
+                {permissions.getDeniedInstructions()}
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => permissions.requestPermissions()}
+              disabled={permissions.isChecking}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300"
+            >
+              {permissions.isChecking ? 'Checking...' : 'Request Both'}
+            </button>
+            <button
+              onClick={() =>
+                permissions.requestPermissions({
+                  camera: true,
+                  microphone: false,
+                })
+              }
+              disabled={permissions.isChecking}
+              className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:bg-gray-300"
+            >
+              Camera Only
+            </button>
+            <button
+              onClick={() =>
+                permissions.requestPermissions({
+                  camera: false,
+                  microphone: true,
+                })
+              }
+              disabled={permissions.isChecking}
+              className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:bg-gray-300"
+            >
+              Mic Only
+            </button>
+            <button
+              onClick={() => permissions.refreshPermissions()}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Refresh State
+            </button>
+          </div>
+        </section>
+
+        {/* PermissionGate Component Test (PR #60) */}
+        <section className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">
+            PermissionGate Component (PR #60)
+          </h2>
+
+          <div className="flex items-center gap-4 mb-4">
+            <button
+              onClick={() => {
+                setShowPermissionGate(!showPermissionGate);
+                if (showPermissionGate) setPermissionWasGranted(false);
+              }}
+              className={`px-4 py-2 rounded text-white ${
+                showPermissionGate
+                  ? 'bg-red-500 hover:bg-red-600'
+                  : 'bg-green-500 hover:bg-green-600'
+              }`}
+            >
+              {showPermissionGate
+                ? 'Hide PermissionGate'
+                : 'Show PermissionGate'}
+            </button>
+            {permissionWasGranted && (
+              <span className="text-sm text-green-600">
+                Permission granted! (camera should be OFF)
+              </span>
+            )}
+          </div>
+
+          {showPermissionGate && (
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+              <PermissionGate
+                onGranted={() => {
+                  console.log('PermissionGate granted (no stream held)');
+                  setPermissionWasGranted(true);
+                }}
+                onDenied={() => {
+                  console.log('PermissionGate denied');
+                }}
+                title="Test Permission Gate"
+                description="This is a test of the PermissionGate component. Click the button to request permissions."
+              >
+                <div className="bg-green-100 border border-green-300 rounded-lg p-6 text-center">
+                  <div className="text-2xl mb-2">🎉</div>
+                  <h3 className="text-lg font-semibold text-green-800">
+                    Permissions Granted!
+                  </h3>
+                  <p className="text-green-700">
+                    This content is only visible when camera and microphone
+                    permissions are granted.
+                  </p>
+                </div>
+              </PermissionGate>
+            </div>
+          )}
+
+          <p className="text-sm text-gray-500 mt-4">
+            The PermissionGate component shows different UI based on permission
+            state: checking, request prompt, denied with instructions, or
+            granted (shows children).
+          </p>
+        </section>
+
         {/* Recording Stats */}
         <section className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold mb-4">Recording Details</h2>
@@ -349,6 +538,14 @@ const DevAvTestPage: React.FC = () => {
                 previewPosition,
                 previewMinimized,
                 simulateMuted,
+                permissions: {
+                  camera: permissions.camera,
+                  microphone: permissions.microphone,
+                  allGranted: permissions.allGranted,
+                  anyDenied: permissions.anyDenied,
+                  isSupported: permissions.isSupported,
+                  isChecking: permissions.isChecking,
+                },
               },
               null,
               2

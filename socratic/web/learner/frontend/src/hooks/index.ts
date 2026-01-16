@@ -12,3 +12,12 @@ export type {
   MediaRecorderOptions,
   UseMediaRecorderResult,
 } from './useMediaRecorder';
+
+export { useMediaPermissions } from './useMediaPermissions';
+export type {
+  PermissionState,
+  MediaPermissionStatus,
+  UseMediaPermissionsResult,
+  RequestOptions,
+  RequestResult,
+} from './useMediaPermissions';
