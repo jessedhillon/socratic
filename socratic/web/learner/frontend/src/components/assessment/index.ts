@@ -1,5 +1,6 @@
 export { default as ChatMessage, type ChatMessageData } from './ChatMessage';
 export { default as ChatInterface } from './ChatInterface';
+export { default as VoiceInput, type VoiceInputProps } from './VoiceInput';
 export {
   useAssessmentState,
   type AssessmentPhase,
