@@ -10,6 +10,7 @@ import AttemptDetailPage from './pages/AttemptDetailPage';
 import NotFoundPage from './pages/NotFoundPage';
 import DevChatTestPage from './pages/DevChatTestPage';
 import DevApiTestPage from './pages/DevApiTestPage';
+import DevAvTestPage from './pages/DevAvTestPage';
 
 const App: React.FC = () => {
   return (
@@ -17,6 +18,7 @@ const App: React.FC = () => {
       {/* Dev test routes */}
       <Route path="/dev/chat-test" element={<DevChatTestPage />} />
       <Route path="/dev/api-test" element={<DevApiTestPage />} />
+      <Route path="/dev/av-test" element={<DevAvTestPage />} />
 
       {/* Authentication routes */}
       <Route path="/:orgSlug/:role" element={<LoginPage />} />
