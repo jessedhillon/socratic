@@ -21,3 +21,10 @@ export type {
   RequestOptions,
   RequestResult,
 } from './useMediaPermissions';
+
+export { useRecordingSession } from './useRecordingSession';
+export type {
+  SessionState,
+  RecordingSessionOptions,
+  UseRecordingSessionResult,
+} from './useRecordingSession';
