@@ -22,6 +22,7 @@ from socratic.storage import user as user_storage
 from ..view.review import AttemptResponse, EvaluationResponse, EvidenceMappingResponse, FeedbackRequest, \
     GradeAcceptRequest, GradeOverrideRequest, OverrideResponse, ReviewDetailResponse, ReviewListResponse, \
     ReviewSummary, TranscriptSegmentResponse
+from ..view.transcript import SynchronizedSegmentResponse, SynchronizedTranscriptResponse, WordTimingResponse
 
 router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 
@@ -232,6 +233,62 @@ def add_feedback(
 
     # Return updated review detail
     return get_review_detail(attempt_id, auth, session)
+
+
+@router.get("/{attempt_id}/transcript/synchronized", operation_id="get_synchronized_transcript")
+@di.inject
+def get_synchronized_transcript(
+    attempt_id: AttemptID,
+    auth: AuthContext = Depends(require_educator),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+) -> SynchronizedTranscriptResponse:
+    """Get transcript with word-level timing data for video synchronization.
+
+    Returns transcript segments with word timings for video playback sync.
+    This enables "click word to seek" and "highlight current word" features.
+    """
+    with session.begin():
+        # Validate attempt and access
+        attempt, _, _ = _validate_review_access(attempt_id, auth, session)
+
+        # Get segments with word timings
+        segments_with_timings = transcript_storage.find_with_timings(
+            attempt_id=attempt_id,
+            session=session,
+        )
+
+        # Build response
+        segments: list[SynchronizedSegmentResponse] = []
+        for seg in segments_with_timings:
+            word_timings = [
+                WordTimingResponse(
+                    word=wt.word,
+                    start_offset_ms=wt.start_offset_ms,
+                    end_offset_ms=wt.end_offset_ms,
+                    confidence=float(wt.confidence) if wt.confidence else None,
+                )
+                for wt in seg.word_timings
+            ]
+
+            segments.append(
+                SynchronizedSegmentResponse(
+                    segment_id=str(seg.segment_id),
+                    attempt_id=str(seg.attempt_id),
+                    utterance_type=seg.utterance_type.value,
+                    content=seg.content,
+                    start_time=seg.start_time,
+                    end_time=seg.end_time,
+                    confidence=float(seg.confidence) if seg.confidence else None,
+                    prompt_index=seg.prompt_index,
+                    word_timings=word_timings,
+                )
+            )
+
+        return SynchronizedTranscriptResponse(
+            attempt_id=str(attempt_id),
+            video_url=attempt.video_url,
+            segments=segments,
+        )
 
 
 def _validate_review_access(

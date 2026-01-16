@@ -9,7 +9,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, MappedAsDatac
 from sqlalchemy.types import DateTime, Numeric, String
 
 from socratic.model import AssignmentID, AttemptID, EvaluationResultID, ExampleID, ObjectiveID, OrganizationID, \
-    OverrideID, RubricCriterionID, StrandID, TranscriptSegmentID, UserID
+    OverrideID, RubricCriterionID, StrandID, TranscriptSegmentID, UserID, WordTimingID
 
 from .type import ShortUUIDKeyType, ValueEnumMapper
 
@@ -27,6 +27,7 @@ class base(MappedAsDataclass, DeclarativeBase):
         AssignmentID: ShortUUIDKeyType(AssignmentID),
         AttemptID: ShortUUIDKeyType(AttemptID),
         TranscriptSegmentID: ShortUUIDKeyType(TranscriptSegmentID),
+        WordTimingID: ShortUUIDKeyType(WordTimingID),
         EvaluationResultID: ShortUUIDKeyType(EvaluationResultID),
         OverrideID: ShortUUIDKeyType(OverrideID),
         datetime.datetime: DateTime(timezone=True),
@@ -188,6 +189,7 @@ class assessment_attempts(base):
     confidence_score: Mapped[decimal.Decimal | None] = mapped_column(Numeric(5, 4), default=None)
 
     audio_url: Mapped[str | None] = mapped_column(default=None)
+    video_url: Mapped[str | None] = mapped_column(default=None)
 
     create_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now())
 
@@ -208,6 +210,20 @@ class transcript_segments(base):
 
     confidence: Mapped[decimal.Decimal | None] = mapped_column(Numeric(5, 4), default=None)
     prompt_index: Mapped[int | None] = mapped_column(default=None)
+
+
+class word_timings(base):
+    """Word-level timing data for transcript synchronization with video."""
+
+    __tablename__ = "word_timings"
+
+    word_timing_id: Mapped[WordTimingID] = mapped_column(primary_key=True)
+    segment_id: Mapped[TranscriptSegmentID] = mapped_column(ForeignKey("transcript_segments.segment_id"))
+
+    word: Mapped[str]
+    start_offset_ms: Mapped[int]  # Milliseconds from segment start_time
+    end_offset_ms: Mapped[int]  # Milliseconds from segment start_time
+    confidence: Mapped[decimal.Decimal | None] = mapped_column(Numeric(5, 4), default=None)
 
 
 # Evaluation Results
