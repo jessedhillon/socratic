@@ -142,6 +142,24 @@
 
         commands = [
           {
+            name = "sandbox-claude";
+            command = ''
+            GIT_SSH_COMMAND='ssh -F /dev/null -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519' \
+            bwrap --bind / / \
+            --remount-ro / \
+            --ro-bind /nix /nix \
+            --bind "$(pwd)" "$(pwd)" \
+            --bind "/home/jesse/.cache" "/home/jesse/.cache" \
+            --bind "/home/jesse/.ansible" "/home/jesse/.ansible" \
+            --bind "/home/jesse/.npm" "/home/jesse/.npm" \
+            --chdir "$(pwd)" \
+            --proc /proc \
+            --dev /dev \
+            --tmpfs /tmp \
+            -- \
+            claude --dangerously-skip-permissions'';
+          }
+          {
             name = "install-hooks";
             command = ''
               if [[ -f ".pre-commit-config.yaml" ]]; then
