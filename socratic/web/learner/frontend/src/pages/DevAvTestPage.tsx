@@ -2,7 +2,9 @@ import React, { useRef, useEffect, useState } from 'react';
 import {
   useMediaRecorder,
   useMediaPermissions,
+  useRecordingSession,
   type RecordingState,
+  type SessionState,
 } from '../hooks';
 import {
   CameraPreview,
@@ -17,6 +19,18 @@ const recordingStateColors: Record<RecordingState, string> = {
   paused: 'bg-orange-400',
   stopped: 'bg-green-600',
   error: 'bg-red-600',
+};
+
+const sessionStateColors: Record<SessionState, string> = {
+  idle: 'bg-gray-400',
+  initializing: 'bg-yellow-400',
+  ready: 'bg-blue-500',
+  recording: 'bg-red-500',
+  paused: 'bg-orange-400',
+  stopping: 'bg-yellow-500',
+  completed: 'bg-green-600',
+  error: 'bg-red-600',
+  abandoned: 'bg-gray-600',
 };
 
 type PreviewPosition = CameraPreviewProps['position'];
@@ -74,6 +88,31 @@ const DevAvTestPage: React.FC = () => {
 
   // useMediaPermissions hook for direct testing
   const permissions = useMediaPermissions();
+
+  // useRecordingSession hook for lifecycle testing (PR #61)
+  const [showSessionTest, setShowSessionTest] = useState(false);
+  const [sessionCallbacks, setSessionCallbacks] = useState<string[]>([]);
+  const [maxDurationSec, setMaxDurationSec] = useState(10);
+
+  const addCallback = (msg: string) => {
+    setSessionCallbacks((prev) => [
+      ...prev,
+      `${new Date().toLocaleTimeString()}: ${msg}`,
+    ]);
+  };
+
+  const session = useRecordingSession({
+    maxDuration: maxDurationSec,
+    onStart: () => addCallback('onStart'),
+    onPause: () => addCallback('onPause'),
+    onResume: () => addCallback('onResume'),
+    onStop: (blob) =>
+      addCallback(
+        `onStop (blob: ${blob ? `${(blob.size / 1024).toFixed(1)}KB` : 'null'})`
+      ),
+    onError: (err) => addCallback(`onError: ${err.type} - ${err.message}`),
+    onMaxDurationReached: () => addCallback('onMaxDurationReached'),
+  });
 
   // Clean up blob URL when component unmounts or new recording starts
   useEffect(() => {
@@ -521,6 +560,179 @@ const DevAvTestPage: React.FC = () => {
           </p>
         </section>
 
+        {/* useRecordingSession Test (PR #61) */}
+        <section className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">
+            useRecordingSession Hook (PR #61)
+          </h2>
+
+          <div className="flex items-center gap-4 mb-4">
+            <button
+              onClick={() => {
+                setShowSessionTest(!showSessionTest);
+                if (showSessionTest) {
+                  session.reset();
+                  setSessionCallbacks([]);
+                }
+              }}
+              className={`px-4 py-2 rounded text-white ${
+                showSessionTest
+                  ? 'bg-red-500 hover:bg-red-600'
+                  : 'bg-green-500 hover:bg-green-600'
+              }`}
+            >
+              {showSessionTest ? 'Hide Session Test' : 'Show Session Test'}
+            </button>
+          </div>
+
+          {showSessionTest && (
+            <div className="space-y-4">
+              {/* Session State */}
+              <div className="flex items-center gap-4">
+                <span className="font-medium">Session State:</span>
+                <span
+                  className={`px-3 py-1 rounded-full text-white text-sm font-medium ${sessionStateColors[session.sessionState]}`}
+                >
+                  {session.sessionState}
+                </span>
+                <span className="text-lg font-mono">
+                  {formatDuration(session.duration)}
+                </span>
+                {session.isPausedByVisibility && (
+                  <span className="text-sm text-orange-600">
+                    (paused by tab visibility)
+                  </span>
+                )}
+              </div>
+
+              {/* Error Display */}
+              {session.error && (
+                <div className="bg-red-50 border border-red-200 rounded p-3 text-red-700 text-sm">
+                  <strong>Error:</strong> {session.error.type} -{' '}
+                  {session.error.message}
+                </div>
+              )}
+
+              {/* Max Duration Config */}
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-medium">
+                  Max Duration (sec):
+                </label>
+                <input
+                  type="number"
+                  value={maxDurationSec}
+                  onChange={(e) => setMaxDurationSec(Number(e.target.value))}
+                  className="w-20 border rounded px-2 py-1"
+                  min={0}
+                  disabled={session.sessionState !== 'idle'}
+                />
+                <span className="text-sm text-gray-500">
+                  (0 = unlimited, set before initialize)
+                </span>
+              </div>
+
+              {/* Session Controls */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => session.initialize()}
+                  disabled={session.sessionState !== 'idle'}
+                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Initialize
+                </button>
+                <button
+                  onClick={() => session.startRecording()}
+                  disabled={
+                    session.sessionState !== 'ready' &&
+                    session.sessionState !== 'idle'
+                  }
+                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Start Recording
+                </button>
+                <button
+                  onClick={() => session.pauseRecording()}
+                  disabled={session.sessionState !== 'recording'}
+                  className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Pause
+                </button>
+                <button
+                  onClick={() => session.resumeRecording()}
+                  disabled={session.sessionState !== 'paused'}
+                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Resume
+                </button>
+                <button
+                  onClick={() => session.stopRecording()}
+                  disabled={
+                    session.sessionState !== 'recording' &&
+                    session.sessionState !== 'paused'
+                  }
+                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Stop
+                </button>
+                <button
+                  onClick={() => session.abandon()}
+                  disabled={!session.isActive}
+                  className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Abandon
+                </button>
+                <button
+                  onClick={() => {
+                    session.reset();
+                    setSessionCallbacks([]);
+                  }}
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                >
+                  Reset
+                </button>
+              </div>
+
+              {/* Callback Log */}
+              <div className="bg-gray-50 rounded p-3">
+                <div className="text-sm font-medium mb-2">Callback Log:</div>
+                <div className="max-h-32 overflow-auto text-xs font-mono">
+                  {sessionCallbacks.length === 0 ? (
+                    <span className="text-gray-400">No callbacks yet</span>
+                  ) : (
+                    sessionCallbacks.map((cb, i) => (
+                      <div key={i} className="text-gray-700">
+                        {cb}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Session Stream Preview */}
+              {session.stream && (
+                <div className="bg-gray-900 rounded-lg p-2 inline-block">
+                  <video
+                    ref={(el) => {
+                      if (el && session.stream) {
+                        el.srcObject = session.stream;
+                      }
+                    }}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="w-60 h-45 rounded"
+                  />
+                </div>
+              )}
+
+              <p className="text-sm text-gray-500">
+                Test visibility pause: switch to another tab while recording,
+                then return. The session should auto-pause/resume.
+              </p>
+            </div>
+          )}
+        </section>
+
         {/* Recording Stats */}
         <section className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold mb-4">Recording Details</h2>
@@ -545,6 +757,15 @@ const DevAvTestPage: React.FC = () => {
                   anyDenied: permissions.anyDenied,
                   isSupported: permissions.isSupported,
                   isChecking: permissions.isChecking,
+                },
+                session: {
+                  sessionState: session.sessionState,
+                  recordingState: session.recordingState,
+                  duration: session.duration,
+                  isActive: session.isActive,
+                  isPausedByVisibility: session.isPausedByVisibility,
+                  hasStream: !!session.stream,
+                  hasError: !!session.error,
                 },
               },
               null,
