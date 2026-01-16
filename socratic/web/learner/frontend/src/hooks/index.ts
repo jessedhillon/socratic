@@ -37,3 +37,12 @@ export type {
   TranscribeOptions,
   UseTranscriptionResult,
 } from './useTranscription';
+
+export { useSpeech } from './useSpeech';
+export type {
+  Voice,
+  SpeechFormat,
+  SpeechOptions,
+  SpeechState,
+  UseSpeechResult,
+} from './useSpeech';
