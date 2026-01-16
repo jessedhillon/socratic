@@ -28,3 +28,12 @@ export type {
   RecordingSessionOptions,
   UseRecordingSessionResult,
 } from './useRecordingSession';
+
+export { useTranscription } from './useTranscription';
+export type {
+  TranscriptionState,
+  TranscriptionResult,
+  TranscriptionError,
+  TranscribeOptions,
+  UseTranscriptionResult,
+} from './useTranscription';
