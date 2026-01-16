@@ -17,6 +17,7 @@ import os
 import typing as t
 from pathlib import Path
 
+import alembic.command
 import jwt
 import pydantic as p
 import pytest
@@ -59,6 +60,17 @@ def container() -> t.Generator[SocraticContainer]:
     yield ct
 
     ct.shutdown_resources()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_schema_current(container: SocraticContainer) -> None:  # pyright: ignore[reportUnusedFunction]
+    """Ensure test database schema is at the latest migration.
+
+    Runs automatically before any tests to prevent failures due to
+    schema drift between the codebase and test database.
+    """
+    alembic_conf = container.storage().persistent().alembic_config()
+    alembic.command.upgrade(alembic_conf, "head")
 
 
 @pytest.fixture(scope="session")

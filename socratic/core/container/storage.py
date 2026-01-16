@@ -71,6 +71,7 @@ def provide_engine(
     engine = sqlalchemy.create_engine(dsn, json_serializer=json.dumps, json_deserializer=json.loads)
     sqlalchemy.event.listen(engine, "connect", register_uuid)
     sqlalchemy.event.listen(engine, "connect", register_path)
+    sqlalchemy.event.listen(engine, "connect", register_timezone)
     logger.info(
         "initialized SQLAlchemy engine",
         extra={
@@ -161,3 +162,15 @@ def register_uuid(conn: psycopg.connection.Connection[t.Any], _: t.Any) -> None:
 
 def register_path(conn: psycopg.connection.Connection[t.Any], _: t.Any) -> None:
     psycopg.adapters.register_dumper(Path, StrDumper)
+
+
+def register_timezone(dbapi_conn: t.Any, _: t.Any) -> None:
+    """Set connection timezone to UTC for consistent datetime handling.
+
+    PostgreSQL TIMESTAMP WITH TIME ZONE stores timestamps in UTC but returns
+    them converted to the connection's timezone. Setting UTC ensures consistent
+    timezone-aware datetimes across all environments.
+    """
+    cursor = dbapi_conn.cursor()
+    cursor.execute("SET TIMEZONE TO 'UTC'")
+    cursor.close()
