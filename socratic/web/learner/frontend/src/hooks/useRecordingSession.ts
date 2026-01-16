@@ -6,6 +6,16 @@ import {
 } from './useMediaRecorder';
 
 /**
+ * Helper hook to keep a ref updated with the latest value.
+ * Useful for accessing current values in event handlers without stale closures.
+ */
+function useLatest<T>(value: T): React.MutableRefObject<T> {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
+}
+
+/**
  * Session state for the recording lifecycle.
  */
 export type SessionState =
@@ -137,6 +147,15 @@ export function useRecordingSession(
   const wasRecordingBeforeHiddenRef = useRef(false);
   const maxDurationTimeoutRef = useRef<number | null>(null);
 
+  // Keep refs to current values for use in event handlers (avoids stale closures)
+  const sessionStateRef = useLatest(sessionState);
+  const onStartRef = useLatest(onStart);
+  const onPauseRef = useLatest(onPause);
+  const onResumeRef = useLatest(onResume);
+  const onStopRef = useLatest(onStop);
+  const onErrorRef = useLatest(onError);
+  const onMaxDurationReachedRef = useLatest(onMaxDurationReached);
+
   const {
     state: recordingState,
     error,
@@ -170,11 +189,11 @@ export function useRecordingSession(
     clearMaxDurationTimeout();
     if (maxDuration > 0) {
       maxDurationTimeoutRef.current = window.setTimeout(() => {
-        onMaxDurationReached?.();
+        onMaxDurationReachedRef.current?.();
         // Don't auto-stop, let the caller decide what to do
       }, maxDuration * 1000);
     }
-  }, [maxDuration, clearMaxDurationTimeout, onMaxDurationReached]);
+  }, [maxDuration, clearMaxDurationTimeout, onMaxDurationReachedRef]);
 
   /**
    * Initialize the session (request permissions and get stream).
@@ -204,33 +223,40 @@ export function useRecordingSession(
       } else {
         setSessionState('recording');
         setupMaxDurationTimeout();
-        onStart?.();
+        onStartRef.current?.();
       }
       return true;
     } catch {
       setSessionState('error');
       return false;
     }
-  }, [isSupported, start, pause, autoStart, setupMaxDurationTimeout, onStart]);
+  }, [
+    isSupported,
+    start,
+    pause,
+    autoStart,
+    setupMaxDurationTimeout,
+    onStartRef,
+  ]);
 
   /**
    * Start recording.
    */
   const startRecording = useCallback(async () => {
-    if (sessionState === 'ready') {
+    if (sessionStateRef.current === 'ready') {
       resume();
       setSessionState('recording');
       setupMaxDurationTimeout();
-      onStart?.();
-    } else if (sessionState === 'idle') {
+      onStartRef.current?.();
+    } else if (sessionStateRef.current === 'idle') {
       // Initialize and start
       setSessionState('initializing');
       await start();
       setSessionState('recording');
       setupMaxDurationTimeout();
-      onStart?.();
+      onStartRef.current?.();
     }
-  }, [sessionState, resume, start, setupMaxDurationTimeout, onStart]);
+  }, [sessionStateRef, resume, start, setupMaxDurationTimeout, onStartRef]);
 
   /**
    * Stop recording and get final blob.
@@ -240,34 +266,34 @@ export function useRecordingSession(
     clearMaxDurationTimeout();
     const blob = await stop();
     setSessionState('completed');
-    onStop?.(blob);
+    onStopRef.current?.(blob);
     return blob;
-  }, [stop, clearMaxDurationTimeout, onStop]);
+  }, [stop, clearMaxDurationTimeout, onStopRef]);
 
   /**
    * Pause recording.
    */
   const pauseRecording = useCallback(() => {
-    if (sessionState === 'recording') {
+    if (sessionStateRef.current === 'recording') {
       pause();
       setSessionState('paused');
       clearMaxDurationTimeout();
-      onPause?.();
+      onPauseRef.current?.();
     }
-  }, [sessionState, pause, clearMaxDurationTimeout, onPause]);
+  }, [sessionStateRef, pause, clearMaxDurationTimeout, onPauseRef]);
 
   /**
    * Resume recording.
    */
   const resumeRecording = useCallback(() => {
-    if (sessionState === 'paused') {
+    if (sessionStateRef.current === 'paused') {
       resume();
       setSessionState('recording');
       setIsPausedByVisibility(false);
       setupMaxDurationTimeout();
-      onResume?.();
+      onResumeRef.current?.();
     }
-  }, [sessionState, resume, setupMaxDurationTimeout, onResume]);
+  }, [sessionStateRef, resume, setupMaxDurationTimeout, onResumeRef]);
 
   /**
    * Abandon the session without completing.
@@ -292,29 +318,34 @@ export function useRecordingSession(
   }, [resetRecorder, clearMaxDurationTimeout]);
 
   // Handle visibility changes
+  // Note: We use refs for sessionState and callbacks to avoid stale closures
+  // and prevent the effect from re-running on every state change.
   useEffect(() => {
     if (!pauseOnHidden) return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
         // Tab became hidden - pause if recording
-        if (sessionState === 'recording') {
+        if (sessionStateRef.current === 'recording') {
           wasRecordingBeforeHiddenRef.current = true;
           pause();
           setSessionState('paused');
           setIsPausedByVisibility(true);
           clearMaxDurationTimeout();
-          onPause?.();
+          onPauseRef.current?.();
         }
       } else {
         // Tab became visible - resume if we paused due to visibility
-        if (wasRecordingBeforeHiddenRef.current && sessionState === 'paused') {
+        if (
+          wasRecordingBeforeHiddenRef.current &&
+          sessionStateRef.current === 'paused'
+        ) {
           wasRecordingBeforeHiddenRef.current = false;
           resume();
           setSessionState('recording');
           setIsPausedByVisibility(false);
           setupMaxDurationTimeout();
-          onResume?.();
+          onResumeRef.current?.();
         }
       }
     };
@@ -325,13 +356,13 @@ export function useRecordingSession(
     };
   }, [
     pauseOnHidden,
-    sessionState,
     pause,
     resume,
     clearMaxDurationTimeout,
     setupMaxDurationTimeout,
-    onPause,
-    onResume,
+    sessionStateRef,
+    onPauseRef,
+    onResumeRef,
   ]);
 
   // Handle recording errors
@@ -339,9 +370,9 @@ export function useRecordingSession(
     if (error) {
       setSessionState('error');
       clearMaxDurationTimeout();
-      onError?.(error);
+      onErrorRef.current?.(error);
     }
-  }, [error, clearMaxDurationTimeout, onError]);
+  }, [error, clearMaxDurationTimeout, onErrorRef]);
 
   // Cleanup on unmount
   useEffect(() => {
