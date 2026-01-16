@@ -8,8 +8,8 @@ export interface PermissionGateProps {
   camera?: boolean;
   /** Whether to request microphone access (default: true) */
   microphone?: boolean;
-  /** Callback when permissions are granted with the media stream */
-  onGranted?: (stream: MediaStream) => void;
+  /** Callback when permissions are granted */
+  onGranted?: () => void;
   /** Callback when permissions are denied */
   onDenied?: () => void;
   /** Custom title for the permission prompt */
@@ -27,10 +27,14 @@ export interface PermissionGateProps {
  * - Permission denied with instructions
  * - Unsupported browsers
  *
+ * Note: This component only verifies permissions - it does not acquire or hold
+ * a media stream. The camera/microphone will only be active when you actually
+ * start recording via useMediaRecorder.
+ *
  * @example
  * ```tsx
  * <PermissionGate
- *   onGranted={(stream) => setMediaStream(stream)}
+ *   onGranted={() => console.log('Ready to record')}
  *   title="Camera Access Required"
  *   description="We need access to your camera and microphone to conduct the assessment."
  * >
@@ -68,8 +72,8 @@ export function PermissionGate({
 
     setIsRequesting(false);
 
-    if (result.success && result.stream) {
-      onGranted?.(result.stream);
+    if (result.success) {
+      onGranted?.();
     } else {
       setRequestError(result.error);
       if (result.errorType === 'denied') {

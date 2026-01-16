@@ -53,8 +53,6 @@ export interface RequestOptions {
 export interface RequestResult {
   /** Whether the request was successful */
   success: boolean;
-  /** The media stream if granted */
-  stream: MediaStream | null;
   /** Error message if failed */
   error: string | null;
   /** Error type for programmatic handling */
@@ -219,7 +217,6 @@ export function useMediaPermissions(): UseMediaPermissionsResult {
       if (!isSupported) {
         return {
           success: false,
-          stream: null,
           error: 'Camera and microphone are not supported in this browser.',
           errorType: 'not_supported',
         };
@@ -231,13 +228,16 @@ export function useMediaPermissions(): UseMediaPermissionsResult {
           audio: requestMic,
         });
 
+        // Immediately stop all tracks - we only needed to verify permission
+        // The actual stream will be acquired when recording starts
+        stream.getTracks().forEach((track) => track.stop());
+
         // Update permission states
         if (requestCamera) setCamera('granted');
         if (requestMic) setMicrophone('granted');
 
         return {
           success: true,
-          stream,
           error: null,
           errorType: 'none',
         };
@@ -249,7 +249,6 @@ export function useMediaPermissions(): UseMediaPermissionsResult {
           if (err.name === 'NotAllowedError') {
             return {
               success: false,
-              stream: null,
               error:
                 'Permission was denied. Please enable camera and microphone access.',
               errorType: 'denied',
@@ -257,7 +256,6 @@ export function useMediaPermissions(): UseMediaPermissionsResult {
           } else if (err.name === 'NotFoundError') {
             return {
               success: false,
-              stream: null,
               error: 'No camera or microphone found. Please connect a device.',
               errorType: 'not_found',
             };
@@ -266,7 +264,6 @@ export function useMediaPermissions(): UseMediaPermissionsResult {
 
         return {
           success: false,
-          stream: null,
           error: err instanceof Error ? err.message : 'Unknown error occurred.',
           errorType: 'unknown',
         };
