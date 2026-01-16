@@ -170,6 +170,7 @@ export function useMediaRecorder(
   const [duration, setDuration] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<number | null>(null);
@@ -210,11 +211,13 @@ export function useMediaRecorder(
       mediaRecorderRef.current = null;
     }
 
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+    // Use ref to avoid stale closure over stream state
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       setStream(null);
     }
-  }, [stream, stopDurationTracking]);
+  }, [stopDurationTracking]);
 
   /**
    * Request permissions and start recording.
@@ -243,6 +246,7 @@ export function useMediaRecorder(
         audio: opts.audio,
       });
 
+      streamRef.current = mediaStream;
       setStream(mediaStream);
 
       // Determine MIME type
@@ -348,15 +352,19 @@ export function useMediaRecorder(
         setState('stopped');
         stopDurationTracking();
 
-        // Stop all tracks
-        stream?.getTracks().forEach((track) => track.stop());
+        // Stop all tracks - use ref to avoid stale closure
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+          setStream(null);
+        }
 
         resolve(finalBlobRef.current);
       };
 
       recorder.stop();
     });
-  }, [cleanup, stopDurationTracking, stream]);
+  }, [cleanup, stopDurationTracking]);
 
   /**
    * Pause recording.
