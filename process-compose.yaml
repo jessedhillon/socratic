@@ -33,7 +33,7 @@ processes:
   redis:
     command: |
       mkdir -p ${XDG_STATE_HOME}/redis
-      redis-server --unixsocket ${REDIS_SOCKET_PATH} --unixsocketperm 700 --port 0 --daemonize no
+      redis-server --unixsocket ${REDIS_SOCKET_PATH} --unixsocketperm 700 --port 0 --daemonize no --dir ${XDG_STATE_HOME}/redis
     is_daemon: false
     readiness_probe:
       exec:
