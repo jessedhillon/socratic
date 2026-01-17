@@ -10,6 +10,7 @@ import {
   CameraPreview,
   PermissionGate,
   VoiceInput,
+  SpeakButton,
   type CameraPreviewProps,
 } from '../components';
 
@@ -66,6 +67,17 @@ const AudioOnlyPreview: React.FC<{ isRecording: boolean }> = ({
  * - PermissionGate component (from PR #60)
  * - Blob playback verification
  */
+// Available OpenAI TTS voices
+const ttsVoices = [
+  'alloy',
+  'echo',
+  'fable',
+  'onyx',
+  'nova',
+  'shimmer',
+] as const;
+type TTSVoice = (typeof ttsVoices)[number];
+
 const DevAvTestPage: React.FC = () => {
   const [audioOnly, setAudioOnly] = useState(false);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
@@ -81,6 +93,13 @@ const DevAvTestPage: React.FC = () => {
     React.useState<PreviewPosition>('bottom-right');
   const [previewMinimized, setPreviewMinimized] = React.useState(false);
   const [simulateMuted, setSimulateMuted] = React.useState(false);
+
+  // TTS test controls
+  const [ttsText, setTtsText] = useState(
+    'Hello! This is a test of the text to speech system.'
+  );
+  const [ttsVoice, setTtsVoice] = useState<TTSVoice>('nova');
+  const [ttsSpeed, setTtsSpeed] = useState(1.0);
 
   const recording = useMediaRecorder({
     video: !audioOnly,
@@ -755,6 +774,90 @@ const DevAvTestPage: React.FC = () => {
           <p className="text-sm text-gray-500 mt-4">
             Flow: Click Record → speak → Stop → wait for transcription → edit if
             needed → Send. Check browser console for submitted text.
+          </p>
+        </section>
+
+        {/* TTS / SpeakButton Component Test (PR #63 / SOC-91) */}
+        <section className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">
+            SpeakButton Component (PR #63 / SOC-91)
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Tests the text-to-speech synthesis: click speaker icon to synthesize
+            and play speech via OpenAI TTS API.
+          </p>
+
+          {/* TTS Controls */}
+          <div className="space-y-4 mb-6">
+            {/* Text Input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Text to speak
+              </label>
+              <textarea
+                value={ttsText}
+                onChange={(e) => setTtsText(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+                rows={3}
+                placeholder="Enter text to convert to speech..."
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                {ttsText.length} / 4096 characters
+              </div>
+            </div>
+
+            {/* Voice and Speed Controls */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Voice
+                </label>
+                <select
+                  value={ttsVoice}
+                  onChange={(e) => setTtsVoice(e.target.value as TTSVoice)}
+                  className="w-full border rounded px-3 py-2"
+                >
+                  {ttsVoices.map((voice) => (
+                    <option key={voice} value={voice}>
+                      {voice.charAt(0).toUpperCase() + voice.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Speed: {ttsSpeed.toFixed(2)}x
+                </label>
+                <input
+                  type="range"
+                  min="0.25"
+                  max="4.0"
+                  step="0.05"
+                  value={ttsSpeed}
+                  onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>0.25x</span>
+                  <span>1.0x</span>
+                  <span>4.0x</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SpeakButton with current settings */}
+          <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+            <SpeakButton text={ttsText} voice={ttsVoice} speed={ttsSpeed} />
+            <div className="text-sm text-gray-600">
+              <span className="font-medium">Voice:</span> {ttsVoice} |{' '}
+              <span className="font-medium">Speed:</span> {ttsSpeed.toFixed(2)}x
+            </div>
+          </div>
+
+          <p className="text-sm text-gray-500 mt-4">
+            Click the speaker icon to play. Click again while playing to stop.
+            Watch for loading spinner and pause icon states.
           </p>
         </section>
 

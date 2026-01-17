@@ -570,6 +570,33 @@ export type SendMessageRequest = {
 };
 
 /**
+ * Supported audio output formats.
+ */
+export type SpeechFormat = 'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm';
+
+/**
+ * Request to synthesize speech from text.
+ */
+export type SpeechRequest = {
+  /**
+   * Text to convert to speech
+   */
+  text: string;
+  /**
+   * Voice to use for synthesis
+   */
+  voice?: Voice;
+  /**
+   * Output audio format
+   */
+  format?: SpeechFormat;
+  /**
+   * Speech speed (0.25-4.0)
+   */
+  speed?: number;
+};
+
+/**
  * Immediate response when starting an assessment.
  *
  * The orientation message will be streamed via the /stream endpoint.
@@ -700,6 +727,11 @@ export type ValidationError = {
   msg: string;
   type: string;
 };
+
+/**
+ * Available TTS voices.
+ */
+export type Voice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
 
 /**
  * Assessment attempt response.
@@ -2295,6 +2327,35 @@ export type AddFeedbackResponses = {
 
 export type AddFeedbackResponse =
   AddFeedbackResponses[keyof AddFeedbackResponses];
+
+export type SynthesizeSpeechData = {
+  body: SpeechRequest;
+  path?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/speech';
+};
+
+export type SynthesizeSpeechErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SynthesizeSpeechError =
+  SynthesizeSpeechErrors[keyof SynthesizeSpeechErrors];
+
+export type SynthesizeSpeechResponses = {
+  /**
+   * Successful Response
+   */
+  200: unknown;
+};
 
 export type TranscribeAudioData = {
   body: BodyTranscribeAudio;

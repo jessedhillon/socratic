@@ -12,3 +12,4 @@ export {
   type StartAssessmentResult,
   type SendMessageResult,
 } from './useAssessmentApi';
+export { SpeakButton } from './SpeakButton';
