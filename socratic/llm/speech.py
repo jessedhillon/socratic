@@ -5,8 +5,8 @@ from __future__ import annotations
 import typing as t
 from enum import Enum
 
+import pydantic as p
 from openai import AsyncOpenAI
-from pydantic import SecretStr
 
 
 class Voice(str, Enum):
@@ -56,7 +56,7 @@ class SpeechService(object):
     # Maximum text length for TTS (OpenAI limit is 4096 characters)
     MAX_TEXT_LENGTH = 4096
 
-    def __init__(self, api_key: SecretStr) -> None:
+    def __init__(self, api_key: p.SecretStr) -> None:
         """Initialize the speech service.
 
         Args:
