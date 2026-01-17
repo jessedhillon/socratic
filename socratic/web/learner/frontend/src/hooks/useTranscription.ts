@@ -3,7 +3,8 @@
  */
 
 import { useCallback, useState } from 'react';
-import { getAuthToken } from '../auth';
+import { transcribeAudio } from '../api/sdk.gen';
+import type { TranscriptionResponse } from '../api/types.gen';
 
 /** State of the transcription process */
 export type TranscriptionState = 'idle' | 'transcribing' | 'success' | 'error';
@@ -72,48 +73,17 @@ export function useTranscription(): UseTranscriptionResult {
       setError(null);
 
       try {
-        const formData = new FormData();
-        formData.append('file', audioBlob, 'recording.webm');
-
-        if (options?.language) {
-          formData.append('language', options.language);
-        }
-
-        const token = getAuthToken();
-        const headers: HeadersInit = {};
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        const response = await fetch('/api/transcription', {
-          method: 'POST',
-          headers,
-          body: formData,
+        const response = await transcribeAudio({
+          body: {
+            file: new File([audioBlob], 'recording.webm', {
+              type: audioBlob.type,
+            }),
+            language: options?.language ?? null,
+          },
+          throwOnError: true,
         });
 
-        if (!response.ok) {
-          let errorData: { error?: string; detail?: string } = {};
-          try {
-            errorData = await response.json();
-          } catch {
-            // Response may not be JSON
-          }
-
-          const errorMessage =
-            errorData.error || errorData.detail || `HTTP ${response.status}`;
-          const errorCode =
-            response.status === 413
-              ? 'file_too_large'
-              : response.status === 415
-                ? 'unsupported_format'
-                : 'api_error';
-
-          setError({ message: errorMessage, code: errorCode });
-          setState('error');
-          return null;
-        }
-
-        const data = await response.json();
+        const data = response.data as TranscriptionResponse;
         const transcriptionResult: TranscriptionResult = {
           text: data.text,
           duration: data.duration ?? null,
@@ -124,9 +94,29 @@ export function useTranscription(): UseTranscriptionResult {
         setState('success');
         return transcriptionResult;
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Unknown error occurred';
-        setError({ message, code: 'network_error' });
+        let message = 'Unknown error occurred';
+        let code = 'api_error';
+
+        if (err instanceof Error) {
+          message = err.message;
+        }
+
+        // Check for HTTP error responses
+        if (typeof err === 'object' && err !== null && 'status' in err) {
+          const status = (err as { status: number }).status;
+          if (status === 413) {
+            code = 'file_too_large';
+            message = 'File size exceeds maximum allowed';
+          } else if (status === 415) {
+            code = 'unsupported_format';
+            message = 'Unsupported audio format';
+          } else if (status === 401) {
+            code = 'unauthorized';
+            message = 'Not authenticated';
+          }
+        }
+
+        setError({ message, code });
         setState('error');
         return null;
       }
