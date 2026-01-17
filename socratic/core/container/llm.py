@@ -41,7 +41,7 @@ class LLMContainer(DeclarativeContainer):
         factory=model_factory,
     )
 
-    transcription_service: Provider[TranscriptionService] = Singleton(
+    transcription: Provider[TranscriptionService] = Singleton(
         WhisperTranscriptionService,
         api_key=secrets.secret_key,
     )

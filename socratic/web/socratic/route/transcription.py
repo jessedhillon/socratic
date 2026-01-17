@@ -19,7 +19,7 @@ async def transcribe_audio_route(
     file: UploadFile = File(...),
     language: str | None = Form(None),
     auth: AuthContext = Depends(require_learner),
-    transcription_service: TranscriptionService = Depends(di.Provide["llm.transcription_service"]),
+    transcription: TranscriptionService = Depends(di.Provide["llm.transcription"]),
 ) -> TranscriptionResponse:
     """Transcribe audio to text using OpenAI Whisper.
 
@@ -35,7 +35,7 @@ async def transcribe_audio_route(
     content_type = file.content_type or "audio/webm"
 
     try:
-        result = await transcription_service.transcribe(
+        result = await transcription.transcribe(
             audio_data,
             filename=file.filename or "audio.webm",
             content_type=content_type,
