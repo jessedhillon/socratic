@@ -10,8 +10,8 @@ import pydantic as p
 from openai import AsyncOpenAI
 
 
-class Voice(str, Enum):
-    """Available TTS voices."""
+class OpenAIVoice(str, Enum):
+    """Available OpenAI TTS voices."""
 
     ALLOY = "alloy"
     ECHO = "echo"
@@ -77,7 +77,7 @@ class SpeechService(t.Protocol):
         self,
         text: str,
         *,
-        voice: Voice = Voice.NOVA,
+        voice: str = "nova",
         format: SpeechFormat = SpeechFormat.MP3,
         speed: float = 1.0,
     ) -> SpeechResult:
@@ -85,7 +85,7 @@ class SpeechService(t.Protocol):
 
         Args:
             text: The text to convert to speech.
-            voice: The voice to use for synthesis.
+            voice: The voice identifier (implementation-specific).
             format: The output audio format.
             speed: The speed of the generated audio (0.25 to 4.0).
 
@@ -121,7 +121,7 @@ class OpenAISpeechService(object):
         self,
         text: str,
         *,
-        voice: Voice = Voice.NOVA,
+        voice: str = "nova",
         format: SpeechFormat = SpeechFormat.MP3,
         speed: float = 1.0,
     ) -> SpeechResult:
@@ -129,7 +129,7 @@ class OpenAISpeechService(object):
 
         Args:
             text: The text to convert to speech.
-            voice: The voice to use for synthesis.
+            voice: The voice to use (one of: alloy, echo, fable, onyx, nova, shimmer).
             format: The output audio format.
             speed: The speed of the generated audio (0.25 to 4.0).
 
@@ -158,7 +158,7 @@ class OpenAISpeechService(object):
         try:
             response = await self._client.audio.speech.create(
                 model="tts-1",
-                voice=voice.value,
+                voice=voice,
                 input=text,
                 response_format=format.value,
                 speed=speed,
