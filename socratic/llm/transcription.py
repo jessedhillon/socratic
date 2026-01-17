@@ -10,10 +10,10 @@ from openai import AsyncOpenAI
 from pydantic import SecretStr
 
 # Maximum file size for Whisper API (25MB)
-MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024
+MaxFileSizeBytes = 25 * 1024 * 1024
 
 # Supported audio formats
-SUPPORTED_FORMATS = {
+SupportedFormats = {
     "audio/webm",
     "audio/mp3",
     "audio/mp4",
@@ -72,15 +72,15 @@ class TranscriptionService:
             TranscriptionError: If validation fails or API call fails
         """
         # Validate file size
-        if len(audio_data) > MAX_FILE_SIZE_BYTES:
+        if len(audio_data) > MaxFileSizeBytes:
             raise TranscriptionError(
-                f"File size {len(audio_data)} exceeds maximum {MAX_FILE_SIZE_BYTES} bytes",
+                f"File size {len(audio_data)} exceeds maximum {MaxFileSizeBytes} bytes",
                 code="file_too_large",
             )
 
         # Validate content type (strip codec info like "video/webm;codecs=vp9,opus" -> "video/webm")
         base_content_type = content_type.split(";")[0].strip()
-        if base_content_type not in SUPPORTED_FORMATS:
+        if base_content_type not in SupportedFormats:
             raise TranscriptionError(
                 f"Unsupported audio format: {content_type}",
                 code="unsupported_format",
