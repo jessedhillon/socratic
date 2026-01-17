@@ -10,6 +10,7 @@ import {
   CameraPreview,
   PermissionGate,
   VoiceInput,
+  SpeakButton,
   type CameraPreviewProps,
 } from '../components';
 
@@ -755,6 +756,55 @@ const DevAvTestPage: React.FC = () => {
           <p className="text-sm text-gray-500 mt-4">
             Flow: Click Record → speak → Stop → wait for transcription → edit if
             needed → Send. Check browser console for submitted text.
+          </p>
+        </section>
+
+        {/* TTS / SpeakButton Component Test (PR #63 / SOC-91) */}
+        <section className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">
+            SpeakButton Component (PR #63 / SOC-91)
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Tests the text-to-speech synthesis: click speaker icon to synthesize
+            and play speech via OpenAI TTS API.
+          </p>
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <span className="text-gray-700">Short text:</span>
+              <SpeakButton
+                text="Hello! This is a test of the text to speech system."
+                voice="nova"
+              />
+              <span className="text-sm text-gray-500">
+                "Hello! This is a test..."
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-gray-700">Longer text:</span>
+              <SpeakButton
+                text="The Socratic method is a form of cooperative argumentative dialogue between individuals, based on asking and answering questions to stimulate critical thinking and to draw out ideas and underlying presuppositions."
+                voice="alloy"
+                speed={1.1}
+              />
+              <span className="text-sm text-gray-500">
+                "The Socratic method is..."
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-gray-700">Different voice:</span>
+              <SpeakButton
+                text="I am using the echo voice at a slower speed."
+                voice="echo"
+                speed={0.9}
+              />
+              <span className="text-sm text-gray-500">
+                Echo voice, 0.9x speed
+              </span>
+            </div>
+          </div>
+          <p className="text-sm text-gray-500 mt-4">
+            Click the speaker icon to play. Click again while playing to stop.
+            Watch for loading spinner and pause icon states.
           </p>
         </section>
 

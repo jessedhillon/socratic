@@ -3,6 +3,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
+import { synthesizeSpeech } from '../api/sdk.gen';
 
 export type Voice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
 export type SpeechFormat = 'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm';
@@ -96,27 +97,18 @@ export function useSpeech(): UseSpeechResult {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       try {
-        const response = await fetch('/api/speech', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+        const response = await synthesizeSpeech({
+          body: {
             text,
             voice,
             format,
             speed,
-          }),
+          },
+          parseAs: 'blob',
+          throwOnError: true,
         });
 
-        if (!response.ok) {
-          const errorData = await response
-            .json()
-            .catch(() => ({ detail: 'Speech synthesis failed' }));
-          throw new Error(errorData.detail || `HTTP ${response.status}`);
-        }
-
-        const audioBlob = await response.blob();
+        const audioBlob = response.data as Blob;
 
         setState((prev) => ({ ...prev, isLoading: false }));
 

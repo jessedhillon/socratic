@@ -10,7 +10,7 @@ from socratic.core import di
 from socratic.llm import SpeechService
 from socratic.web.socratic.view.speech import SpeechRequest
 
-router = APIRouter(prefix="/speech", tags=["speech"])
+router = APIRouter(prefix="/api/speech", tags=["speech"])
 
 
 @router.post("", operation_id="synthesize_speech")
@@ -18,14 +18,14 @@ router = APIRouter(prefix="/speech", tags=["speech"])
 async def synthesize_speech_route(
     request: SpeechRequest,
     auth: AuthContext = Depends(require_learner),
-    speech_service: SpeechService = Depends(di.Provide["llm.speech_service"]),
+    speech: SpeechService = Depends(di.Provide["llm.speech"]),
 ) -> Response:
     """Synthesize speech from text.
 
     Returns audio data in the requested format.
     """
     try:
-        result = await speech_service.synthesize(
+        result = await speech.synthesize(
             request.text,
             voice=request.voice,
             format=request.format,
