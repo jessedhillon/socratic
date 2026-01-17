@@ -126,6 +126,11 @@ export type AttemptStatus =
   | 'evaluated'
   | 'reviewed';
 
+export type BodyTranscribeAudio = {
+  file: Blob | File;
+  language?: string | null;
+};
+
 /**
  * Request to create assignments for multiple learners.
  */
@@ -308,15 +313,6 @@ export type LoginOkResponse = {
 export type LoginRequest = {
   email: string;
   password: string;
-};
-
-/**
- * Response when a message is accepted for processing.
- *
- * The AI response will be streamed via the /stream endpoint.
- */
-export type MessageAcceptedResponse = {
-  message_id: string;
 };
 
 /**
@@ -678,6 +674,15 @@ export type TranscriptSegmentResponse = {
 };
 
 /**
+ * Response from transcription API.
+ */
+export type TranscriptionResponse = {
+  text: string;
+  duration?: number | null;
+  language?: string | null;
+};
+
+/**
  * Response containing user information.
  */
 export type UserResponse = {
@@ -778,9 +783,23 @@ export type RegisterResponse = RegisterResponses[keyof RegisterResponses];
 export type LogoutData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/auth/logout';
 };
+
+export type LogoutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
 
 export type LogoutResponses = {
   /**
@@ -796,9 +815,24 @@ export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
 export type GetCurrentUserData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/auth/me';
 };
+
+export type GetCurrentUserErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetCurrentUserError =
+  GetCurrentUserErrors[keyof GetCurrentUserErrors];
 
 export type GetCurrentUserResponses = {
   /**
@@ -871,7 +905,12 @@ export type GetOrganizationData = {
   path: {
     organization_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/organizations/{organization_id}';
 };
 
@@ -900,7 +939,12 @@ export type InviteUserData = {
   path: {
     organization_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/organizations/{organization_id}/invite';
 };
 
@@ -928,6 +972,10 @@ export type ListObjectivesData = {
   query?: {
     status_filter?: ObjectiveStatus | null;
     include_archived?: boolean;
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
   };
   url: '/api/objectives';
 };
@@ -955,7 +1003,12 @@ export type ListObjectivesResponse =
 export type CreateObjectiveData = {
   body: ObjectiveCreateRequest;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/objectives';
 };
 
@@ -984,7 +1037,12 @@ export type ArchiveObjectiveData = {
   path: {
     objective_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/objectives/{objective_id}';
 };
 
@@ -1013,7 +1071,12 @@ export type GetObjectiveData = {
   path: {
     objective_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/objectives/{objective_id}';
 };
 
@@ -1041,7 +1104,12 @@ export type UpdateObjectiveData = {
   path: {
     objective_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/objectives/{objective_id}';
 };
 
@@ -1070,7 +1138,12 @@ export type AddRubricCriterionData = {
   path: {
     objective_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/objectives/{objective_id}/criteria';
 };
 
@@ -1100,7 +1173,12 @@ export type DeleteRubricCriterionData = {
     objective_id: string;
     criterion_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/objectives/{objective_id}/criteria/{criterion_id}';
 };
 
@@ -1130,7 +1208,12 @@ export type UpdateRubricCriterionData = {
     objective_id: string;
     criterion_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/objectives/{objective_id}/criteria/{criterion_id}';
 };
 
@@ -1157,9 +1240,23 @@ export type UpdateRubricCriterionResponse =
 export type ListStrandsData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/strands';
 };
+
+export type ListStrandsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListStrandsError = ListStrandsErrors[keyof ListStrandsErrors];
 
 export type ListStrandsResponses = {
   /**
@@ -1174,7 +1271,12 @@ export type ListStrandsResponse =
 export type CreateStrandData = {
   body: StrandCreateRequest;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/strands';
 };
 
@@ -1202,7 +1304,12 @@ export type GetStrandData = {
   path: {
     strand_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/strands/{strand_id}';
 };
 
@@ -1229,7 +1336,12 @@ export type UpdateStrandData = {
   path: {
     strand_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/strands/{strand_id}';
 };
 
@@ -1257,7 +1369,12 @@ export type AddObjectiveToStrandData = {
   path: {
     strand_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/strands/{strand_id}/objectives';
 };
 
@@ -1286,7 +1403,12 @@ export type ReorderObjectivesData = {
   path: {
     strand_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/strands/{strand_id}/objectives';
 };
 
@@ -1316,7 +1438,12 @@ export type GetObjectiveDependenciesData = {
     strand_id: string;
     objective_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/strands/{strand_id}/objectives/{objective_id}/dependencies';
 };
 
@@ -1346,7 +1473,12 @@ export type AddObjectiveDependencyData = {
     strand_id: string;
     objective_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/strands/{strand_id}/objectives/{objective_id}/dependencies';
 };
 
@@ -1376,6 +1508,10 @@ export type ListAssignmentsData = {
   query?: {
     objective_id?: string | null;
     assigned_to?: string | null;
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
   };
   url: '/api/assignments';
 };
@@ -1403,7 +1539,12 @@ export type ListAssignmentsResponse =
 export type CreateAssignmentData = {
   body: AssignmentCreateRequest;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assignments';
 };
 
@@ -1430,7 +1571,12 @@ export type CreateAssignmentResponse =
 export type CreateBulkAssignmentsData = {
   body: BulkAssignmentCreateRequest;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assignments/bulk';
 };
 
@@ -1459,7 +1605,12 @@ export type CancelAssignmentData = {
   path: {
     assignment_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assignments/{assignment_id}';
 };
 
@@ -1488,7 +1639,12 @@ export type GetAssignmentData = {
   path: {
     assignment_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assignments/{assignment_id}';
 };
 
@@ -1516,7 +1672,12 @@ export type UpdateAssignmentData = {
   path: {
     assignment_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assignments/{assignment_id}';
 };
 
@@ -1543,9 +1704,23 @@ export type UpdateAssignmentResponse =
 export type ListLearnersData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/learners';
 };
+
+export type ListLearnersErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListLearnersError = ListLearnersErrors[keyof ListLearnersErrors];
 
 export type ListLearnersResponses = {
   /**
@@ -1560,9 +1735,24 @@ export type ListLearnersResponse =
 export type ListMyAssignmentsData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/learners/me/assignments';
 };
+
+export type ListMyAssignmentsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListMyAssignmentsError =
+  ListMyAssignmentsErrors[keyof ListMyAssignmentsErrors];
 
 export type ListMyAssignmentsResponses = {
   /**
@@ -1579,6 +1769,10 @@ export type ListMyAttemptsData = {
   path?: never;
   query?: {
     assignment_id?: string | null;
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
   };
   url: '/api/learners/me/attempts';
 };
@@ -1606,9 +1800,24 @@ export type ListMyAttemptsResponse =
 export type GetLearnerDashboardData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/learners/me/dashboard';
 };
+
+export type GetLearnerDashboardErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetLearnerDashboardError =
+  GetLearnerDashboardErrors[keyof GetLearnerDashboardErrors];
 
 export type GetLearnerDashboardResponses = {
   /**
@@ -1625,7 +1834,12 @@ export type GetMyAssignmentData = {
   path: {
     assignment_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/learners/me/assignments/{assignment_id}';
 };
 
@@ -1654,7 +1868,12 @@ export type GetLearnerAssignmentsData = {
   path: {
     learner_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/learners/{learner_id}/assignments';
 };
 
@@ -1683,7 +1902,12 @@ export type StartAssessmentData = {
   path: {
     assignment_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assessments/{assignment_id}/start';
 };
 
@@ -1712,7 +1936,12 @@ export type StreamAssessmentData = {
   path: {
     attempt_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assessments/{attempt_id}/stream';
 };
 
@@ -1738,7 +1967,12 @@ export type SendAssessmentMessageData = {
   path: {
     attempt_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assessments/{attempt_id}/message';
 };
 
@@ -1756,18 +1990,20 @@ export type SendAssessmentMessageResponses = {
   /**
    * Successful Response
    */
-  202: MessageAcceptedResponse;
+  200: unknown;
 };
-
-export type SendAssessmentMessageResponse =
-  SendAssessmentMessageResponses[keyof SendAssessmentMessageResponses];
 
 export type GetAssessmentStatusData = {
   body?: never;
   path: {
     attempt_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assessments/{attempt_id}/status';
 };
 
@@ -1796,7 +2032,12 @@ export type CompleteAssessmentData = {
   path: {
     attempt_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assessments/{attempt_id}/complete';
 };
 
@@ -1825,7 +2066,12 @@ export type GetAssessmentTranscriptData = {
   path: {
     attempt_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assessments/{attempt_id}/transcript';
 };
 
@@ -1854,7 +2100,12 @@ export type TriggerEvaluationData = {
   path: {
     attempt_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/assessments/{attempt_id}/evaluate';
 };
 
@@ -1883,9 +2134,24 @@ export type TriggerEvaluationResponse =
 export type ListPendingReviewsData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/reviews';
 };
+
+export type ListPendingReviewsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListPendingReviewsError =
+  ListPendingReviewsErrors[keyof ListPendingReviewsErrors];
 
 export type ListPendingReviewsResponses = {
   /**
@@ -1902,7 +2168,12 @@ export type GetReviewDetailData = {
   path: {
     attempt_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/reviews/{attempt_id}';
 };
 
@@ -1931,7 +2202,12 @@ export type AcceptGradeData = {
   path: {
     attempt_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/reviews/{attempt_id}/accept';
 };
 
@@ -1959,7 +2235,12 @@ export type OverrideGradeData = {
   path: {
     attempt_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/reviews/{attempt_id}/override';
 };
 
@@ -1987,7 +2268,12 @@ export type AddFeedbackData = {
   path: {
     attempt_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
   url: '/api/reviews/{attempt_id}/feedback';
 };
 
@@ -2009,6 +2295,38 @@ export type AddFeedbackResponses = {
 
 export type AddFeedbackResponse =
   AddFeedbackResponses[keyof AddFeedbackResponses];
+
+export type TranscribeAudioData = {
+  body: BodyTranscribeAudio;
+  path?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/transcription';
+};
+
+export type TranscribeAudioErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type TranscribeAudioError =
+  TranscribeAudioErrors[keyof TranscribeAudioErrors];
+
+export type TranscribeAudioResponses = {
+  /**
+   * Successful Response
+   */
+  200: TranscriptionResponse;
+};
+
+export type TranscribeAudioResponse =
+  TranscribeAudioResponses[keyof TranscribeAudioResponses];
 
 export type ClientOptions = {
   baseUrl: 'http://localhost:8089' | (string & {});

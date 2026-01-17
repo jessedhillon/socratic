@@ -93,6 +93,28 @@ Learner responses are captured via **speech-to-text**:
 - STT converts to text for AI processing
 - Original audio retained for review if needed
 
+### Transcription Trust Boundary
+
+The transcription flow must maintain a **server-side trust boundary**:
+
+1. Client sends audio blob to server
+2. Server transcribes via Whisper and **stores the result authoritatively**
+3. Client receives transcription for read-only preview (not editable)
+4. Assessment uses server-stored transcription, not client-submitted text
+
+This prevents learners from:
+
+- Editing transcriptions to fix spoken mistakes
+- Pasting pre-written text from external sources
+- Bypassing the voice requirement entirely
+
+The client should never send free-form text that gets treated as "what the learner said." The only acceptable inputs are:
+
+- Raw audio blobs (for transcription)
+- References to already-stored transcriptions
+
+Any text editing UI (if present) is for development/testing only and must not be used in production assessments.
+
 ## Technical Components
 
 | Component | Purpose                  | Options                   |

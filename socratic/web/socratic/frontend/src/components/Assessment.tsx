@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ChatMessage, { MessageRole } from './ChatMessage';
 import useSSE from '../hooks/useSSE';
+import { completeAssessment as completeAssessmentApi } from '../api/sdk.gen';
 
 interface Message {
   id: string;
@@ -139,17 +140,12 @@ const Assessment: React.FC<AssessmentProps> = ({
     if (!attemptId) return;
 
     try {
-      const response = await fetch(`/api/assessments/${attemptId}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-        credentials: 'include',
+      await completeAssessmentApi({
+        path: { attempt_id: attemptId },
+        throwOnError: true,
       });
-
-      if (response.ok) {
-        setIsComplete(true);
-        onComplete?.();
-      }
+      setIsComplete(true);
+      onComplete?.();
     } catch (err) {
       console.error('Failed to complete assessment:', err);
     }

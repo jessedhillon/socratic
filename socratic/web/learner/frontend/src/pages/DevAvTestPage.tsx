@@ -9,6 +9,7 @@ import {
 import {
   CameraPreview,
   PermissionGate,
+  VoiceInput,
   type CameraPreviewProps,
 } from '../components';
 
@@ -731,6 +732,30 @@ const DevAvTestPage: React.FC = () => {
               </p>
             </div>
           )}
+        </section>
+
+        {/* VoiceInput Component Test (PR #62 / SOC-90) */}
+        <section className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">
+            VoiceInput Component (PR #62 / SOC-90)
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Tests the full voice input flow: record → transcribe (via Whisper
+            API) → review/edit → send.
+          </p>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+            <VoiceInput
+              onSubmit={(text) => {
+                console.log('VoiceInput submitted:', text);
+                alert(`Submitted text: "${text}"`);
+              }}
+              placeholder="Edit your transcribed response..."
+            />
+          </div>
+          <p className="text-sm text-gray-500 mt-4">
+            Flow: Click Record → speak → Stop → wait for transcription → edit if
+            needed → Send. Check browser console for submitted text.
+          </p>
         </section>
 
         {/* Recording Stats */}
