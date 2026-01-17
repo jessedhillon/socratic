@@ -34,3 +34,4 @@ class AssessmentAttempt(BaseModel, WithCtime):
     confidence_score: decimal.Decimal | None = None
 
     audio_url: str | None = None
+    video_url: str | None = None
