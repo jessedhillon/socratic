@@ -78,8 +78,9 @@ class TranscriptionService:
                 code="file_too_large",
             )
 
-        # Validate content type
-        if content_type not in SUPPORTED_FORMATS:
+        # Validate content type (strip codec info like "video/webm;codecs=vp9,opus" -> "video/webm")
+        base_content_type = content_type.split(";")[0].strip()
+        if base_content_type not in SUPPORTED_FORMATS:
             raise TranscriptionError(
                 f"Unsupported audio format: {content_type}",
                 code="unsupported_format",
