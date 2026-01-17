@@ -26,6 +26,7 @@ __all__ = [
     "TranscriptionService",
     "TranscriptionResult",
     "TranscriptionError",
+    "WhisperTranscriptionService",
 ]
 
 from .config import AssessmentModels, LLMSecrets, LLMSettings, ModelSettings
@@ -33,4 +34,4 @@ from .factory import ModelFactory
 from .provider import create_chat_model, LLMMessage, LLMResponse, MessageRole, messages_to_langchain, ModelConfig, \
     ProviderType, TokenTracker, TokenUsage
 from .tokens import CostEstimate, estimate_cost, estimate_tokens
-from .transcription import TranscriptionError, TranscriptionResult, TranscriptionService
+from .transcription import TranscriptionError, TranscriptionResult, TranscriptionService, WhisperTranscriptionService
