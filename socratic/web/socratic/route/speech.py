@@ -7,7 +7,7 @@ from fastapi.responses import Response
 
 from socratic.auth import AuthContext, require_learner
 from socratic.core import di
-from socratic.llm import SpeechService
+from socratic.llm import SpeechError, SpeechService
 from socratic.web.socratic.view.speech import SpeechRequest
 
 router = APIRouter(prefix="/api/speech", tags=["speech"])
@@ -40,7 +40,6 @@ async def synthesize_speech_route(
             },
         )
 
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except SpeechError as e:
+        status_code = 400 if e.code in ("empty_text", "text_too_long", "invalid_speed") else 500
+        raise HTTPException(status_code=status_code, detail=str(e)) from e

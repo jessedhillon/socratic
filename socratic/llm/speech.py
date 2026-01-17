@@ -1,8 +1,9 @@
-"""Text-to-speech service using OpenAI TTS API."""
+"""Text-to-speech service interface and implementations."""
 
 from __future__ import annotations
 
 import typing as t
+from abc import abstractmethod
 from enum import Enum
 
 import pydantic as p
@@ -32,7 +33,7 @@ class SpeechFormat(str, Enum):
 
 
 # Content type mapping for each format
-CONTENT_TYPES: dict[SpeechFormat, str] = {
+ContentTypes: dict[SpeechFormat, str] = {
     SpeechFormat.MP3: "audio/mpeg",
     SpeechFormat.OPUS: "audio/opus",
     SpeechFormat.AAC: "audio/aac",
@@ -50,20 +51,28 @@ class SpeechResult(t.NamedTuple):
     format: SpeechFormat
 
 
-class SpeechService(object):
-    """Service for converting text to speech using OpenAI TTS API."""
+class SpeechError(Exception):
+    """Error during speech synthesis."""
 
-    # Maximum text length for TTS (OpenAI limit is 4096 characters)
-    MAX_TEXT_LENGTH = 4096
+    def __init__(self, message: str, code: str) -> None:
+        super().__init__(message)
+        self.code = code
 
-    def __init__(self, api_key: p.SecretStr) -> None:
-        """Initialize the speech service.
 
-        Args:
-            api_key: OpenAI API key.
-        """
-        self._client = AsyncOpenAI(api_key=api_key.get_secret_value())
+class SpeechService(t.Protocol):
+    """Protocol for text-to-speech synthesis services.
 
+    Implementations can use different backends (OpenAI TTS, Google Cloud TTS, etc.)
+    while exposing a consistent interface.
+    """
+
+    @property
+    @abstractmethod
+    def max_text_length(self) -> int:
+        """Maximum text length in characters that this service accepts."""
+        ...
+
+    @abstractmethod
     async def synthesize(
         self,
         text: str,
@@ -84,18 +93,67 @@ class SpeechService(object):
             SpeechResult containing the audio data and metadata.
 
         Raises:
-            ValueError: If text is empty or too long, or speed is out of range.
-            RuntimeError: If the TTS API call fails.
+            SpeechError: If validation fails or synthesis fails.
+        """
+        ...
+
+
+class OpenAISpeechService(object):
+    """Speech synthesis service using OpenAI TTS API."""
+
+    # OpenAI TTS API limits
+    MaxTextLength = 4096
+
+    def __init__(self, api_key: p.SecretStr) -> None:
+        """Initialize the speech service.
+
+        Args:
+            api_key: OpenAI API key.
+        """
+        self._client = AsyncOpenAI(api_key=api_key.get_secret_value())
+
+    @property
+    def max_text_length(self) -> int:
+        """Maximum text length in characters (4096 for OpenAI TTS)."""
+        return self.MaxTextLength
+
+    async def synthesize(
+        self,
+        text: str,
+        *,
+        voice: Voice = Voice.NOVA,
+        format: SpeechFormat = SpeechFormat.MP3,
+        speed: float = 1.0,
+    ) -> SpeechResult:
+        """Convert text to speech using OpenAI TTS.
+
+        Args:
+            text: The text to convert to speech.
+            voice: The voice to use for synthesis.
+            format: The output audio format.
+            speed: The speed of the generated audio (0.25 to 4.0).
+
+        Returns:
+            SpeechResult containing the audio data and metadata.
+
+        Raises:
+            SpeechError: If validation fails or API call fails.
         """
         # Validate inputs
         if not text or not text.strip():
-            raise ValueError("Text cannot be empty")
+            raise SpeechError("Text cannot be empty", code="empty_text")
 
-        if len(text) > self.MAX_TEXT_LENGTH:
-            raise ValueError(f"Text exceeds maximum length of {self.MAX_TEXT_LENGTH} characters")
+        if len(text) > self.max_text_length:
+            raise SpeechError(
+                f"Text length {len(text)} exceeds maximum {self.max_text_length} characters",
+                code="text_too_long",
+            )
 
         if not 0.25 <= speed <= 4.0:
-            raise ValueError("Speed must be between 0.25 and 4.0")
+            raise SpeechError(
+                "Speed must be between 0.25 and 4.0",
+                code="invalid_speed",
+            )
 
         try:
             response = await self._client.audio.speech.create(
@@ -111,9 +169,12 @@ class SpeechService(object):
 
             return SpeechResult(
                 audio_data=audio_data,
-                content_type=CONTENT_TYPES[format],
+                content_type=ContentTypes[format],
                 format=format,
             )
 
         except Exception as e:
-            raise RuntimeError(f"TTS synthesis failed: {e}") from e
+            raise SpeechError(
+                f"TTS synthesis failed: {e!s}",
+                code="api_error",
+            ) from e

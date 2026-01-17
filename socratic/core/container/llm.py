@@ -6,14 +6,8 @@ from dependency_injector.containers import DeclarativeContainer
 from dependency_injector.providers import Configuration, Factory, Provider, Singleton
 from langchain_core.language_models import BaseChatModel
 
-from socratic.llm import (
-    LLMSecrets,
-    LLMSettings,
-    ModelFactory,
-    SpeechService,
-    TranscriptionService,
-    WhisperTranscriptionService,
-)
+from socratic.llm import LLMSecrets, LLMSettings, ModelFactory, OpenAISpeechService, SpeechService, \
+    TranscriptionService, WhisperTranscriptionService
 
 
 def provide_dialogue_model(factory: ModelFactory) -> BaseChatModel:
@@ -54,6 +48,6 @@ class LLMContainer(DeclarativeContainer):
     )
 
     speech: Provider[SpeechService] = Singleton(
-        SpeechService,
+        OpenAISpeechService,
         api_key=secrets.secret_key,
     )
