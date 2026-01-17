@@ -5,14 +5,12 @@ from __future__ import annotations
 import io
 import typing as t
 from abc import abstractmethod
-from dataclasses import dataclass
 
+import pydantic as p
 from openai import AsyncOpenAI
-from pydantic import SecretStr
 
 
-@dataclass
-class TranscriptionResult:
+class TranscriptionResult(p.BaseModel):
     """Result from transcription."""
 
     text: str
@@ -98,7 +96,7 @@ class WhisperTranscriptionService(object):
         "video/webm",  # MediaRecorder may use video/webm for audio+video
     })
 
-    def __init__(self, api_key: SecretStr) -> None:
+    def __init__(self, api_key: p.SecretStr) -> None:
         self._client = AsyncOpenAI(api_key=api_key.get_secret_value())
 
     @property
