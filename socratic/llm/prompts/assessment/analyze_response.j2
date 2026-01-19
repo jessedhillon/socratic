@@ -10,11 +10,13 @@ Analyze the learner's response for quality signals. This is an internal analysis
 
 ## Rubric Criteria to Consider
 {% for criterion in rubric_criteria %}
-- {{ criterion.name }}: {{ criterion.description }}
-  - Evidence indicators: {{ criterion.evidence_indicators | join(", ") }}
-  {% if criterion.failure_modes %}
-  - Failure modes: {{ criterion.failure_modes | join(", ") }}
-  {% endif %}
+### {{ criterion.name }}
+{{ criterion.description }}
+
+Proficiency levels (use these to gauge quality of response):
+{% for level in criterion.proficiency_levels %}
+- **{{ level.grade }}**: {{ level.description }}
+{% endfor %}
 {% endfor %}
 
 ## Analysis Required
