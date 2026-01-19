@@ -3,6 +3,19 @@ Deliver the following educator-defined question to the learner.
 ## Question to Ask ({{ prompt_number }} of {{ total_prompts }})
 {{ current_prompt }}
 
+{% if pacing %}
+## Pacing Status
+- Elapsed: {{ pacing.elapsed_minutes }} minutes of {{ pacing.estimated_total_minutes }} estimated ({{ pacing.percent_elapsed }}%)
+- Remaining: {{ pacing.remaining_minutes }} minutes
+- Status: {{ pacing.pace }}
+
+{% if pacing.pace == "behind" or pacing.pace == "overtime" %}
+**Time pressure**: We're running {{ "over time" if pacing.pace == "overtime" else "behind schedule" }}. Present the question directly without extended preamble. Remaining questions may need lighter exploration.
+{% elif pacing.pace == "ahead" %}
+**Time available**: We're ahead of schedule. You can use a warmer, more conversational lead-in if appropriate.
+{% endif %}
+{% endif %}
+
 ## Instructions
 - Present this question naturally as part of the conversation
 - You may rephrase slightly to maintain conversational flow, but preserve the intent
