@@ -117,6 +117,16 @@ def calculate_pacing_status(
     )
 
 
+class CompletionAnalysis(TypedDict):
+    """Result of AI-driven completion analysis."""
+
+    completion_ready: bool
+    confidence: str  # "HIGH", "MEDIUM", or "LOW"
+    criteria_status: dict[str, str]  # criterion_name -> status
+    reasoning: str
+    summary: str | None
+
+
 # Using a regular dict type alias for more flexible state handling
 # TypedDict is too strict for LangGraph's dynamic state updates
 AgentState = dict[str, t.Any]
@@ -150,4 +160,6 @@ Expected keys:
 - current_point: str | None - For inconsistency probing
 - probing_topic: str | None - Current topic being probed
 - key_points_summary: list[str] - For closure
+- completion_analysis: CompletionAnalysis | None - Result of AI completion check
+- completion_ready: bool - Whether AI determined assessment should complete
 """

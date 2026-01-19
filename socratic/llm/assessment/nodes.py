@@ -9,7 +9,7 @@ import jinja2
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from .state import AgentState, calculate_pacing_status, CoverageLevel, InterviewPhase
+from .state import AgentState, calculate_pacing_status, CompletionAnalysis, CoverageLevel, InterviewPhase
 
 if t.TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -290,6 +290,113 @@ def _extract_quote(text: str, keyword: str) -> str | None:
     pattern = rf'{keyword}[^"]*"([^"]+)"'
     match = regex.search(pattern, text, regex.IGNORECASE)
     return match.group(1) if match else None
+
+
+async def analyze_completion_node(
+    state: AgentState,
+    model: BaseChatModel,
+    env: jinja2.Environment,
+) -> dict[str, t.Any]:
+    """Analyze whether the assessment should conclude.
+
+    Uses AI to determine if all criteria have been sufficiently explored
+    and whether further probing would yield meaningful information.
+    """
+    messages = state.get("messages", [])
+    initial_prompts = state.get("initial_prompts", [])
+    current_index = state.get("current_prompt_index", 0)
+
+    # Only run completion analysis if we've covered all prompts
+    if current_index < len(initial_prompts):
+        return {"completion_ready": False}
+
+    system_prompt = build_system_prompt(env, state)
+    completion_prompt = render_template(
+        env,
+        "assessment/analyze_completion.j2",
+        objective_title=state.get("objective_title", ""),
+        rubric_criteria=state.get("rubric_criteria", []),
+        conversation_summary=summarize_conversation(messages),
+        prompts_completed=current_index,
+        total_prompts=len(initial_prompts),
+        probing_depth=state.get("probing_depth", 0),
+    )
+
+    completion_messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=completion_prompt),
+    ]
+
+    response = await model.ainvoke(completion_messages)
+    response_text = get_content_str(response.content)
+
+    # Parse the structured response
+    analysis = _parse_completion_response(response_text, state.get("rubric_criteria", []))
+
+    return {
+        "completion_analysis": analysis,
+        "completion_ready": analysis["completion_ready"],
+    }
+
+
+def _parse_completion_response(response_text: str, rubric_criteria: list[dict[str, t.Any]]) -> CompletionAnalysis:
+    """Parse the structured completion analysis response from the LLM."""
+    lines = response_text.strip().split("\n")
+
+    completion_ready = False
+    confidence = "MEDIUM"
+    criteria_status: dict[str, str] = {}
+    reasoning = ""
+    summary: str | None = None
+
+    current_section = ""
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        if line.startswith("COMPLETION_READY:"):
+            value = line.split(":", 1)[1].strip().upper()
+            completion_ready = value == "YES"
+        elif line.startswith("CONFIDENCE:"):
+            confidence = line.split(":", 1)[1].strip().upper()
+            if confidence not in ("HIGH", "MEDIUM", "LOW"):
+                confidence = "MEDIUM"
+        elif line.startswith("CRITERIA_STATUS:"):
+            current_section = "criteria"
+        elif line.startswith("REASONING:"):
+            current_section = "reasoning"
+            reasoning = line.split(":", 1)[1].strip()
+        elif line.startswith("SUMMARY:"):
+            current_section = "summary"
+            summary = line.split(":", 1)[1].strip()
+        elif current_section == "criteria" and line.startswith("-"):
+            # Parse criterion status line: "- Criterion Name: STATUS"
+            parts = line[1:].strip().split(":", 1)
+            if len(parts) == 2:
+                criterion_name = parts[0].strip()
+                status = parts[1].strip().upper()
+                if status in ("FULLY_EXPLORED", "PARTIALLY_EXPLORED", "NOT_TOUCHED"):
+                    criteria_status[criterion_name] = status
+        elif current_section == "reasoning":
+            reasoning += " " + line
+        elif current_section == "summary" and summary is not None:
+            summary += " " + line
+
+    # Default any missing criteria to NOT_TOUCHED
+    for criterion in rubric_criteria:
+        name = criterion.get("name", "")
+        if name and name not in criteria_status:
+            criteria_status[name] = "NOT_TOUCHED"
+
+    return CompletionAnalysis(
+        completion_ready=completion_ready,
+        confidence=confidence,
+        criteria_status=criteria_status,
+        reasoning=reasoning.strip(),
+        summary=summary.strip() if summary else None,
+    )
 
 
 async def dynamic_probing_node(

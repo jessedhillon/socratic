@@ -78,10 +78,43 @@ def check_more_prompts(state: AgentState) -> Literal["primary_prompts", "check_e
     return "check_extension"
 
 
+def check_completion(state: AgentState) -> Literal["extension", "closure", "continue"]:
+    """Check if AI determined the assessment should complete.
+
+    Routes based on completion_ready signal and extension policy.
+    If completion_ready is True, goes to closure (skipping extension).
+    If completion_ready is False and extension allowed, goes to extension.
+    Otherwise goes to closure.
+    """
+    completion_ready = state.get("completion_ready", False)
+
+    # If AI says we're done, go straight to closure
+    if completion_ready:
+        return "closure"
+
+    # Otherwise check extension policy
+    extension_policy = state.get("extension_policy", "disallowed")
+
+    if extension_policy == "allowed":
+        return "extension"
+
+    if extension_policy == "conditional":
+        # Check if all criteria were at least partially explored
+        completion_analysis = state.get("completion_analysis")
+        if completion_analysis:
+            criteria_status = completion_analysis.get("criteria_status", {})
+            all_touched = all(status != "NOT_TOUCHED" for status in criteria_status.values())
+            if all_touched:
+                return "extension"
+
+    return "closure"
+
+
 def check_extension(state: AgentState) -> Literal["extension", "closure"]:
     """Check if extension phase should be entered.
 
     Routes to extension if policy allows, closure otherwise.
+    Note: For AI-driven completion, prefer using check_completion instead.
     """
     extension_policy = state.get("extension_policy", "disallowed")
 
