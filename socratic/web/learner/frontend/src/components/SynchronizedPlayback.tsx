@@ -84,12 +84,21 @@ const SynchronizedPlayback: React.FC<SynchronizedPlaybackProps> = ({
     [wordTimings]
   );
 
-  // Format time as mm:ss
+  // Format time as mm:ss, handling invalid values
   const formatTime = (seconds: number): string => {
+    if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) {
+      return '--:--';
+    }
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Use word timings to estimate duration if media duration is unavailable
+  const estimatedDuration =
+    wordTimings.length > 0 ? wordTimings[wordTimings.length - 1].end : 0;
+  const displayDuration =
+    isFinite(duration) && duration > 0 ? duration : estimatedDuration;
 
   return (
     <div className={`synchronized-playback ${className}`}>
@@ -115,7 +124,7 @@ const SynchronizedPlayback: React.FC<SynchronizedPlaybackProps> = ({
       {/* Playback Info */}
       <div className="flex items-center gap-4 mb-4 text-sm text-gray-600">
         <span>
-          {formatTime(currentTime)} / {formatTime(duration)}
+          {formatTime(currentTime)} / {formatTime(displayDuration)}
         </span>
         <span
           className={`px-2 py-0.5 rounded ${isPlaying ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}
