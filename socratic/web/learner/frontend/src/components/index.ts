@@ -8,3 +8,9 @@ export { VoiceInput, SpeakButton } from './assessment';
 export type { VoiceInputProps } from './assessment';
 
 export { default as LearnerLayout } from './LearnerLayout';
+
+export { default as SynchronizedPlayback } from './SynchronizedPlayback';
+export type {
+  SynchronizedPlaybackProps,
+  WordTiming,
+} from './SynchronizedPlayback';

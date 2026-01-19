@@ -27,6 +27,7 @@ __all__ = [
     "TranscriptionResult",
     "TranscriptionError",
     "WhisperTranscriptionService",
+    "WordTiming",
     # Speech synthesis
     "SpeechService",
     "SpeechResult",
@@ -42,4 +43,5 @@ from .provider import create_chat_model, LLMMessage, LLMResponse, MessageRole, m
     ProviderType, TokenTracker, TokenUsage
 from .speech import OpenAISpeechService, OpenAIVoice, SpeechError, SpeechFormat, SpeechResult, SpeechService
 from .tokens import CostEstimate, estimate_cost, estimate_tokens
-from .transcription import TranscriptionError, TranscriptionResult, TranscriptionService, WhisperTranscriptionService
+from .transcription import TranscriptionError, TranscriptionResult, TranscriptionService, WhisperTranscriptionService, \
+    WordTiming
