@@ -8,6 +8,15 @@ from abc import abstractmethod
 
 import pydantic as p
 from openai import AsyncOpenAI
+from openai.types.audio import Transcription
+
+
+class WordTiming(p.BaseModel):
+    """Word-level timing from transcription."""
+
+    word: str
+    start: float  # Start time in seconds
+    end: float  # End time in seconds
 
 
 class TranscriptionResult(p.BaseModel):
@@ -16,6 +25,7 @@ class TranscriptionResult(p.BaseModel):
     text: str
     duration: float | None = None
     language: str | None = None
+    words: list[WordTiming] | None = None  # Word-level timings (optional)
 
 
 class TranscriptionError(Exception):
@@ -60,6 +70,7 @@ class TranscriptionService(t.Protocol):
         filename: str = "audio.webm",
         content_type: str = "audio/webm",
         language: str | None = None,
+        include_word_timings: bool = False,
     ) -> TranscriptionResult:
         """Transcribe audio data to text.
 
@@ -68,6 +79,7 @@ class TranscriptionService(t.Protocol):
             filename: Original filename (used for format detection)
             content_type: MIME type of the audio
             language: Optional ISO language code hint
+            include_word_timings: If True, request word-level timing data
 
         Returns:
             TranscriptionResult with text and optional metadata
@@ -119,6 +131,7 @@ class WhisperTranscriptionService(object):
         filename: str = "audio.webm",
         content_type: str = "audio/webm",
         language: str | None = None,
+        include_word_timings: bool = False,
     ) -> TranscriptionResult:
         """Transcribe audio data to text using OpenAI Whisper.
 
@@ -127,6 +140,7 @@ class WhisperTranscriptionService(object):
             filename: Original filename (used for format detection)
             content_type: MIME type of the audio
             language: Optional ISO language code to hint to Whisper
+            include_word_timings: If True, request word-level timing data
 
         Returns:
             TranscriptionResult with text and optional metadata
@@ -154,28 +168,47 @@ class WhisperTranscriptionService(object):
             audio_file = io.BytesIO(audio_data)
             audio_file.name = filename
 
+            # Build API call arguments
+            api_args: dict[str, t.Any] = {
+                "model": "whisper-1",
+                "file": audio_file,
+                "response_format": "verbose_json",
+            }
+
             if language is not None:
-                response = await self._client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    language=language,
-                    response_format="verbose_json",
-                )
-            else:
-                response = await self._client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    response_format="verbose_json",
-                )
+                api_args["language"] = language
+
+            if include_word_timings:
+                api_args["timestamp_granularities"] = ["word"]
+
+            response = t.cast(
+                Transcription,
+                await self._client.audio.transcriptions.create(**api_args),
+            )
 
             # verbose_json format returns additional fields as a dict
             # but the SDK returns a Transcription object with .text
             # Use model_dump to access all fields
-            response_dict: dict[str, t.Any] = response.model_dump()
+            response_dict = response.model_dump()
+
+            # Parse word-level timings if requested and available
+            words: list[WordTiming] | None = None
+            if include_word_timings and "words" in response_dict:
+                raw_words = t.cast(list[dict[str, t.Any]], response_dict["words"])
+                words = [
+                    WordTiming(
+                        word=str(w.get("word", "")),
+                        start=float(w.get("start", 0.0)),
+                        end=float(w.get("end", 0.0)),
+                    )
+                    for w in raw_words
+                ]
+
             return TranscriptionResult(
                 text=str(response_dict.get("text", "")),
                 duration=t.cast(float | None, response_dict.get("duration")),
                 language=t.cast(str | None, response_dict.get("language")),
+                words=words,
             )
 
         except Exception as e:

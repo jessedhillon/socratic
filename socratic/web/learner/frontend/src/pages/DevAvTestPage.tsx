@@ -11,7 +11,9 @@ import {
   PermissionGate,
   VoiceInput,
   SpeakButton,
+  SynchronizedPlayback,
   type CameraPreviewProps,
+  type WordTiming,
 } from '../components';
 
 const recordingStateColors: Record<RecordingState, string> = {
@@ -100,6 +102,20 @@ const DevAvTestPage: React.FC = () => {
   );
   const [ttsVoice, setTtsVoice] = useState<TTSVoice>('nova');
   const [ttsSpeed, setTtsSpeed] = useState(1.0);
+
+  // Synchronized playback test state (SOC-108)
+  const [showSyncTest, setShowSyncTest] = useState(false);
+  const [syncRecordingBlob, setSyncRecordingBlob] = useState<Blob | null>(null);
+  const [syncPlaybackUrl, setSyncPlaybackUrl] = useState<string | null>(null);
+  const [syncWordTimings, setSyncWordTimings] = useState<WordTiming[]>([]);
+  const [syncIsTranscribing, setSyncIsTranscribing] = useState(false);
+  const [syncTranscriptText, setSyncTranscriptText] = useState<string>('');
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  const syncRecording = useMediaRecorder({
+    video: false,
+    audio: true,
+  });
 
   const recording = useMediaRecorder({
     video: !audioOnly,
@@ -191,6 +207,76 @@ const DevAvTestPage: React.FC = () => {
 
   const hasStream = !!recording.stream;
   const hasVideo = recording.stream?.getVideoTracks().length ?? 0 > 0;
+
+  // Synchronized playback handlers
+  const handleSyncStopRecording = async () => {
+    await syncRecording.stop();
+    const blob = syncRecording.getBlob();
+    if (blob) {
+      setSyncRecordingBlob(blob);
+      // Clean up old URL if exists
+      if (syncPlaybackUrl) {
+        URL.revokeObjectURL(syncPlaybackUrl);
+      }
+      setSyncPlaybackUrl(URL.createObjectURL(blob));
+    }
+  };
+
+  const handleSyncTranscribe = async () => {
+    if (!syncRecordingBlob) return;
+
+    setSyncIsTranscribing(true);
+    setSyncError(null);
+    setSyncWordTimings([]);
+    setSyncTranscriptText('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', syncRecordingBlob, 'recording.webm');
+      formData.append('include_word_timings', 'true');
+
+      const token = localStorage.getItem('access_token');
+      const response = await fetch('/api/transcription', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      setSyncTranscriptText(data.text || '');
+
+      if (data.words && Array.isArray(data.words)) {
+        setSyncWordTimings(
+          data.words.map((w: { word: string; start: number; end: number }) => ({
+            word: w.word,
+            start: w.start,
+            end: w.end,
+          }))
+        );
+      }
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Transcription failed');
+    } finally {
+      setSyncIsTranscribing(false);
+    }
+  };
+
+  const handleSyncReset = () => {
+    syncRecording.reset();
+    if (syncPlaybackUrl) {
+      URL.revokeObjectURL(syncPlaybackUrl);
+    }
+    setSyncRecordingBlob(null);
+    setSyncPlaybackUrl(null);
+    setSyncWordTimings([]);
+    setSyncTranscriptText('');
+    setSyncError(null);
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -859,6 +945,137 @@ const DevAvTestPage: React.FC = () => {
             Click the speaker icon to play. Click again while playing to stop.
             Watch for loading spinner and pause icon states.
           </p>
+        </section>
+
+        {/* Synchronized Playback Test (SOC-108) */}
+        <section className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">
+            Synchronized Playback (SOC-108)
+          </h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Full loop demo: Record audio → Transcribe with word timing → Replay
+            with synchronized highlighting.
+          </p>
+
+          <div className="flex items-center gap-4 mb-4">
+            <button
+              onClick={() => {
+                setShowSyncTest(!showSyncTest);
+                if (showSyncTest) handleSyncReset();
+              }}
+              className={`px-4 py-2 rounded text-white ${
+                showSyncTest
+                  ? 'bg-red-500 hover:bg-red-600'
+                  : 'bg-green-500 hover:bg-green-600'
+              }`}
+            >
+              {showSyncTest ? 'Hide Test' : 'Show Test'}
+            </button>
+          </div>
+
+          {showSyncTest && (
+            <div className="space-y-4">
+              {/* Step 1: Record */}
+              <div className="bg-blue-50 rounded-lg p-4">
+                <h3 className="font-medium text-blue-800 mb-2">
+                  Step 1: Record Audio
+                </h3>
+                <div className="flex items-center gap-4 mb-2">
+                  <span
+                    className={`px-2 py-1 rounded text-sm text-white ${recordingStateColors[syncRecording.state]}`}
+                  >
+                    {syncRecording.state}
+                  </span>
+                  <span className="font-mono">
+                    {Math.floor(syncRecording.duration)}s
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => syncRecording.start()}
+                    disabled={syncRecording.state !== 'idle'}
+                    className="px-3 py-1.5 bg-green-500 text-white rounded text-sm hover:bg-green-600 disabled:bg-gray-300"
+                  >
+                    Start
+                  </button>
+                  <button
+                    onClick={handleSyncStopRecording}
+                    disabled={syncRecording.state !== 'recording'}
+                    className="px-3 py-1.5 bg-red-500 text-white rounded text-sm hover:bg-red-600 disabled:bg-gray-300"
+                  >
+                    Stop
+                  </button>
+                  <button
+                    onClick={handleSyncReset}
+                    className="px-3 py-1.5 bg-gray-500 text-white rounded text-sm hover:bg-gray-600"
+                  >
+                    Reset
+                  </button>
+                </div>
+                {syncRecordingBlob && (
+                  <p className="text-sm text-green-700 mt-2">
+                    Recording saved:{' '}
+                    {(syncRecordingBlob.size / 1024).toFixed(1)} KB
+                  </p>
+                )}
+              </div>
+
+              {/* Step 2: Transcribe */}
+              <div
+                className={`rounded-lg p-4 ${syncRecordingBlob ? 'bg-yellow-50' : 'bg-gray-100'}`}
+              >
+                <h3
+                  className={`font-medium mb-2 ${syncRecordingBlob ? 'text-yellow-800' : 'text-gray-500'}`}
+                >
+                  Step 2: Transcribe with Word Timing
+                </h3>
+                <button
+                  onClick={handleSyncTranscribe}
+                  disabled={!syncRecordingBlob || syncIsTranscribing}
+                  className="px-3 py-1.5 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600 disabled:bg-gray-300"
+                >
+                  {syncIsTranscribing ? 'Transcribing...' : 'Transcribe'}
+                </button>
+                {syncError && (
+                  <p className="text-sm text-red-600 mt-2">
+                    Error: {syncError}
+                  </p>
+                )}
+                {syncTranscriptText && (
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-700">
+                      <strong>Text:</strong> {syncTranscriptText}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {syncWordTimings.length} words with timing data
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Step 3: Synchronized Playback */}
+              <div
+                className={`rounded-lg p-4 ${syncWordTimings.length > 0 ? 'bg-green-50' : 'bg-gray-100'}`}
+              >
+                <h3
+                  className={`font-medium mb-2 ${syncWordTimings.length > 0 ? 'text-green-800' : 'text-gray-500'}`}
+                >
+                  Step 3: Synchronized Playback
+                </h3>
+                {syncPlaybackUrl && syncWordTimings.length > 0 ? (
+                  <SynchronizedPlayback
+                    mediaUrl={syncPlaybackUrl}
+                    isVideo={false}
+                    wordTimings={syncWordTimings}
+                  />
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    Complete steps 1 and 2 to see synchronized playback.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Recording Stats */}
