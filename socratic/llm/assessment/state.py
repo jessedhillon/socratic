@@ -18,6 +18,14 @@ class InterviewPhase(enum.Enum):
     Complete = "complete"
 
 
+class CoverageLevel(enum.Enum):
+    """Coverage level for a rubric criterion."""
+
+    NotStarted = "not_started"
+    PartiallyExplored = "partially_explored"
+    FullyExplored = "fully_explored"
+
+
 GradeLevel = t.Literal["S", "A", "C", "F"]
 """Valid grade levels for proficiency assessment."""
 
@@ -42,6 +50,16 @@ class RubricCriterionContext(TypedDict):
     proficiency_levels: list[ProficiencyLevelContext]
 
 
+class CriteriaCoverageEntry(TypedDict):
+    """Tracking entry for criterion coverage during assessment."""
+
+    criterion_id: str
+    criterion_name: str
+    coverage_level: str  # CoverageLevel.value
+    evidence_found: list[str]  # Specific evidence observed
+    last_touched_turn: int  # Turn number when last explored
+
+
 # Using a regular dict type alias for more flexible state handling
 # TypedDict is too strict for LangGraph's dynamic state updates
 AgentState = dict[str, t.Any]
@@ -60,7 +78,9 @@ Expected keys:
 - challenge_prompts: list[str] - Additional probing questions
 - extension_policy: str - "allowed", "disallowed", or "conditional"
 - rubric_criteria: list[RubricCriterionContext] - Serialized criteria
+- criteria_coverage: dict[str, CriteriaCoverageEntry] - Tracking coverage per criterion
 - current_prompt_index: int - Progress through prompts
+- current_turn: int - Turn counter for tracking
 - probing_depth: int - Follow-up depth for current prompt
 - max_probing_depth: int - Maximum follow-ups allowed
 - learner_consent_confirmed: bool - Whether consent was given

@@ -12,7 +12,7 @@ from langgraph.graph import END, StateGraph
 from .edges import after_extension, check_consent, check_extension, check_more_prompts, should_probe
 from .nodes import analyze_response_node, closure_node, dynamic_probing_node, extension_node, orientation_node, \
     primary_prompts_node
-from .state import AgentState
+from .state import AgentState, CoverageLevel
 
 if t.TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -147,6 +147,18 @@ def create_initial_state(
     Returns:
         Initial AgentState ready for graph execution
     """
+    # Initialize criteria coverage tracking
+    criteria_coverage: dict[str, dict[str, t.Any]] = {}
+    for criterion in rubric_criteria:
+        criterion_id = criterion.get("criterion_id", "")
+        criteria_coverage[criterion_id] = {
+            "criterion_id": criterion_id,
+            "criterion_name": criterion.get("name", ""),
+            "coverage_level": CoverageLevel.NotStarted.value,
+            "evidence_found": [],
+            "last_touched_turn": 0,
+        }
+
     return AgentState(
         messages=[],
         phase=None,  # Will be set by first node
@@ -160,7 +172,9 @@ def create_initial_state(
         challenge_prompts=challenge_prompts or [],
         extension_policy=extension_policy,
         rubric_criteria=rubric_criteria,
+        criteria_coverage=criteria_coverage,
         current_prompt_index=0,
+        current_turn=0,
         probing_depth=0,
         max_probing_depth=max_probing_depth,
         learner_consent_confirmed=False,

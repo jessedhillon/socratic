@@ -16,6 +16,20 @@ Generate a follow-up question to probe deeper into the learner's understanding.
 ## Probing Depth
 This is follow-up #{{ probing_depth + 1 }}. Be proportionally more direct if this is a repeated follow-up.
 
+{% if criteria_coverage %}
+## Criteria Coverage Status
+{% set unexplored = criteria_coverage.values() | selectattr("coverage_level", "eq", "not_started") | list %}
+{% set partial = criteria_coverage.values() | selectattr("coverage_level", "eq", "partially_explored") | list %}
+{% if unexplored %}
+**Unexplored criteria**: {{ unexplored | map(attribute="criterion_name") | join(", ") }}
+{% endif %}
+{% if partial %}
+**Partially explored**: {{ partial | map(attribute="criterion_name") | join(", ") }}
+{% endif %}
+
+Consider steering the follow-up question to address unexplored or partially explored criteria when appropriate.
+{% endif %}
+
 {% if challenge_prompts %}
 ## Available Challenge Prompts (use if appropriate)
 {% for prompt in challenge_prompts %}

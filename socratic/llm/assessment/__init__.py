@@ -2,6 +2,8 @@
 
 __all__ = [
     "AgentState",
+    "CoverageLevel",
+    "CriteriaCoverageEntry",
     "GradeLevel",
     "InterviewPhase",
     "PostgresCheckpointer",
@@ -17,4 +19,12 @@ __all__ = [
 from .checkpointer import PostgresCheckpointer
 from .graph import build_assessment_graph, create_initial_state
 from .runner import get_assessment_status, run_assessment_turn, start_assessment
-from .state import AgentState, GradeLevel, InterviewPhase, ProficiencyLevelContext, RubricCriterionContext
+from .state import (
+    AgentState,
+    CoverageLevel,
+    CriteriaCoverageEntry,
+    GradeLevel,
+    InterviewPhase,
+    ProficiencyLevelContext,
+    RubricCriterionContext,
+)
