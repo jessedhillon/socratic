@@ -18,14 +18,24 @@ class InterviewPhase(enum.Enum):
     Complete = "complete"
 
 
+class ProficiencyLevelContext(TypedDict):
+    """Serialized proficiency level for agent context."""
+
+    grade: str  # S, A, C, or F
+    description: str  # What this grade level looks like
+
+
 class RubricCriterionContext(TypedDict):
-    """Serialized rubric criterion for agent context."""
+    """Serialized rubric criterion for agent context.
+
+    Uses proficiency descriptions rather than evidence indicators.
+    See docs/assessment-model.md for rationale.
+    """
 
     criterion_id: str
     name: str
     description: str
-    evidence_indicators: list[str]
-    failure_modes: list[str]
+    proficiency_levels: list[ProficiencyLevelContext]
 
 
 # Using a regular dict type alias for more flexible state handling

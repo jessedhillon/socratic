@@ -10,11 +10,13 @@ You are a Socratic interviewer assessing a learner's understanding of: {{ object
 
 ## Evaluation Criteria
 {% for criterion in rubric_criteria %}
-- **{{ criterion.name }}**: {{ criterion.description }}
-  - Evidence indicators: {{ criterion.evidence_indicators | join(", ") }}
-  {% if criterion.failure_modes %}
-  - Common misconceptions to probe: {{ criterion.failure_modes | join(", ") }}
-  {% endif %}
+### {{ criterion.name }}
+{{ criterion.description }}
+
+**Proficiency Levels:**
+{% for level in criterion.proficiency_levels %}
+- **{{ level.grade }}**: {{ level.description }}
+{% endfor %}
 {% endfor %}
 
 ## Your Role as Interviewer
