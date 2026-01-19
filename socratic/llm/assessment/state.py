@@ -18,10 +18,14 @@ class InterviewPhase(enum.Enum):
     Complete = "complete"
 
 
+GradeLevel = t.Literal["S", "A", "C", "F"]
+"""Valid grade levels for proficiency assessment."""
+
+
 class ProficiencyLevelContext(TypedDict):
     """Serialized proficiency level for agent context."""
 
-    grade: str  # S, A, C, or F
+    grade: GradeLevel
     description: str  # What this grade level looks like
 
 
