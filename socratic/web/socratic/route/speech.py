@@ -1,0 +1,45 @@
+"""Speech synthesis routes."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
+
+from socratic.auth import AuthContext, require_learner
+from socratic.core import di
+from socratic.llm import SpeechError, SpeechService
+from socratic.web.socratic.view.speech import SpeechRequest
+
+router = APIRouter(prefix="/api/speech", tags=["speech"])
+
+
+@router.post("", operation_id="synthesize_speech")
+@di.inject
+async def synthesize_speech_route(
+    request: SpeechRequest,
+    auth: AuthContext = Depends(require_learner),
+    speech: SpeechService = Depends(di.Provide["llm.speech"]),
+) -> Response:
+    """Synthesize speech from text.
+
+    Returns audio data in the requested format.
+    """
+    try:
+        result = await speech.synthesize(
+            request.text,
+            voice=request.voice,
+            format=request.format,
+            speed=request.speed,
+        )
+
+        return Response(
+            content=result.audio_data,
+            media_type=result.content_type,
+            headers={
+                "Content-Disposition": f'inline; filename="speech.{result.format.value}"',
+            },
+        )
+
+    except SpeechError as e:
+        status_code = 400 if e.code in ("empty_text", "text_too_long", "invalid_speed") else 500
+        raise HTTPException(status_code=status_code, detail=str(e)) from e

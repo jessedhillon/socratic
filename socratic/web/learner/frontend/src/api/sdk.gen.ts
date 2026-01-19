@@ -149,6 +149,8 @@ import type {
   AddFeedbackData,
   AddFeedbackResponse,
   AddFeedbackError,
+  SynthesizeSpeechData,
+  SynthesizeSpeechError,
   TranscribeAudioData,
   TranscribeAudioResponse,
   TranscribeAudioError,
@@ -1419,6 +1421,35 @@ export const addFeedback = <ThrowOnError extends boolean = false>(
       },
     ],
     url: '/api/reviews/{attempt_id}/feedback',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+};
+
+/**
+ * Synthesize Speech Route
+ * Synthesize speech from text.
+ *
+ * Returns audio data in the requested format.
+ */
+export const synthesizeSpeech = <ThrowOnError extends boolean = false>(
+  options: Options<SynthesizeSpeechData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).post<
+    unknown,
+    SynthesizeSpeechError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/speech',
     ...options,
     headers: {
       'Content-Type': 'application/json',
