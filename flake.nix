@@ -118,7 +118,7 @@
         ];
 
         devshell.startup.create-dirs.text = ''
-          mkdir -p "$RABBITMQ_HOME" "$RABBITMQ_MNESIA_BASE" "$(dirname "$RABBITMQ_LOGS")" "$XDG_STATE_HOME/redis"
+          mkdir -p "$RABBITMQ_HOME" "$RABBITMQ_MNESIA_BASE" "$(dirname "$RABBITMQ_LOGS")" "$XDG_STATE_HOME/redis" "$XDG_STATE_HOME/remote-profile"
         '';
 
         packages = with pkgs; [
@@ -144,20 +144,20 @@
           {
             name = "sandbox-claude";
             command = ''
-            GIT_SSH_COMMAND='ssh -F /dev/null -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519' \
-            bwrap --bind / / \
-            --remount-ro / \
-            --ro-bind /nix /nix \
-            --bind "$(pwd)" "$(pwd)" \
-            --bind "/home/jesse/.cache" "/home/jesse/.cache" \
-            --bind "/home/jesse/.ansible" "/home/jesse/.ansible" \
-            --bind "/home/jesse/.npm" "/home/jesse/.npm" \
-            --chdir "$(pwd)" \
-            --proc /proc \
-            --dev /dev \
-            --tmpfs /tmp \
-            -- \
-            claude --dangerously-skip-permissions'';
+              GIT_SSH_COMMAND='ssh -F /dev/null -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519' \
+              bwrap --bind / / \
+              --remount-ro / \
+              --ro-bind /nix /nix \
+              --bind "$(pwd)" "$(pwd)" \
+              --bind "/home/jesse/.cache" "/home/jesse/.cache" \
+              --bind "/home/jesse/.ansible" "/home/jesse/.ansible" \
+              --bind "/home/jesse/.npm" "/home/jesse/.npm" \
+              --chdir "$(pwd)" \
+              --proc /proc \
+              --dev /dev \
+              --tmpfs /tmp \
+              -- \
+              claude --dangerously-skip-permissions'';
           }
           {
             name = "install-hooks";
@@ -218,6 +218,11 @@
               echo "$APP_NAME API clients generated successfully"
             '';
             help = "generate TypeScript API clients from OpenAPI specs";
+          }
+          {
+            name = "debug-browser";
+            command = "google-chrome-stable --remote-debugging-port=9222 --user-data-dir=$XDG_STATE_HOME/remote-profile > $XDG_STATE_HOME/chrome.log 2>&1 &";
+            help = "launch an instance of Chrome with remote-debugging enabled on 9222";
           }
           {
             name = "dev";
