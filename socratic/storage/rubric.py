@@ -52,6 +52,8 @@ def create(
     name: str,
     description: str,
     proficiency_levels: list[ProficiencyLevelCreateParams] | None = None,
+    evidence_indicators: list[str] | None = None,
+    failure_modes: list[str] | None = None,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> RubricCriterion:
     """Create a new rubric criterion."""
@@ -64,6 +66,8 @@ def create(
         name=name,
         description=description,
         proficiency_levels=proficiency_levels_data,
+        evidence_indicators=evidence_indicators or [],
+        failure_modes=failure_modes or [],
     )
     session.execute(stmt)
     session.flush()
@@ -78,6 +82,8 @@ def update(
     name: str | NotSet = NotSet(),
     description: str | NotSet = NotSet(),
     proficiency_levels: list[ProficiencyLevelCreateParams] | NotSet = NotSet(),
+    evidence_indicators: list[str] | NotSet = NotSet(),
+    failure_modes: list[str] | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
 ) -> None:
     """Update a rubric criterion.
@@ -95,6 +101,10 @@ def update(
         values["description"] = description
     if not isinstance(proficiency_levels, NotSet):
         values["proficiency_levels"] = [pl.model_dump() for pl in proficiency_levels]
+    if not isinstance(evidence_indicators, NotSet):
+        values["evidence_indicators"] = evidence_indicators
+    if not isinstance(failure_modes, NotSet):
+        values["failure_modes"] = failure_modes
 
     if values:
         stmt = sqla.update(rubric_criteria).where(rubric_criteria.criterion_id == criterion_id).values(**values)

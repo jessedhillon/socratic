@@ -147,6 +147,8 @@ class rubric_criteria(base):
     name: Mapped[str]
     description: Mapped[str]
     proficiency_levels: Mapped[list[dict[str, t.Any]]] = mapped_column(JSONB, default_factory=list)
+    evidence_indicators: Mapped[list[str]] = mapped_column(JSONB, default_factory=list)
+    failure_modes: Mapped[list[str]] = mapped_column(JSONB, default_factory=list)
 
 
 # Assignments

@@ -16,3 +16,5 @@ class RubricCriterion(BaseModel):
     name: str
     description: str
     proficiency_levels: list[ProficiencyLevel] = []
+    evidence_indicators: list[str] = []
+    failure_modes: list[str] = []
