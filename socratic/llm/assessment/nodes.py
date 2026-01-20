@@ -9,7 +9,7 @@ import jinja2
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from .state import AgentState, InterviewPhase
+from .state import AgentState, CoverageLevel, InterviewPhase
 
 if t.TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -136,10 +136,11 @@ async def analyze_response_node(
     model: BaseChatModel,
     env: jinja2.Environment,
 ) -> dict[str, t.Any]:
-    """Analyze the learner's response for quality signals.
+    """Analyze the learner's response for quality signals and criteria coverage.
 
     This node runs internally without generating a visible message.
-    It sets flags for ambiguity, inconsistency, or evasion.
+    It sets flags for ambiguity, inconsistency, or evasion, and updates
+    criteria coverage tracking.
     """
     messages = state.get("messages", [])
     if not messages:
@@ -151,43 +152,136 @@ async def analyze_response_node(
         return {}
 
     last_learner_message = learner_messages[-1]
+    current_turn = state.get("current_turn", 0) + 1
 
     system_prompt = build_system_prompt(env, state)
-    analysis_prompt = render_template(
+
+    # First analysis: quality signals (ambiguity, inconsistency, evasion)
+    quality_prompt = render_template(
         env,
         "assessment/analyze_response.j2",
         learner_response=last_learner_message.content,
         rubric_criteria=state.get("rubric_criteria", []),
-        conversation_history=[m.content for m in messages[-6:]],  # Last 6 messages for context
+        conversation_history=[m.content for m in messages[-6:]],
     )
 
-    analysis_messages = [
+    quality_messages = [
         SystemMessage(content=system_prompt),
-        HumanMessage(content=analysis_prompt),
+        HumanMessage(content=quality_prompt),
     ]
 
-    response = await model.ainvoke(analysis_messages)
-    analysis_text = get_content_str(response.content).lower()
+    quality_response = await model.ainvoke(quality_messages)
+    quality_text = get_content_str(quality_response.content).lower()
 
-    # Parse analysis flags from response
-    detected_ambiguity = "ambiguous" in analysis_text or "unclear" in analysis_text
-    detected_inconsistency = "inconsistent" in analysis_text or "contradicts" in analysis_text
-    detected_evasion = "evasion" in analysis_text or "avoids" in analysis_text
+    # Parse quality flags
+    detected_ambiguity = "ambiguous" in quality_text or "unclear" in quality_text
+    detected_inconsistency = "inconsistent" in quality_text or "contradicts" in quality_text
+    detected_evasion = "evasion" in quality_text or "avoids" in quality_text
 
     result: dict[str, t.Any] = {
         "detected_ambiguity": detected_ambiguity,
         "detected_inconsistency": detected_inconsistency,
         "detected_evasion": detected_evasion,
+        "current_turn": current_turn,
     }
 
     # Extract context for probing if needed
     if detected_ambiguity:
-        result["ambiguous_phrase"] = _extract_quote(analysis_text, "ambiguous")
+        result["ambiguous_phrase"] = _extract_quote(quality_text, "ambiguous")
     if detected_inconsistency:
-        result["earlier_point"] = _extract_quote(analysis_text, "earlier")
-        result["current_point"] = _extract_quote(analysis_text, "now")
+        result["earlier_point"] = _extract_quote(quality_text, "earlier")
+        result["current_point"] = _extract_quote(quality_text, "now")
+
+    # Second analysis: criteria coverage
+    criteria_coverage = dict(state.get("criteria_coverage", {}))
+    rubric_criteria = state.get("rubric_criteria", [])
+
+    if rubric_criteria:
+        coverage_prompt = render_template(
+            env,
+            "assessment/analyze_coverage.j2",
+            learner_response=last_learner_message.content,
+            rubric_criteria=rubric_criteria,
+            criteria_coverage=criteria_coverage,
+            conversation_history=[m.content for m in messages[-6:]],
+        )
+
+        coverage_messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=coverage_prompt),
+        ]
+
+        coverage_response = await model.ainvoke(coverage_messages)
+        coverage_text = get_content_str(coverage_response.content)
+
+        # Parse coverage updates
+        updated_coverage = _parse_coverage_response(
+            coverage_text,
+            criteria_coverage,
+            current_turn,
+        )
+        result["criteria_coverage"] = updated_coverage
 
     return result
+
+
+def _parse_coverage_response(
+    response_text: str,
+    current_coverage: dict[str, dict[str, t.Any]],
+    current_turn: int,
+) -> dict[str, dict[str, t.Any]]:
+    """Parse the coverage analysis response and update coverage tracking.
+
+    Expected format:
+    - criterion_id: [none/partial/full] - "evidence quote"
+    """
+    updated = dict(current_coverage)
+
+    # Pattern to match coverage entries
+    pattern = r"-\s*(\S+):\s*(none|partial|full)\s*-\s*\"([^\"]*)\""
+    matches = regex.findall(pattern, response_text, regex.IGNORECASE)
+
+    for criterion_id, level, evidence in matches:
+        if criterion_id not in updated:
+            continue
+
+        entry = dict(updated[criterion_id])
+        level_lower = level.lower()
+
+        # Determine new coverage level
+        if level_lower == "full":
+            new_level = CoverageLevel.FullyExplored.value
+        elif level_lower == "partial":
+            new_level = CoverageLevel.PartiallyExplored.value
+        else:
+            new_level = entry.get("coverage_level", CoverageLevel.NotStarted.value)
+
+        # Only upgrade coverage, never downgrade
+        current_level = entry.get("coverage_level", CoverageLevel.NotStarted.value)
+        if _coverage_level_rank(new_level) > _coverage_level_rank(current_level):
+            entry["coverage_level"] = new_level
+
+        # Add evidence if provided and not "no evidence"
+        if evidence and evidence.lower() not in ("no evidence", "none", "n/a"):
+            evidence_list = list(entry.get("evidence_found", []))
+            if evidence not in evidence_list:
+                evidence_list.append(evidence)
+            entry["evidence_found"] = evidence_list
+            entry["last_touched_turn"] = current_turn
+
+        updated[criterion_id] = entry
+
+    return updated
+
+
+def _coverage_level_rank(level: str) -> int:
+    """Get numeric rank for coverage level comparison."""
+    ranks = {
+        CoverageLevel.NotStarted.value: 0,
+        CoverageLevel.PartiallyExplored.value: 1,
+        CoverageLevel.FullyExplored.value: 2,
+    }
+    return ranks.get(level, 0)
 
 
 def _extract_quote(text: str, keyword: str) -> str | None:
@@ -348,10 +442,11 @@ async def stream_node_response(
 
 def build_template_context(state: AgentState, phase: InterviewPhase) -> dict[str, t.Any]:
     """Build template context based on current phase."""
-    base_context = {
+    base_context: dict[str, t.Any] = {
         "objective_title": state.get("objective_title", ""),
         "objective_description": state.get("objective_description", ""),
         "rubric_criteria": state.get("rubric_criteria", []),
+        "criteria_coverage": state.get("criteria_coverage", {}),
     }
 
     if phase == InterviewPhase.Orientation:

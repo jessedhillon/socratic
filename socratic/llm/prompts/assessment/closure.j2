@@ -6,6 +6,20 @@ Generate a closing message that summarizes the discussion and allows the learner
 ## Summary of Discussion
 {{ conversation_summary }}
 
+{% if criteria_coverage %}
+## Criteria Coverage (internal reference)
+{% for criterion_id, coverage in criteria_coverage.items() %}
+- {{ coverage.criterion_name }}: {{ coverage.coverage_level }}
+  {% if coverage.evidence_found %}- Evidence gathered: {{ coverage.evidence_found | join("; ") }}{% endif %}
+{% endfor %}
+
+{% set fully_explored = criteria_coverage.values() | selectattr("coverage_level", "eq", "fully_explored") | list %}
+{% set partial = criteria_coverage.values() | selectattr("coverage_level", "eq", "partially_explored") | list %}
+{% set unexplored = criteria_coverage.values() | selectattr("coverage_level", "eq", "not_started") | list %}
+
+**Coverage summary**: {{ fully_explored | length }} fully explored, {{ partial | length }} partially explored, {{ unexplored | length }} not explored
+{% endif %}
+
 ## Instructions
 Generate a closing message that:
 
@@ -28,5 +42,6 @@ Generate a closing message that:
 ## Important
 - Do NOT reveal how they did or provide any evaluation
 - Do NOT hint at whether their answers were right or wrong
+- Do NOT mention the criteria coverage status to the learner
 - The summary should reflect THEIR words and ideas, not yours
 - Be accurate - don't put words in their mouth

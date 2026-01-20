@@ -17,3 +17,15 @@ Deliver the following educator-defined question to the learner.
   - {{ level.grade }}: {{ level.description }}
   {% endfor %}
 {% endfor %}
+
+{% if criteria_coverage %}
+## Criteria Coverage Status (internal tracking)
+{% for criterion_id, coverage in criteria_coverage.items() %}
+- {{ coverage.criterion_name }}: {{ coverage.coverage_level }}{% if coverage.evidence_found %} - Evidence: {{ coverage.evidence_found | join("; ") }}{% endif %}
+
+{% endfor %}
+{% set unexplored = criteria_coverage.values() | selectattr("coverage_level", "eq", "not_started") | list %}
+{% if unexplored %}
+**Note**: The following criteria still need exploration: {{ unexplored | map(attribute="criterion_name") | join(", ") }}
+{% endif %}
+{% endif %}

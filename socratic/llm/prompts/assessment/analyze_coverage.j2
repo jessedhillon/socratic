@@ -1,0 +1,38 @@
+Analyze the learner's response to determine which rubric criteria were addressed.
+
+## Learner's Response
+{{ learner_response }}
+
+## Recent Conversation Context
+{% for message in conversation_history %}
+- {{ message }}
+{% endfor %}
+
+## Rubric Criteria to Assess
+{% for criterion in rubric_criteria %}
+### {{ criterion.name }} (ID: {{ criterion.criterion_id }})
+{{ criterion.description }}
+- Evidence indicators: {{ criterion.evidence_indicators | join(", ") if criterion.evidence_indicators else "Not specified" }}
+{% endfor %}
+
+## Current Coverage Status
+{% for criterion_id, coverage in criteria_coverage.items() %}
+- {{ coverage.criterion_name }}: {{ coverage.coverage_level }}
+  {% if coverage.evidence_found %}- Evidence so far: {{ coverage.evidence_found | join("; ") }}{% endif %}
+{% endfor %}
+
+## Analysis Required
+For each criterion, determine if the learner's response provides evidence related to it.
+
+Respond in the following format:
+CRITERIA_COVERAGE:
+{% for criterion in rubric_criteria %}
+- {{ criterion.criterion_id }}: [none/partial/full] - "[brief evidence quote or 'no evidence']"
+{% endfor %}
+
+Guidelines:
+- "none": No evidence related to this criterion in the response
+- "partial": Some relevant information but incomplete or needs clarification
+- "full": Clear, substantive evidence addressing this criterion
+
+Be specific about what evidence you found. Quote the learner's words when possible.
