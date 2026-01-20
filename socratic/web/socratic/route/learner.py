@@ -379,6 +379,7 @@ def get_my_assignment(
     assignment_id: str,
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
+    utcnow: TimestampProvider = Depends(di.Provide["utcnow"]),
 ) -> AssignmentWithAttemptsResponse:
     """Get details of a specific assignment for the current learner."""
     with session.begin():
@@ -397,6 +398,10 @@ def get_my_assignment(
                 detail="This assignment is not yours",
             )
 
+        # Get objective info
+        objective = obj_storage.get(assignment.objective_id, session=session)
+
+        # Get attempts
         attempts = attempt_storage.find(assignment_id=aid, session=session)
         attempt_responses = [
             AttemptResponse(
@@ -412,11 +417,48 @@ def get_my_assignment(
             )
             for a in attempts
         ]
+        attempts_remaining = max(0, assignment.max_attempts - len(attempts))
+
+        # Determine availability
+        now = utcnow()
+        is_available = True
+        if assignment.available_from and now < assignment.available_from:
+            is_available = False
+        if assignment.available_until and now > assignment.available_until:
+            is_available = False
+        if attempts_remaining <= 0:
+            is_available = False
+
+        # Check prerequisites
+        is_locked = False
+        dependencies = strand_storage.get_dependencies(assignment.objective_id, session=session)
+        for dep in dependencies:
+            prereq_assignments = assignment_storage.find(
+                organization_id=auth.organization_id,
+                objective_id=dep.depends_on_objective_id,
+                assigned_to=auth.user.user_id,
+                session=session,
+            )
+            prereq_completed = False
+            for prereq in prereq_assignments:
+                prereq_attempts = attempt_storage.find(assignment_id=prereq.assignment_id, session=session)
+                for prereq_attempt in prereq_attempts:
+                    if prereq_attempt.status in (AttemptStatus.Evaluated, AttemptStatus.Reviewed):
+                        prereq_completed = True
+                        break
+                if prereq_completed:
+                    break
+            if not prereq_completed and dependencies:
+                is_locked = True
+                break
 
         return AssignmentWithAttemptsResponse(
             assignment_id=assignment.assignment_id,
             organization_id=assignment.organization_id,
             objective_id=assignment.objective_id,
+            objective_title=objective.title if objective else None,
+            objective_description=objective.description if objective else None,
+            expected_duration_minutes=objective.time_expectation_minutes if objective else None,
             assigned_by=assignment.assigned_by,
             assigned_to=assignment.assigned_to,
             available_from=assignment.available_from,
@@ -427,7 +469,9 @@ def get_my_assignment(
             create_time=assignment.create_time,
             update_time=assignment.update_time,
             attempts=attempt_responses,
-            attempts_remaining=max(0, assignment.max_attempts - len(attempts)),
+            attempts_remaining=attempts_remaining,
+            is_available=is_available and not is_locked,
+            is_locked=is_locked,
         )
 
 

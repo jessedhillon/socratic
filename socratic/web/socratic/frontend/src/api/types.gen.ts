@@ -77,6 +77,9 @@ export type AssignmentWithAttemptsResponse = {
   assignment_id: string;
   organization_id: string;
   objective_id: string;
+  objective_title?: string | null;
+  objective_description?: string | null;
+  expected_duration_minutes?: number | null;
   assigned_by: string;
   assigned_to: string;
   available_from?: string | null;
@@ -88,6 +91,8 @@ export type AssignmentWithAttemptsResponse = {
   update_time?: string | null;
   attempts?: Array<SocraticWebSocraticViewAssignmentAttemptResponse>;
   attempts_remaining?: number;
+  is_available?: boolean;
+  is_locked?: boolean;
 };
 
 /**
