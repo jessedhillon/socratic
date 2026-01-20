@@ -1,7 +1,8 @@
-"""Manual test for criteria coverage tracking in assessments.
+"""Manual test for criteria coverage and pacing tracking in assessments.
 
 Tests that criteria coverage is properly tracked and updated during
-assessment conversations. The script can run in two modes:
+assessment conversations, and that pacing information is communicated
+in prompts. The script can run in two modes:
 - Manual: Displays state and prompts tester to verify correctness
 - Automated: Programmatically verifies state changes
 
@@ -9,6 +10,7 @@ Usage:
     socratic-cli script test-criteria-coverage                    # manual mode
     socratic-cli script test-criteria-coverage --automated        # automated mode
     socratic-cli script test-criteria-coverage -a <assignment_id> # specific assignment
+    socratic-cli script test-criteria-coverage --test-pacing      # simulate time passage
 
 Prerequisites:
     - LANGSMITH_API_KEY and LANGSMITH_TRACING=true in environment
@@ -35,7 +37,7 @@ from sqlalchemy.orm import Session
 
 import socratic.lib.cli as click
 from socratic.core import di
-from socratic.llm.assessment import PostgresCheckpointer, run_assessment_turn, start_assessment
+from socratic.llm.assessment import calculate_pacing_status, PostgresCheckpointer, run_assessment_turn, start_assessment
 from socratic.model import AssignmentID, AttemptID, AttemptStatus
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
@@ -247,6 +249,34 @@ def display_state(state: dict[str, t.Any] | None, title: str = "Assessment State
     messages = state.get("messages", [])
     tree.add(f"[cyan]Message Count:[/cyan] {len(messages)}")
 
+    # Pacing information
+    start_time = state.get("start_time")
+    time_expectation = state.get("time_expectation_minutes")
+    pacing = calculate_pacing_status(start_time, time_expectation)
+
+    if pacing:
+        pacing_branch = tree.add("[bold yellow]Pacing Status[/bold yellow]")
+        pacing_branch.add(f"[cyan]Elapsed:[/cyan] {pacing['elapsed_minutes']} min")
+        pacing_branch.add(f"[cyan]Remaining:[/cyan] {pacing['remaining_minutes']} min")
+        pacing_branch.add(f"[cyan]Estimated Total:[/cyan] {pacing['estimated_total_minutes']} min")
+        pacing_branch.add(f"[cyan]Percent Elapsed:[/cyan] {pacing['percent_elapsed']}%")
+
+        # Color code pace status
+        pace = pacing["pace"]
+        if pace == "ahead":
+            pace_styled = f"[green]{pace}[/green]"
+        elif pace == "on_track":
+            pace_styled = f"[blue]{pace}[/blue]"
+        elif pace == "behind":
+            pace_styled = f"[yellow]{pace}[/yellow]"
+        else:  # overtime
+            pace_styled = f"[red]{pace}[/red]"
+        pacing_branch.add(f"[cyan]Pace:[/cyan] {pace_styled}")
+    elif start_time:
+        tree.add("[yellow]Pacing:[/yellow] start_time set but pacing not calculated")
+    else:
+        tree.add("[dim]Pacing:[/dim] start_time not set")
+
     # Criteria Coverage - the main focus
     coverage = state.get("criteria_coverage", {})
     if coverage:
@@ -302,6 +332,31 @@ def display_state(state: dict[str, t.Any] | None, title: str = "Assessment State
     console.print()
 
 
+def simulate_time_passage(
+    checkpointer: PostgresCheckpointer,
+    attempt_id: AttemptID,
+    minutes_elapsed: float,
+) -> None:
+    """Modify start_time in state to simulate time passage.
+
+    This allows testing different pacing scenarios without waiting.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    state = checkpointer.get(attempt_id)
+    if state is None:
+        click.echo(click.style("Error: Cannot simulate time - state is None", fg="red"))
+        return
+
+    # Calculate new start_time that would result in the desired elapsed time
+    now = datetime.now(timezone.utc)
+    new_start_time = now - timedelta(minutes=minutes_elapsed)
+    state["start_time"] = new_start_time
+    checkpointer.put(attempt_id, state)
+
+    click.echo(f"Simulated {minutes_elapsed} minutes elapsed (start_time adjusted)")
+
+
 @click.command()
 @click.option(
     "--assignment-id",
@@ -323,21 +378,31 @@ def display_state(state: dict[str, t.Any] | None, title: str = "Assessment State
     default="default",
     help="LangSmith project name to query (default: 'default')",
 )
+@click.option(
+    "--test-pacing",
+    is_flag=True,
+    default=False,
+    help="Include pacing simulation tests (manipulate time to test different pacing scenarios)",
+)
 @di.inject
 def execute(
     assignment_id: str | None,
     automated: bool,
     project: str,
+    test_pacing: bool,
     session: Session = di.Manage["storage.persistent.session"],
     model: BaseChatModel = di.Provide["llm.dialogue_model"],
     env: jinja2.Environment = di.Provide["template.llm"],
 ) -> None:
-    """Run manual test for criteria coverage tracking."""
+    """Run manual test for criteria coverage and pacing tracking."""
     results = TestResult()
     verifier = LangSmithVerifier(project_name=project) if automated else None
 
     click.echo("=" * 60)
-    click.echo("Criteria Coverage Tracking - " + ("Automated" if automated else "Manual") + " Test")
+    mode_label = "Automated" if automated else "Manual"
+    if test_pacing:
+        mode_label += " + Pacing"
+    click.echo(f"Criteria Coverage Tracking - {mode_label} Test")
     click.echo("=" * 60)
 
     # Check LangSmith configuration
@@ -454,6 +519,7 @@ def execute(
             results=results,
             verifier=verifier,
             automated=automated,
+            test_pacing=test_pacing,
         )
     )
 
@@ -479,6 +545,7 @@ async def _run_test_flow(
     results: TestResult,
     verifier: LangSmithVerifier | None,
     automated: bool,
+    test_pacing: bool = False,
 ) -> None:
     """Run the async test flow."""
     checkpointer = PostgresCheckpointer()
@@ -751,6 +818,112 @@ async def _run_test_flow(
 
         v3_turn_tracking = click.confirm("Does last_touched_turn reflect the latest turn number?", default=True)
         results.record("Turn tracking is accurate", v3_turn_tracking)
+
+    # ========== PHASE 4: Pacing Tests (optional) ==========
+    if test_pacing:
+        click.echo("\n" + "-" * 60)
+        click.echo("PHASE 4: Pacing Simulation Tests")
+        click.echo("-" * 60 + "\n")
+
+        estimated_time = time_expectation_minutes or 15
+
+        # Test pacing at different time points
+        pacing_scenarios = [
+            (estimated_time * 0.3, "ahead", "30% elapsed - should be ahead"),
+            (estimated_time * 0.6, "on_track", "60% elapsed - should be on_track"),
+            (estimated_time * 0.9, "behind", "90% elapsed - should be behind"),
+            (estimated_time * 1.2, "overtime", "120% elapsed - should be overtime"),
+        ]
+
+        for elapsed_minutes, expected_pace, description in pacing_scenarios:
+            click.echo(f"\n[Pacing Test] {description}")
+
+            # Simulate time passage
+            simulate_time_passage(checkpointer, attempt_id, elapsed_minutes)
+
+            # Get state and verify pacing
+            state = checkpointer.get(attempt_id)
+            if state:
+                pacing = calculate_pacing_status(state.get("start_time"), estimated_time)
+                if pacing:
+                    actual_pace = pacing["pace"]
+                    if automated:
+                        results.record(
+                            f"Pacing: {description}",
+                            actual_pace == expected_pace,
+                            f"expected {expected_pace}, got {actual_pace}",
+                        )
+                    else:
+                        console.print(f"  [cyan]Elapsed:[/cyan] {pacing['elapsed_minutes']} min")
+                        console.print(f"  [cyan]Remaining:[/cyan] {pacing['remaining_minutes']} min")
+                        console.print(f"  [cyan]Percent:[/cyan] {pacing['percent_elapsed']}%")
+
+                        pace = pacing["pace"]
+                        if pace == "ahead":
+                            pace_styled = f"[green]{pace}[/green]"
+                        elif pace == "on_track":
+                            pace_styled = f"[blue]{pace}[/blue]"
+                        elif pace == "behind":
+                            pace_styled = f"[yellow]{pace}[/yellow]"
+                        else:
+                            pace_styled = f"[red]{pace}[/red]"
+
+                        console.print(f"  [cyan]Pace:[/cyan] {pace_styled} (expected: {expected_pace})")
+
+                        pace_correct = click.confirm(
+                            f"Is the pace '{actual_pace}' correct?", default=actual_pace == expected_pace
+                        )
+                        results.record(f"Pacing: {description}", pace_correct)
+                else:
+                    results.record(f"Pacing: {description}", False, "Pacing calculation returned None")
+            else:
+                results.record(f"Pacing: {description}", False, "State is None")
+
+        # Test that pacing appears in rendered prompts
+        click.echo("\n[Pacing Test] Verify pacing appears in prompts")
+
+        # Simulate being "behind" schedule
+        simulate_time_passage(checkpointer, attempt_id, estimated_time * 0.85)
+
+        # Send a response to trigger a new prompt with pacing
+        pacing_test_response = "I understand that ratios can be simplified like fractions."
+        click.echo(f"\n[Learner]: {pacing_test_response}")
+        click.echo("\n[AI Interviewer]: ", nl=False)
+
+        full_response = ""
+        async for token in run_assessment_turn(
+            attempt_id=attempt_id,
+            learner_message=pacing_test_response,
+            checkpointer=checkpointer,
+            model=model,
+            env=env,
+        ):
+            full_response += token
+            click.echo(token, nl=False)
+
+        click.echo("\n")
+
+        if automated:
+            # In automated mode, we can't easily verify the prompt content
+            # but we can verify the state has pacing info
+            state = checkpointer.get(attempt_id)
+            if state:
+                has_start_time = state.get("start_time") is not None
+                results.record(
+                    "Pacing info available for prompts",
+                    has_start_time,
+                    "start_time is set in state",
+                )
+        else:
+            console.print("[bold]Expected behavior:[/bold]")
+            click.echo("  - The AI should have been more direct/concise due to time pressure")
+            click.echo("  - Pacing status was included in the prompt template")
+            click.echo("")
+
+            pacing_behavior = click.confirm(
+                "Did the AI's response seem appropriately paced (direct, not verbose)?", default=True
+            )
+            results.record("AI adjusts behavior based on pacing", pacing_behavior)
 
     # ========== Summary ==========
     click.echo("\n" + "-" * 60)
