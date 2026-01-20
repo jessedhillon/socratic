@@ -5,7 +5,7 @@ import {
   useRecordingSession,
   type RecordingState,
   type SessionState,
-} from '../hooks';
+} from '../../hooks';
 import {
   CameraPreview,
   PermissionGate,
@@ -14,7 +14,7 @@ import {
   SynchronizedPlayback,
   type CameraPreviewProps,
   type WordTiming,
-} from '../components';
+} from '../../components';
 
 const recordingStateColors: Record<RecordingState, string> = {
   idle: 'bg-gray-400',
@@ -850,7 +850,7 @@ const DevAvTestPage: React.FC = () => {
           </p>
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
             <VoiceInput
-              onSubmit={(text) => {
+              onSubmit={(text: string) => {
                 console.log('VoiceInput submitted:', text);
                 alert(`Submitted text: "${text}"`);
               }}

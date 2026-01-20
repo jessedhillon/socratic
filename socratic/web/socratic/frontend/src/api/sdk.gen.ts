@@ -149,6 +149,11 @@ import type {
   AddFeedbackData,
   AddFeedbackResponse,
   AddFeedbackError,
+  GetSynchronizedTranscriptData,
+  GetSynchronizedTranscriptResponse,
+  GetSynchronizedTranscriptError,
+  SynthesizeSpeechData,
+  SynthesizeSpeechError,
   TranscribeAudioData,
   TranscribeAudioResponse,
   TranscribeAudioError,
@@ -1428,11 +1433,69 @@ export const addFeedback = <ThrowOnError extends boolean = false>(
 };
 
 /**
+ * Get Synchronized Transcript
+ * Get transcript with word-level timing data for video synchronization.
+ *
+ * Returns transcript segments with word timings for video playback sync.
+ * This enables "click word to seek" and "highlight current word" features.
+ */
+export const getSynchronizedTranscript = <ThrowOnError extends boolean = false>(
+  options: Options<GetSynchronizedTranscriptData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).get<
+    GetSynchronizedTranscriptResponse,
+    GetSynchronizedTranscriptError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/reviews/{attempt_id}/transcript/synchronized',
+    ...options,
+  });
+};
+
+/**
+ * Synthesize Speech Route
+ * Synthesize speech from text.
+ *
+ * Returns audio data in the requested format.
+ */
+export const synthesizeSpeech = <ThrowOnError extends boolean = false>(
+  options: Options<SynthesizeSpeechData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).post<
+    unknown,
+    SynthesizeSpeechError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/speech',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+};
+
+/**
  * Transcribe Audio Route
  * Transcribe audio to text using OpenAI Whisper.
  *
  * Accepts audio files up to 25MB in common formats (webm, mp3, mp4, wav, etc.).
  * Returns the transcribed text along with optional duration and detected language.
+ *
+ * If include_word_timings is true, also returns word-level timing data for
+ * synchronized playback features.
  *
  * The learner must be authenticated to use this endpoint.
  */

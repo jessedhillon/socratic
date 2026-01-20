@@ -16,9 +16,28 @@ import {
 import { getAuthToken } from '../auth';
 import type {
   StartAssessmentOkResponse,
-  MessageAcceptedResponse,
   CompleteAssessmentOkResponse,
 } from '../api/types.gen';
+
+/** Response from sending a message - defined locally as API types it as unknown */
+interface MessageAcceptedResponse {
+  message_id: string;
+}
+
+/** Extract error message from API error detail which can be string or ValidationError[] */
+function getErrorMessage(detail: unknown, fallback: string): string {
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  if (Array.isArray(detail) && detail.length > 0) {
+    // ValidationError format: { loc: string[], msg: string, type: string }
+    const firstError = detail[0];
+    if (typeof firstError?.msg === 'string') {
+      return firstError.msg;
+    }
+  }
+  return fallback;
+}
 
 /** Callbacks for handling stream events */
 export interface StreamCallbacks {
@@ -116,7 +135,9 @@ export function useAssessmentApi(): UseAssessmentApiResult {
       });
 
       if (response.error) {
-        throw new Error(response.error.detail || 'Failed to start assessment');
+        throw new Error(
+          getErrorMessage(response.error.detail, 'Failed to start assessment')
+        );
       }
 
       return response.data;
@@ -219,10 +240,13 @@ export function useAssessmentApi(): UseAssessmentApiResult {
       });
 
       if (response.error) {
-        throw new Error(response.error.detail || 'Failed to send message');
+        throw new Error(
+          getErrorMessage(response.error.detail, 'Failed to send message')
+        );
       }
 
-      return response.data;
+      // Cast response.data since the API types it as unknown
+      return response.data as MessageAcceptedResponse;
     },
     []
   );
@@ -239,7 +263,10 @@ export function useAssessmentApi(): UseAssessmentApiResult {
 
       if (response.error) {
         throw new Error(
-          response.error.detail || 'Failed to complete assessment'
+          getErrorMessage(
+            response.error.detail,
+            'Failed to complete assessment'
+          )
         );
       }
 

@@ -4,7 +4,7 @@ import {
   ChatInterface,
   useAssessmentState,
   useAssessmentApi,
-} from '../components/assessment';
+} from '../../components/assessment';
 
 /**
  * Assessment page - where learners complete their assessments.

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
 
 interface NavItem {
   label: string;
@@ -67,11 +68,17 @@ const navItems: NavItem[] = [
   },
 ];
 
-/**
- * Layout component for instructor pages with collapsible side navigation.
- */
-const InstructorLayout: React.FC = () => {
+function InstructorLayoutContent(): React.ReactElement {
   const [collapsed, setCollapsed] = useState(false);
+  const { user, logout, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 flex">
@@ -131,10 +138,42 @@ const InstructorLayout: React.FC = () => {
           </ul>
         </nav>
 
-        {/* Footer */}
+        {/* User info / Footer */}
         <div className="p-4 border-t border-gray-200">
-          {!collapsed && (
-            <p className="text-xs text-gray-400">Instructor Dashboard</p>
+          {user && !collapsed && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-800 truncate">
+                {user.name}
+              </p>
+              <p className="text-xs text-gray-500 truncate">{user.email}</p>
+              <button
+                onClick={logout}
+                className="text-xs text-gray-500 hover:text-gray-700"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+          {user && collapsed && (
+            <button
+              onClick={logout}
+              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 w-full flex justify-center"
+              title="Sign out"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
+            </button>
           )}
         </div>
       </aside>
@@ -145,6 +184,16 @@ const InstructorLayout: React.FC = () => {
       </main>
     </div>
   );
-};
+}
 
-export default InstructorLayout;
+/**
+ * Layout component for instructor pages with collapsible side navigation.
+ * Protected by AuthProvider requiring 'educator' role.
+ */
+export default function InstructorLayout(): React.ReactElement {
+  return (
+    <AuthProvider requireRole="educator">
+      <InstructorLayoutContent />
+    </AuthProvider>
+  );
+}

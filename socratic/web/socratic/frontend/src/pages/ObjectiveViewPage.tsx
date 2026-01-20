@@ -64,6 +64,8 @@ const gradeLevels = [
 // Default values for a new objective
 const defaultObjective: ObjectiveResponse = {
   objective_id: '',
+  organization_id: '',
+  created_by: '',
   title: '',
   description: '',
   status: 'draft' as ObjectiveStatus,
@@ -122,7 +124,7 @@ const ObjectiveViewPage: React.FC = () => {
               merged.time_expectation_minutes || undefined,
             initial_prompts: merged.initial_prompts || undefined,
             challenge_prompts: merged.challenge_prompts || undefined,
-            extension_policy: merged.extension_policy,
+            extension_policy: merged.extension_policy ?? undefined,
           };
           const { data, response } = await createObjective({
             body: createRequest,

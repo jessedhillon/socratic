@@ -4,7 +4,7 @@ import {
   ChatMessage,
   useAssessmentState,
   type AssessmentPhase,
-} from '../components/assessment';
+} from '../../components/assessment';
 
 const phaseColors: Record<AssessmentPhase, string> = {
   idle: 'bg-gray-400',
