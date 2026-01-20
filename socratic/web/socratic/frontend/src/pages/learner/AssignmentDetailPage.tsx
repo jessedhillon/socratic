@@ -68,15 +68,18 @@ const getGradeBadge = (
   switch (grade) {
     case 'S':
       return {
-        label: 'Satisfactory',
+        label: 'Superb',
         className: 'bg-green-100 text-green-700',
       };
     case 'A':
       return { label: 'Advanced', className: 'bg-blue-100 text-blue-700' };
     case 'C':
-      return { label: 'Competent', className: 'bg-yellow-100 text-yellow-700' };
+      return {
+        label: 'Developing',
+        className: 'bg-yellow-100 text-yellow-700',
+      };
     case 'F':
-      return { label: 'Not Yet', className: 'bg-red-100 text-red-700' };
+      return { label: 'Beginning', className: 'bg-red-100 text-red-700' };
     default:
       return { label: 'Pending', className: 'bg-gray-100 text-gray-600' };
   }

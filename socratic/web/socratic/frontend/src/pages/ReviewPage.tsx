@@ -334,7 +334,7 @@ const ReviewPage: React.FC = () => {
                                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
                               >
                                 <option value="">Select grade...</option>
-                                <option value="S">S - Satisfactory</option>
+                                <option value="S">S - Superb</option>
                                 <option value="A">A - Advanced</option>
                                 <option value="C">C - Developing</option>
                                 <option value="F">F - Beginning</option>
