@@ -3,6 +3,19 @@ Facilitate an optional extension discussion to allow the learner to demonstrate 
 ## Context
 The learner has completed the required assessment questions for "{{ objective_title }}". The extension phase allows them to explore the topic further and demonstrate additional knowledge or connections.
 
+{% if pacing %}
+## Pacing Status
+- Elapsed: {{ pacing.elapsed_minutes }} minutes of {{ pacing.estimated_total_minutes }} estimated ({{ pacing.percent_elapsed }}%)
+- Remaining: {{ pacing.remaining_minutes }} minutes
+- Status: {{ pacing.pace }}
+
+{% if pacing.pace == "behind" or pacing.pace == "overtime" %}
+**Time pressure**: We're running {{ "over time" if pacing.pace == "overtime" else "behind schedule" }}. Offer the extension opportunity briefly, but make it clear they can skip it. The learner shouldn't feel pressured to extend when time is limited.
+{% elif pacing.pace == "ahead" %}
+**Time available**: We're ahead of schedule - a great opportunity for deeper discussion if they're interested.
+{% endif %}
+{% endif %}
+
 ## Instructions
 Generate a message that:
 1. Acknowledges they've covered the main questions

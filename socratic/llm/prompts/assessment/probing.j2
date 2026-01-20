@@ -1,5 +1,18 @@
 Generate a follow-up question to probe deeper into the learner's understanding.
 
+{% if pacing %}
+## Pacing Status
+- Elapsed: {{ pacing.elapsed_minutes }} minutes of {{ pacing.estimated_total_minutes }} estimated ({{ pacing.percent_elapsed }}%)
+- Remaining: {{ pacing.remaining_minutes }} minutes
+- Status: {{ pacing.pace }}
+
+{% if pacing.pace == "behind" or pacing.pace == "overtime" %}
+**Time pressure**: We're running {{ "over time" if pacing.pace == "overtime" else "behind schedule" }}. Keep follow-up questions focused and brief. Avoid extended probing - get clarity quickly and move on.
+{% elif pacing.pace == "ahead" %}
+**Time available**: We're ahead of schedule. You can afford to probe more thoroughly for deeper understanding.
+{% endif %}
+{% endif %}
+
 ## Issue Detected
 {% if detected_ambiguity %}
 - **Ambiguity**: The learner's response was unclear{% if ambiguous_phrase %}, specifically: "{{ ambiguous_phrase }}"{% endif %}

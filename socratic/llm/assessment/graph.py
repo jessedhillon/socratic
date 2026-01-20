@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import typing as t
+from datetime import datetime, timezone
 from functools import partial
 
 import jinja2
@@ -168,6 +169,7 @@ def create_initial_state(
         objective_description=objective_description,
         scope_boundaries=scope_boundaries,
         time_expectation_minutes=time_expectation_minutes,
+        start_time=datetime.now(timezone.utc),  # Track assessment start time for pacing
         initial_prompts=initial_prompts,
         challenge_prompts=challenge_prompts or [],
         extension_policy=extension_policy,

@@ -20,6 +20,16 @@ Generate a closing message that summarizes the discussion and allows the learner
 **Coverage summary**: {{ fully_explored | length }} fully explored, {{ partial | length }} partially explored, {{ unexplored | length }} not explored
 {% endif %}
 
+{% if pacing %}
+## Pacing Status
+- Total elapsed: {{ pacing.elapsed_minutes }} minutes of {{ pacing.estimated_total_minutes }} estimated
+- Status: {{ pacing.pace }}
+
+{% if pacing.pace == "overtime" %}
+**Note**: The assessment ran over the estimated time. Keep the closing message concise while still giving them opportunity to clarify.
+{% endif %}
+{% endif %}
+
 ## Instructions
 Generate a closing message that:
 

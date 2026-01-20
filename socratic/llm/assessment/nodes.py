@@ -9,7 +9,7 @@ import jinja2
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from .state import AgentState, CoverageLevel, InterviewPhase
+from .state import AgentState, calculate_pacing_status, CoverageLevel, InterviewPhase
 
 if t.TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -448,6 +448,14 @@ def build_template_context(state: AgentState, phase: InterviewPhase) -> dict[str
         "rubric_criteria": state.get("rubric_criteria", []),
         "criteria_coverage": state.get("criteria_coverage", {}),
     }
+
+    # Add pacing info for all phases after orientation
+    if phase != InterviewPhase.Orientation:
+        pacing = calculate_pacing_status(
+            state.get("start_time"),
+            state.get("time_expectation_minutes"),
+        )
+        base_context["pacing"] = pacing
 
     if phase == InterviewPhase.Orientation:
         base_context["time_expectation_minutes"] = state.get("time_expectation_minutes", 15)
