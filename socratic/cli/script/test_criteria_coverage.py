@@ -56,9 +56,6 @@ from socratic.storage.user import MembershipCreateParams
 # Rich console for formatted output
 console = Console()
 
-# Fixture slug for test data - used to find or create test fixture
-TEST_FIXTURE_SLUG = "test-criteria-coverage-fixture"
-
 
 def create_test_fixture(
     session: Session,
@@ -74,8 +71,10 @@ def create_test_fixture(
 
     Returns the assignment, objective, and rubric criteria.
     """
+    fixture_slug = "test-criteria-coverage-fixture"
+
     # Check if fixture already exists
-    existing_org = org_storage.get(slug=TEST_FIXTURE_SLUG, session=session)
+    existing_org = org_storage.get(slug=fixture_slug, session=session)
     if existing_org:
         # Find existing assignment for this org
         assignments = assignment_storage.find(organization_id=existing_org.organization_id, session=session)
@@ -84,7 +83,7 @@ def create_test_fixture(
             objective = obj_storage.get(assignment.objective_id, session=session)
             assert objective is not None
             criteria = rubric_storage.find(objective_id=objective.objective_id, session=session)
-            click.echo(click.style(f"Using existing test fixture (org: {TEST_FIXTURE_SLUG})", fg="cyan"))
+            click.echo(click.style(f"Using existing test fixture (org: {fixture_slug})", fg="cyan"))
             return assignment, objective, criteria
 
     click.echo(click.style("Creating new test fixture...", fg="cyan"))
@@ -92,13 +91,13 @@ def create_test_fixture(
     # Create organization
     org = org_storage.create(
         name="Test Organization for Criteria Coverage",
-        slug=TEST_FIXTURE_SLUG,
+        slug=fixture_slug,
         session=session,
     )
 
     # Create instructor user
     instructor = user_storage.create(
-        email=f"instructor+{TEST_FIXTURE_SLUG}@example.com",
+        email=f"instructor+{fixture_slug}@example.com",
         name="Test Instructor",
         password=p.Secret[str]("test-password-123"),
         session=session,
@@ -111,7 +110,7 @@ def create_test_fixture(
 
     # Create learner user
     learner = user_storage.create(
-        email=f"learner+{TEST_FIXTURE_SLUG}@example.com",
+        email=f"learner+{fixture_slug}@example.com",
         name="Test Learner",
         password=p.Secret[str]("test-password-123"),
         session=session,
