@@ -7,7 +7,12 @@ Analyze whether the assessment should now conclude or continue.
 {% for criterion in rubric_criteria %}
 ### {{ criterion.name }}
 {{ criterion.description }}
-- Evidence indicators: {{ criterion.evidence_indicators | join(", ") }}
+{% if criterion.proficiency_levels %}
+Proficiency levels:
+{% for level in criterion.proficiency_levels %}
+- {{ level.grade }}: {{ level.description }}
+{% endfor %}
+{% endif %}
 {% endfor %}
 
 ## Conversation Summary
@@ -17,24 +22,19 @@ Analyze whether the assessment should now conclude or continue.
 - Questions completed: {{ prompts_completed }} of {{ total_prompts }}
 - Follow-up probes used: {{ probing_depth }}
 
-## Instructions
-Analyze the conversation and determine if the assessment should conclude.
+## Decision Criteria
 
-Consider:
-1. **Criteria coverage**: Have all rubric criteria been meaningfully explored?
+Evaluate the following to determine if the assessment should conclude:
+
+1. **Criteria coverage**: For each rubric criterion, assess whether it has been:
+   - FULLY_EXPLORED: The learner's understanding has been thoroughly assessed
+   - PARTIALLY_EXPLORED: Some relevant information gathered but gaps remain
+   - NOT_TOUCHED: This criterion hasn't been meaningfully addressed
+
 2. **Response quality**: Has the learner provided substantive answers that reveal their understanding?
-3. **Diminishing returns**: Would further probing yield new information, or are we just repeating?
+
+3. **Diminishing returns**: Would further probing yield new information, or would we just be repeating?
+
 4. **Natural endpoint**: Has the conversation reached a natural conclusion point?
-
-Respond with a structured assessment in this exact format:
-
-COMPLETION_READY: [YES or NO]
-CONFIDENCE: [HIGH, MEDIUM, or LOW]
-CRITERIA_STATUS:
-{% for criterion in rubric_criteria %}
-- {{ criterion.name }}: [FULLY_EXPLORED, PARTIALLY_EXPLORED, or NOT_TOUCHED]
-{% endfor %}
-REASONING: [Brief explanation of your decision]
-SUMMARY: [If completion ready, a 2-3 sentence summary of what was assessed]
 
 Be conservative - don't conclude early if there's more to learn. But also don't drag out an assessment that has naturally concluded.

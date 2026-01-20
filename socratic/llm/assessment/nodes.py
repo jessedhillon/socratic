@@ -299,8 +299,9 @@ async def analyze_completion_node(
 ) -> dict[str, t.Any]:
     """Analyze whether the assessment should conclude.
 
-    Uses AI to determine if all criteria have been sufficiently explored
-    and whether further probing would yield meaningful information.
+    Uses AI with structured output to determine if all criteria have been
+    sufficiently explored and whether further probing would yield meaningful
+    information.
     """
     messages = state.get("messages", [])
     initial_prompts = state.get("initial_prompts", [])
@@ -327,76 +328,23 @@ async def analyze_completion_node(
         HumanMessage(content=completion_prompt),
     ]
 
-    response = await model.ainvoke(completion_messages)
-    response_text = get_content_str(response.content)
+    # Use structured output for reliable schema-validated response
+    # LangChain's with_structured_output has incomplete types, so we cast the result
+    structured_model = model.with_structured_output(CompletionAnalysis)  # pyright: ignore[reportUnknownVariableType]
+    result = await structured_model.ainvoke(completion_messages)  # pyright: ignore[reportUnknownVariableType]
+    analysis = t.cast(CompletionAnalysis, result)
 
-    # Parse the structured response
-    analysis = _parse_completion_response(response_text, state.get("rubric_criteria", []))
-
-    return {
-        "completion_analysis": analysis,
-        "completion_ready": analysis["completion_ready"],
-    }
-
-
-def _parse_completion_response(response_text: str, rubric_criteria: list[dict[str, t.Any]]) -> CompletionAnalysis:
-    """Parse the structured completion analysis response from the LLM."""
-    lines = response_text.strip().split("\n")
-
-    completion_ready = False
-    confidence = "MEDIUM"
-    criteria_status: dict[str, str] = {}
-    reasoning = ""
-    summary: str | None = None
-
-    current_section = ""
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        if line.startswith("COMPLETION_READY:"):
-            value = line.split(":", 1)[1].strip().upper()
-            completion_ready = value == "YES"
-        elif line.startswith("CONFIDENCE:"):
-            confidence = line.split(":", 1)[1].strip().upper()
-            if confidence not in ("HIGH", "MEDIUM", "LOW"):
-                confidence = "MEDIUM"
-        elif line.startswith("CRITERIA_STATUS:"):
-            current_section = "criteria"
-        elif line.startswith("REASONING:"):
-            current_section = "reasoning"
-            reasoning = line.split(":", 1)[1].strip()
-        elif line.startswith("SUMMARY:"):
-            current_section = "summary"
-            summary = line.split(":", 1)[1].strip()
-        elif current_section == "criteria" and line.startswith("-"):
-            # Parse criterion status line: "- Criterion Name: STATUS"
-            parts = line[1:].strip().split(":", 1)
-            if len(parts) == 2:
-                criterion_name = parts[0].strip()
-                status = parts[1].strip().upper()
-                if status in ("FULLY_EXPLORED", "PARTIALLY_EXPLORED", "NOT_TOUCHED"):
-                    criteria_status[criterion_name] = status
-        elif current_section == "reasoning":
-            reasoning += " " + line
-        elif current_section == "summary" and summary is not None:
-            summary += " " + line
-
-    # Default any missing criteria to NOT_TOUCHED
+    # Ensure all criteria are represented (default to NOT_TOUCHED if missing)
+    rubric_criteria = state.get("rubric_criteria", [])
     for criterion in rubric_criteria:
         name = criterion.get("name", "")
-        if name and name not in criteria_status:
-            criteria_status[name] = "NOT_TOUCHED"
+        if name and name not in analysis.criteria_status:
+            analysis.criteria_status[name] = "NOT_TOUCHED"
 
-    return CompletionAnalysis(
-        completion_ready=completion_ready,
-        confidence=confidence,
-        criteria_status=criteria_status,
-        reasoning=reasoning.strip(),
-        summary=summary.strip() if summary else None,
-    )
+    return {
+        "completion_analysis": analysis.model_dump(),
+        "completion_ready": analysis.completion_ready,
+    }
 
 
 async def dynamic_probing_node(
