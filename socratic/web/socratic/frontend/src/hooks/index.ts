@@ -46,3 +46,5 @@ export type {
   SpeechState,
   UseSpeechResult,
 } from './useSpeech';
+
+export { useSSE } from './useSSE';

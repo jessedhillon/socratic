@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { listMyAssignments } from '../api';
+import { listMyAssignments } from '../../api';
 import type {
   LearnerAssignmentSummary,
   LearnerAssignmentsListResponse,
-} from '../api';
-import { useAuth } from '../contexts/AuthContext';
+} from '../../api';
+import { useAuth } from '../../contexts/AuthContext';
 
 type AssignmentDisplayStatus =
   | 'available'

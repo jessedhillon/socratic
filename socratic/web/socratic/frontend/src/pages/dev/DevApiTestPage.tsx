@@ -1,12 +1,9 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import {
-  useAssessmentApi,
-  type ConnectionState,
-} from '../hooks/useAssessmentApi';
+import { useAssessmentApi, type ConnectionState } from '../../hooks';
 import {
   ChatInterface,
   type ChatMessageData as Message,
-} from '../components/assessment';
+} from '../../components/assessment';
 
 const connectionColors: Record<ConnectionState, string> = {
   disconnected: 'bg-gray-400',
@@ -75,7 +72,7 @@ const DevApiTestPage: React.FC = () => {
       // Connect to the event stream
       addLog('Connecting to event stream...');
       connectStream(response.attempt_id, {
-        onToken: (content) => {
+        onToken: (content: string) => {
           // Create new streaming message if needed
           if (!streamingMessageId.current) {
             const newId = generateMessageId();
@@ -116,7 +113,7 @@ const DevApiTestPage: React.FC = () => {
           }
           setIsWaitingForResponse(false);
         },
-        onComplete: (evaluationId) => {
+        onComplete: (evaluationId?: string) => {
           addLog(`Assessment complete! evaluation_id=${evaluationId || 'N/A'}`);
           setMessages((prev) => [
             ...prev,
@@ -127,7 +124,7 @@ const DevApiTestPage: React.FC = () => {
             },
           ]);
         },
-        onError: (message, recoverable) => {
+        onError: (message: string, recoverable: boolean) => {
           addLog(`Error: ${message} (recoverable: ${recoverable})`);
           setError(message);
           if (!recoverable) {

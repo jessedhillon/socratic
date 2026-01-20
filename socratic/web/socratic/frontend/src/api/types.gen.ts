@@ -129,6 +129,7 @@ export type AttemptStatus =
 export type BodyTranscribeAudio = {
   file: Blob | File;
   language?: string | null;
+  include_word_timings?: boolean;
 };
 
 /**
@@ -570,6 +571,33 @@ export type SendMessageRequest = {
 };
 
 /**
+ * Supported audio output formats.
+ */
+export type SpeechFormat = 'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm';
+
+/**
+ * Request to synthesize speech from text.
+ */
+export type SpeechRequest = {
+  /**
+   * Text to convert to speech
+   */
+  text: string;
+  /**
+   * Voice to use for synthesis
+   */
+  voice?: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+  /**
+   * Output audio format
+   */
+  format?: SpeechFormat;
+  /**
+   * Speech speed (0.25-4.0)
+   */
+  speed?: number;
+};
+
+/**
  * Immediate response when starting an assessment.
  *
  * The orientation message will be streamed via the /stream endpoint.
@@ -633,6 +661,36 @@ export type StrandWithObjectivesResponse = {
 };
 
 /**
+ * Transcript segment with word-level timing data.
+ */
+export type SynchronizedSegmentResponse = {
+  segment_id: string;
+  attempt_id: string;
+  /**
+   * Who spoke: learner, interviewer, or system
+   */
+  utterance_type: string;
+  content: string;
+  start_time: string;
+  end_time?: string | null;
+  confidence?: number | null;
+  prompt_index?: number | null;
+  word_timings?: Array<SocraticWebSocraticViewTranscriptWordTimingResponse>;
+};
+
+/**
+ * Complete synchronized transcript for an attempt.
+ */
+export type SynchronizedTranscriptResponse = {
+  attempt_id: string;
+  /**
+   * URL of the video recording
+   */
+  video_url?: string | null;
+  segments?: Array<SynchronizedSegmentResponse>;
+};
+
+/**
  * Response containing access token.
  */
 export type TokenResponse = {
@@ -680,6 +738,10 @@ export type TranscriptionResponse = {
   text: string;
   duration?: number | null;
   language?: string | null;
+  /**
+   * Word-level timing data (only present if include_word_timings=true)
+   */
+  words?: Array<SocraticWebSocraticViewTranscriptionWordTimingResponse> | null;
 };
 
 /**
@@ -728,6 +790,40 @@ export type SocraticWebSocraticViewReviewAttemptResponse = {
   completed_at: string | null;
   grade: Grade | null;
   confidence_score: string | null;
+};
+
+/**
+ * Word-level timing data for transcript synchronization.
+ */
+export type SocraticWebSocraticViewTranscriptWordTimingResponse = {
+  word: string;
+  /**
+   * Start offset in milliseconds from segment start
+   */
+  start_offset_ms: number;
+  /**
+   * End offset in milliseconds from segment start
+   */
+  end_offset_ms: number;
+  /**
+   * Confidence score (0-1)
+   */
+  confidence?: number | null;
+};
+
+/**
+ * Word-level timing data from transcription.
+ */
+export type SocraticWebSocraticViewTranscriptionWordTimingResponse = {
+  word: string;
+  /**
+   * Start time in seconds
+   */
+  start: number;
+  /**
+   * End time in seconds
+   */
+  end: number;
 };
 
 export type LoginData = {
@@ -2295,6 +2391,69 @@ export type AddFeedbackResponses = {
 
 export type AddFeedbackResponse =
   AddFeedbackResponses[keyof AddFeedbackResponses];
+
+export type GetSynchronizedTranscriptData = {
+  body?: never;
+  path: {
+    attempt_id: string;
+  };
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/reviews/{attempt_id}/transcript/synchronized';
+};
+
+export type GetSynchronizedTranscriptErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetSynchronizedTranscriptError =
+  GetSynchronizedTranscriptErrors[keyof GetSynchronizedTranscriptErrors];
+
+export type GetSynchronizedTranscriptResponses = {
+  /**
+   * Successful Response
+   */
+  200: SynchronizedTranscriptResponse;
+};
+
+export type GetSynchronizedTranscriptResponse =
+  GetSynchronizedTranscriptResponses[keyof GetSynchronizedTranscriptResponses];
+
+export type SynthesizeSpeechData = {
+  body: SpeechRequest;
+  path?: never;
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/speech';
+};
+
+export type SynthesizeSpeechErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SynthesizeSpeechError =
+  SynthesizeSpeechErrors[keyof SynthesizeSpeechErrors];
+
+export type SynthesizeSpeechResponses = {
+  /**
+   * Successful Response
+   */
+  200: unknown;
+};
 
 export type TranscribeAudioData = {
   body: BodyTranscribeAudio;

@@ -5,7 +5,7 @@
  * and plays it when clicked. Shows loading and playing states.
  */
 
-import { useSpeech, type Voice, type SpeechOptions } from '../../hooks';
+import { useSpeech, type Voice } from '../../hooks';
 
 interface SpeakButtonProps {
   /** Text to speak when clicked */

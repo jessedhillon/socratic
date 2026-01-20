@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { listMyAttempts } from '../api';
-import type { AttemptHistoryItem, LearnerAttemptsListResponse } from '../api';
-import { getLoginUrl } from '../auth';
+import { useNavigate } from 'react-router-dom';
+import { listMyAttempts } from '../../api';
+import type {
+  AttemptHistoryItem,
+  LearnerAttemptsListResponse,
+} from '../../api';
 
 /**
  * Format a duration between two timestamps.
@@ -74,45 +76,56 @@ function getStatusBadge(status: string): { className: string; label: string } {
 }
 
 /**
- * Attempt detail panel component.
+ * Attempt detail sheet component - slides in from the right.
  */
-const AttemptDetail: React.FC<{
+const AttemptDetailSheet: React.FC<{
   attempt: AttemptHistoryItem;
   onClose: () => void;
 }> = ({ attempt, onClose }) => {
   const statusBadge = getStatusBadge(attempt.status);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-start mb-4">
-            <h2 className="text-xl font-bold text-gray-800">
-              {attempt.objective_title}
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-              aria-label="Close"
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/30 z-40 transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Sheet */}
+      <div className="fixed inset-y-0 right-0 w-full max-w-xl bg-white shadow-xl z-50 overflow-y-auto animate-slide-in-right">
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-800">Attempt Details</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 p-1"
+            aria-label="Close"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            {attempt.objective_title}
+          </h3>
 
           {attempt.objective_description && (
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 mb-6">
               {attempt.objective_description}
             </p>
           )}
@@ -151,8 +164,8 @@ const AttemptDetail: React.FC<{
 
           {/* Feedback section */}
           {attempt.status === 'reviewed' && attempt.feedback ? (
-            <div className="border-t pt-4">
-              <h3 className="font-semibold text-gray-800 mb-3">
+            <div className="border-t pt-6">
+              <h3 className="font-semibold text-gray-800 mb-4">
                 Instructor Feedback
               </h3>
 
@@ -199,38 +212,42 @@ const AttemptDetail: React.FC<{
               )}
             </div>
           ) : attempt.status === 'evaluated' ? (
-            <div className="border-t pt-4">
+            <div className="border-t pt-6">
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
                 <p className="text-yellow-700">Awaiting instructor review</p>
               </div>
             </div>
           ) : null}
         </div>
-
-        <div className="border-t px-6 py-4 bg-gray-50 rounded-b-lg">
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-          >
-            Close
-          </button>
-        </div>
       </div>
-    </div>
+
+      <style>{`
+        @keyframes slide-in-right {
+          from {
+            transform: translateX(100%);
+          }
+          to {
+            transform: translateX(0);
+          }
+        }
+        .animate-slide-in-right {
+          animation: slide-in-right 0.2s ease-out;
+        }
+      `}</style>
+    </>
   );
 };
 
 /**
  * Learner attempt history page.
  */
-const AttemptHistoryPage: React.FC = () => {
+const HistoryPage: React.FC = () => {
   const [data, setData] = useState<LearnerAttemptsListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedAttempt, setSelectedAttempt] =
     useState<AttemptHistoryItem | null>(null);
   const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
     fetchAttempts();
@@ -241,7 +258,7 @@ const AttemptHistoryPage: React.FC = () => {
       const { data: attemptsData, response } = await listMyAttempts();
       if (!response.ok) {
         if (response.status === 401) {
-          navigate(getLoginUrl(location.pathname));
+          navigate('/');
           return;
         }
         setError('Failed to load attempt history');
@@ -258,7 +275,7 @@ const AttemptHistoryPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-gray-500">Loading...</div>
       </div>
     );
@@ -266,7 +283,7 @@ const AttemptHistoryPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error}</p>
         </div>
@@ -275,19 +292,11 @@ const AttemptHistoryPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
+    <div className="py-8">
       <div className="max-w-4xl mx-auto px-4">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">
-            My Attempt History
-          </h1>
-          <button
-            onClick={() => navigate('/')}
-            className="text-blue-600 hover:text-blue-800"
-          >
-            ← Back to Dashboard
-          </button>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">
+          Assessment History
+        </h1>
 
         {/* Attempt list */}
         <div className="space-y-4">
@@ -345,9 +354,9 @@ const AttemptHistoryPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Detail modal */}
+      {/* Detail sheet */}
       {selectedAttempt && (
-        <AttemptDetail
+        <AttemptDetailSheet
           attempt={selectedAttempt}
           onClose={() => setSelectedAttempt(null)}
         />
@@ -356,4 +365,4 @@ const AttemptHistoryPage: React.FC = () => {
   );
 };
 
-export default AttemptHistoryPage;
+export default HistoryPage;
