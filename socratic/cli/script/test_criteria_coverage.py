@@ -98,7 +98,7 @@ def create_test_fixture(
 
     # Create instructor user
     instructor = user_storage.create(
-        email=f"instructor@{TEST_FIXTURE_SLUG}.test",
+        email=f"instructor+{TEST_FIXTURE_SLUG}@example.com",
         name="Test Instructor",
         password=p.Secret[str]("test-password-123"),
         session=session,
@@ -111,7 +111,7 @@ def create_test_fixture(
 
     # Create learner user
     learner = user_storage.create(
-        email=f"learner@{TEST_FIXTURE_SLUG}.test",
+        email=f"learner+{TEST_FIXTURE_SLUG}@example.com",
         name="Test Learner",
         password=p.Secret[str]("test-password-123"),
         session=session,
@@ -1277,26 +1277,39 @@ async def _run_test_flow(
 
             click.echo(f"Prompts covered so far: {prompts_covered} of {total_prompts}")
 
-            # If we haven't covered all prompts yet, continue the assessment
+            # Note: current_prompt_index tracks prompts DELIVERED, not prompts ANSWERED.
+            # After all prompts are delivered (index == total), the learner still needs
+            # to respond to trigger completion analysis. So we need to send at least
+            # one more response when index >= total.
             remaining_prompts = total_prompts - prompts_covered
+            needs_final_response = prompts_covered >= total_prompts
 
-            if remaining_prompts > 0:
-                click.echo(f"\nContinuing assessment to complete remaining {remaining_prompts} prompts...")
-                click.echo("(Completion analysis should trigger only after all prompts are complete)\n")
+            # Define responses for remaining prompts
+            completion_responses = [
+                "For the map question, if 1 inch = 50 miles and the cities are 3.5 inches "
+                "apart, I would multiply 3.5 by 50 to get 175 miles. The scale is just "
+                "a ratio between map distance and real distance.",
+                "I think ratios are fundamental in many areas - cooking, maps, finance. "
+                "When you say a map has a 1:10000 scale, you're expressing a ratio.",
+                "The connection between ratios and fractions is that they both express "
+                "part-to-whole or part-to-part relationships. 3/4 is like saying 3:4 "
+                "when comparing parts.",
+                "In real life, I'd use ratios to figure out how to scale a recipe "
+                "or calculate proportional costs. If 3 items cost $15, then 9 items "
+                "would cost $45 because the ratio is maintained.",
+            ]
 
-                # Define responses for remaining prompts
-                completion_responses = [
-                    "I think ratios are fundamental in many areas - cooking, maps, finance. "
-                    "When you say a map has a 1:10000 scale, you're expressing a ratio.",
-                    "The connection between ratios and fractions is that they both express "
-                    "part-to-whole or part-to-part relationships. 3/4 is like saying 3:4 "
-                    "when comparing parts.",
-                    "In real life, I'd use ratios to figure out how to scale a recipe "
-                    "or calculate proportional costs. If 3 items cost $15, then 9 items "
-                    "would cost $45 because the ratio is maintained.",
-                ]
-
-                for i in range(remaining_prompts):
+            if remaining_prompts > 0 or needs_final_response:
+                if needs_final_response:
+                    click.echo("\nAll prompts delivered - sending final response to trigger completion analysis...")
+                    num_responses = 1
+                else:
+                    click.echo(f"\nContinuing assessment to complete remaining {remaining_prompts} prompts...")
+                    # Need remaining_prompts responses to deliver all prompts, plus 1 more
+                    # to respond to the final prompt and trigger completion analysis
+                    num_responses = remaining_prompts + 1
+                click.echo("(Completion analysis should trigger after learner responds to final prompt)\n")
+                for i in range(num_responses):
                     # Use a response from our list, cycling if needed
                     response = completion_responses[i % len(completion_responses)]
 

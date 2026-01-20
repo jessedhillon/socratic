@@ -105,8 +105,8 @@ class TestAnalyzeCompletionNodeTiming(object):
 
         result = asyncio.run(analyze_completion_node(state, mock_model, mock_env))
 
-        # Model should be called with structured output
-        mock_model.with_structured_output.assert_called_once_with(CompletionAnalysis)
+        # Model should be called with structured output using function_calling method
+        mock_model.with_structured_output.assert_called_once_with(CompletionAnalysis, method="function_calling")
         mock_structured.ainvoke.assert_called_once()
 
         # Result should include analysis

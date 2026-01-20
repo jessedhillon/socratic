@@ -138,7 +138,7 @@ class CompletionAnalysis(p.BaseModel):
     )
     confidence: ConfidenceLevel = p.Field(description="Confidence level in the completion decision")
     criteria_status: dict[str, CriterionStatus] = p.Field(
-        description="Exploration status for each rubric criterion by name"
+        default_factory=dict, description="Exploration status for each rubric criterion by name"
     )
     reasoning: str = p.Field(description="Brief explanation of the completion decision")
     summary: str | None = p.Field(

@@ -9,7 +9,8 @@ import jinja2
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from .state import AgentState, calculate_pacing_status, CompletionAnalysis, CoverageLevel, InterviewPhase
+from .state import AgentState, calculate_pacing_status, CompletionAnalysis, CoverageLevel, CriterionStatus, \
+    InterviewPhase
 
 if t.TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -329,17 +330,33 @@ async def analyze_completion_node(
     ]
 
     # Use structured output for reliable schema-validated response
+    # Use function_calling method because OpenAI's structured outputs don't support
+    # dict with arbitrary keys (criteria_status: dict[str, CriterionStatus])
     # LangChain's with_structured_output has incomplete types, so we cast the result
-    structured_model = model.with_structured_output(CompletionAnalysis)  # pyright: ignore[reportUnknownVariableType]
+    structured_model = model.with_structured_output(CompletionAnalysis, method="function_calling")  # pyright: ignore[reportUnknownVariableType]
     result = await structured_model.ainvoke(completion_messages)  # pyright: ignore[reportUnknownVariableType]
     analysis = t.cast(CompletionAnalysis, result)
 
-    # Ensure all criteria are represented (default to NOT_TOUCHED if missing)
+    # Ensure all criteria are represented, using existing coverage tracking
+    # to fill in any missing entries from the LLM response
     rubric_criteria = state.get("rubric_criteria", [])
+    criteria_coverage = state.get("criteria_coverage", {})
+
+    # Map coverage levels to status values
+    coverage_to_status: dict[str, CriterionStatus] = {
+        CoverageLevel.FullyExplored.value: "FULLY_EXPLORED",
+        CoverageLevel.PartiallyExplored.value: "PARTIALLY_EXPLORED",
+        CoverageLevel.NotStarted.value: "NOT_TOUCHED",
+    }
+
     for criterion in rubric_criteria:
         name = criterion.get("name", "")
+        criterion_id = criterion.get("criterion_id", "")
         if name and name not in analysis.criteria_status:
-            analysis.criteria_status[name] = "NOT_TOUCHED"
+            # Look up existing coverage for this criterion
+            coverage_entry = criteria_coverage.get(criterion_id, {})
+            coverage_level = coverage_entry.get("coverage_level", CoverageLevel.NotStarted.value)
+            analysis.criteria_status[name] = coverage_to_status.get(coverage_level, "NOT_TOUCHED")
 
     return {
         "completion_analysis": analysis.model_dump(),
