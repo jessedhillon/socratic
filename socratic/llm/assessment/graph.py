@@ -10,9 +10,9 @@ import jinja2
 from langchain_core.language_models import BaseChatModel
 from langgraph.graph import END, StateGraph
 
-from .edges import after_extension, check_consent, check_extension, check_more_prompts, should_probe
-from .nodes import analyze_response_node, closure_node, dynamic_probing_node, extension_node, orientation_node, \
-    primary_prompts_node
+from .edges import after_extension, check_completion, check_consent, check_more_prompts, should_probe
+from .nodes import analyze_completion_node, analyze_response_node, closure_node, dynamic_probing_node, extension_node, \
+    orientation_node, primary_prompts_node
 from .state import AgentState, CoverageLevel
 
 if t.TYPE_CHECKING:
@@ -36,6 +36,7 @@ def build_assessment_graph(
     bound_orientation = partial(orientation_node, model=model, env=env)
     bound_primary_prompts = partial(primary_prompts_node, model=model, env=env)
     bound_analyze_response = partial(analyze_response_node, model=model, env=env)
+    bound_analyze_completion = partial(analyze_completion_node, model=model, env=env)
     bound_dynamic_probing = partial(dynamic_probing_node, model=model, env=env)
     bound_extension = partial(extension_node, model=model, env=env)
     bound_closure = partial(closure_node, model=model, env=env)
@@ -47,6 +48,7 @@ def build_assessment_graph(
     graph.add_node("orientation", bound_orientation)
     graph.add_node("primary_prompts", bound_primary_prompts)
     graph.add_node("analyze_response", bound_analyze_response)
+    graph.add_node("analyze_completion", bound_analyze_completion)
     graph.add_node("dynamic_probing", bound_dynamic_probing)
     graph.add_node("extension", bound_extension)
     graph.add_node("closure", bound_closure)
@@ -87,17 +89,18 @@ def build_assessment_graph(
         check_more_prompts,
         {
             "primary_prompts": "primary_prompts",
-            "check_extension": "check_extension",
+            "check_extension": "analyze_completion",  # Route to completion analysis
         },
     )
 
-    # Check extension policy
+    # After completion analysis, check if we should extend or close
     graph.add_conditional_edges(
-        "check_extension",
-        check_extension,
+        "analyze_completion",
+        check_completion,
         {
             "extension": "extension",
             "closure": "closure",
+            "continue": "primary_prompts",  # If AI says not ready, continue assessment
         },
     )
 
@@ -188,4 +191,6 @@ def create_initial_state(
         current_point=None,
         probing_topic=None,
         key_points_summary=[],
+        completion_ready=False,
+        completion_analysis=None,
     )

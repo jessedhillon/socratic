@@ -1,8 +1,9 @@
-"""Manual test for criteria coverage and pacing tracking in assessments.
+"""Manual test for criteria coverage, pacing, and completion detection in assessments.
 
 Tests that criteria coverage is properly tracked and updated during
-assessment conversations, and that pacing information is communicated
-in prompts. The script can run in two modes:
+assessment conversations, pacing information is communicated in prompts,
+and completion detection works correctly with structured output. The
+script can run in two modes:
 - Manual: Displays state and prompts tester to verify correctness
 - Automated: Programmatically verifies state changes
 
@@ -11,6 +12,7 @@ Usage:
     socratic-cli script test-criteria-coverage --automated        # automated mode
     socratic-cli script test-criteria-coverage -a <assignment_id> # specific assignment
     socratic-cli script test-criteria-coverage --test-pacing      # simulate time passage
+    socratic-cli script test-criteria-coverage --test-completion  # test AI completion detection
 
 Prerequisites:
     - LANGSMITH_API_KEY and LANGSMITH_TRACING=true in environment
@@ -28,6 +30,7 @@ import typing as t
 from datetime import datetime
 
 import jinja2
+import pydantic as p
 from langchain_core.language_models import BaseChatModel
 from langsmith import Client as LangSmithClient
 from rich.console import Console
@@ -39,14 +42,252 @@ from sqlalchemy.orm import Session
 import socratic.lib.cli as click
 from socratic.core import di
 from socratic.llm.assessment import calculate_pacing_status, PostgresCheckpointer, run_assessment_turn, start_assessment
-from socratic.model import AssignmentID, AttemptID, AttemptStatus
+from socratic.model import Assignment, AssignmentID, AttemptID, AttemptStatus, ExtensionPolicy, Objective, \
+    ObjectiveStatus, RubricCriterion, UserRole
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
 from socratic.storage import objective as obj_storage
+from socratic.storage import organization as org_storage
 from socratic.storage import rubric as rubric_storage
+from socratic.storage import user as user_storage
+from socratic.storage.rubric import ProficiencyLevelCreateParams
+from socratic.storage.user import MembershipCreateParams
 
 # Rich console for formatted output
 console = Console()
+
+
+def create_test_fixture(
+    session: Session,
+) -> tuple[Assignment, Objective, tuple[RubricCriterion, ...]]:
+    """Create or find test fixture data for criteria coverage testing.
+
+    Creates a complete test fixture with:
+    - Organization: "Test Organization"
+    - Users: instructor and learner
+    - Objective: "Understanding Ratios and Proportions" with 3 initial prompts
+    - Rubric criteria: 3 criteria with proficiency levels
+    - Assignment: linking learner to objective
+
+    Returns the assignment, objective, and rubric criteria.
+    """
+    fixture_slug = "test-criteria-coverage-fixture"
+
+    # Check if fixture already exists
+    existing_org = org_storage.get(slug=fixture_slug, session=session)
+    if existing_org:
+        # Find existing assignment for this org
+        assignments = assignment_storage.find(organization_id=existing_org.organization_id, session=session)
+        if assignments:
+            assignment = assignments[0]
+            objective = obj_storage.get(assignment.objective_id, session=session)
+            assert objective is not None
+            criteria = rubric_storage.find(objective_id=objective.objective_id, session=session)
+            click.echo(click.style(f"Using existing test fixture (org: {fixture_slug})", fg="cyan"))
+            return assignment, objective, criteria
+
+    click.echo(click.style("Creating new test fixture...", fg="cyan"))
+
+    # Create organization
+    org = org_storage.create(
+        name="Test Organization for Criteria Coverage",
+        slug=fixture_slug,
+        session=session,
+    )
+
+    # Create instructor user
+    instructor = user_storage.create(
+        email=f"instructor+{fixture_slug}@example.com",
+        name="Test Instructor",
+        password=p.Secret[str]("test-password-123"),
+        session=session,
+    )
+    user_storage.update(
+        instructor.user_id,
+        add_memberships={MembershipCreateParams(organization_id=org.organization_id, role=UserRole.Educator)},
+        session=session,
+    )
+
+    # Create learner user
+    learner = user_storage.create(
+        email=f"learner+{fixture_slug}@example.com",
+        name="Test Learner",
+        password=p.Secret[str]("test-password-123"),
+        session=session,
+    )
+    user_storage.update(
+        learner.user_id,
+        add_memberships={MembershipCreateParams(organization_id=org.organization_id, role=UserRole.Learner)},
+        session=session,
+    )
+
+    # Create objective with math ratios content
+    objective = obj_storage.create(
+        organization_id=org.organization_id,
+        created_by=instructor.user_id,
+        title="Understanding Ratios and Proportions",
+        description=(
+            "Assess the student's understanding of ratios and proportional relationships, "
+            "including their ability to identify equivalent ratios, solve proportion problems, "
+            "and apply proportional reasoning to real-world situations."
+        ),
+        scope_boundaries=(
+            "Focus on 6th-7th grade level ratio and proportion concepts. "
+            "Do not assess advanced algebra, statistics, or topics beyond basic proportional reasoning."
+        ),
+        time_expectation_minutes=15,
+        initial_prompts=[
+            "Can you explain what a ratio is and give me an example from everyday life?",
+            (
+                "If a recipe calls for 2 cups of flour for every 3 cups of sugar, "
+                "how much flour would you need for 9 cups of sugar? Walk me through your thinking."
+            ),
+            (
+                "A map has a scale of 1 inch = 50 miles. If two cities are 3.5 inches apart on the map, "
+                "how far apart are they in real life? Explain your reasoning."
+            ),
+        ],
+        challenge_prompts=[
+            (
+                "Can you think of a situation where proportional reasoning wouldn't apply, "
+                "even though it might seem like it should?"
+            ),
+            ("How would you explain the difference between a ratio and a fraction to someone who is confused?"),
+        ],
+        extension_policy=ExtensionPolicy.Conditional,
+        status=ObjectiveStatus.Published,
+        session=session,
+    )
+
+    # Create rubric criteria with proficiency levels
+    criteria_list: list[RubricCriterion] = []
+
+    # Criterion 1: Conceptual Understanding
+    c1 = rubric_storage.create(
+        objective_id=objective.objective_id,
+        name="Conceptual Understanding of Ratios",
+        description=(
+            "Demonstrates understanding of what ratios represent "
+            "and how they describe relationships between quantities."
+        ),
+        proficiency_levels=[
+            ProficiencyLevelCreateParams(
+                grade="Exemplary",
+                description=(
+                    "Clearly explains ratios as comparisons between quantities, "
+                    "provides multiple relevant examples, and connects to broader mathematical concepts."
+                ),
+            ),
+            ProficiencyLevelCreateParams(
+                grade="Proficient",
+                description="Accurately explains what a ratio is and provides at least one appropriate example.",
+            ),
+            ProficiencyLevelCreateParams(
+                grade="Developing",
+                description=(
+                    "Shows partial understanding of ratios but may have "
+                    "minor misconceptions or incomplete explanations."
+                ),
+            ),
+            ProficiencyLevelCreateParams(
+                grade="Beginning",
+                description=(
+                    "Shows significant misconceptions about what ratios represent "
+                    "or cannot provide a clear explanation."
+                ),
+            ),
+        ],
+        session=session,
+    )
+    criteria_list.append(c1)
+
+    # Criterion 2: Problem Solving
+    c2 = rubric_storage.create(
+        objective_id=objective.objective_id,
+        name="Proportional Problem Solving",
+        description=(
+            "Ability to set up and solve proportion problems correctly, showing clear mathematical reasoning."
+        ),
+        proficiency_levels=[
+            ProficiencyLevelCreateParams(
+                grade="Exemplary",
+                description=(
+                    "Solves proportion problems efficiently using multiple methods, "
+                    "clearly explains reasoning, and checks work."
+                ),
+            ),
+            ProficiencyLevelCreateParams(
+                grade="Proficient",
+                description=(
+                    "Correctly solves proportion problems and shows logical reasoning in the solution process."
+                ),
+            ),
+            ProficiencyLevelCreateParams(
+                grade="Developing",
+                description=(
+                    "Attempts proportion problems but may make computational errors or have gaps in reasoning."
+                ),
+            ),
+            ProficiencyLevelCreateParams(
+                grade="Beginning",
+                description="Struggles to set up or solve proportion problems correctly.",
+            ),
+        ],
+        session=session,
+    )
+    criteria_list.append(c2)
+
+    # Criterion 3: Real-World Application
+    c3 = rubric_storage.create(
+        objective_id=objective.objective_id,
+        name="Real-World Application",
+        description=("Ability to apply proportional reasoning to real-world contexts like maps, recipes, and scaling."),
+        proficiency_levels=[
+            ProficiencyLevelCreateParams(
+                grade="Exemplary",
+                description=(
+                    "Expertly applies proportional reasoning to real-world problems, "
+                    "explains context clearly, and recognizes limitations."
+                ),
+            ),
+            ProficiencyLevelCreateParams(
+                grade="Proficient",
+                description=(
+                    "Successfully applies proportional reasoning to real-world scenarios with clear explanations."
+                ),
+            ),
+            ProficiencyLevelCreateParams(
+                grade="Developing",
+                description=(
+                    "Can apply proportional reasoning but may struggle "
+                    "with interpreting context or explaining connections."
+                ),
+            ),
+            ProficiencyLevelCreateParams(
+                grade="Beginning",
+                description="Difficulty connecting proportional reasoning to real-world applications.",
+            ),
+        ],
+        session=session,
+    )
+    criteria_list.append(c3)
+
+    # Create assignment
+    assignment = assignment_storage.create(
+        organization_id=org.organization_id,
+        objective_id=objective.objective_id,
+        assigned_by=instructor.user_id,
+        assigned_to=learner.user_id,
+        max_attempts=10,
+        session=session,
+    )
+
+    click.echo(click.style(f"  Created organization: {org.name} ({org.slug})", fg="green"))
+    click.echo(click.style(f"  Created objective: {objective.title}", fg="green"))
+    click.echo(click.style(f"  Created {len(criteria_list)} rubric criteria", fg="green"))
+    click.echo(click.style(f"  Created assignment: {assignment.assignment_id}", fg="green"))
+
+    return assignment, objective, tuple(criteria_list)
 
 
 class TestResult(object):
@@ -333,6 +574,76 @@ def display_state(state: dict[str, t.Any] | None, title: str = "Assessment State
     console.print()
 
 
+def display_completion_analysis(state: dict[str, t.Any] | None, title: str = "Completion Analysis") -> None:
+    """Display the completion analysis result using rich formatting."""
+    if state is None:
+        console.print(Panel("[red]State is None[/red]", title=title))
+        return
+
+    analysis = state.get("completion_analysis")
+    if analysis is None:
+        console.print(Panel("[yellow]No completion analysis in state[/yellow]", title=title))
+        return
+
+    tree = Tree(f"[bold blue]{title}[/bold blue]")
+
+    # Completion decision
+    completion_ready = analysis.get("completion_ready", False)
+    if completion_ready:
+        ready_styled = "[green]YES - Assessment Ready to Conclude[/green]"
+    else:
+        ready_styled = "[yellow]NO - Assessment Should Continue[/yellow]"
+    tree.add(f"[cyan]Completion Ready:[/cyan] {ready_styled}")
+
+    # Confidence level
+    confidence = analysis.get("confidence", "UNKNOWN")
+    if confidence == "HIGH":
+        conf_styled = f"[green]{confidence}[/green]"
+    elif confidence == "MEDIUM":
+        conf_styled = f"[yellow]{confidence}[/yellow]"
+    else:
+        conf_styled = f"[red]{confidence}[/red]"
+    tree.add(f"[cyan]Confidence:[/cyan] {conf_styled}")
+
+    # Criteria status
+    criteria_status = analysis.get("criteria_status", {})
+    if criteria_status:
+        criteria_branch = tree.add("[bold green]Criteria Status[/bold green]")
+
+        table = Table(show_header=True, header_style="bold magenta", box=None)
+        table.add_column("Criterion", style="cyan", width=40)
+        table.add_column("Status", style="yellow", width=25)
+
+        for criterion_name, status in criteria_status.items():
+            if status == "FULLY_EXPLORED":
+                status_styled = f"[green]{status}[/green]"
+            elif status == "PARTIALLY_EXPLORED":
+                status_styled = f"[yellow]{status}[/yellow]"
+            else:
+                status_styled = f"[red]{status}[/red]"
+            table.add_row(criterion_name, status_styled)
+
+        criteria_branch.add(table)
+
+    # Reasoning
+    reasoning = analysis.get("reasoning", "")
+    if reasoning:
+        reasoning_branch = tree.add("[bold yellow]Reasoning[/bold yellow]")
+        # Word wrap the reasoning
+        for i in range(0, len(reasoning), 80):
+            reasoning_branch.add(f"[dim]{reasoning[i : i + 80]}[/dim]")
+
+    # Summary (if completing)
+    summary = analysis.get("summary")
+    if summary:
+        summary_branch = tree.add("[bold green]Summary[/bold green]")
+        for i in range(0, len(summary), 80):
+            summary_branch.add(f"[italic]{summary[i : i + 80]}[/italic]")
+
+    console.print(tree)
+    console.print()
+
+
 def parse_start_time(start_time: t.Any) -> datetime | None:
     """Parse start_time from state, handling string serialization.
 
@@ -413,12 +724,19 @@ def simulate_time_passage(
     default=False,
     help="Include pacing simulation tests (manipulate time to test different pacing scenarios)",
 )
+@click.option(
+    "--test-completion",
+    is_flag=True,
+    default=False,
+    help="Include completion detection tests (runs full assessment to test AI-driven completion)",
+)
 @di.inject
 def execute(
     assignment_id: str | None,
     automated: bool,
     project: str,
     test_pacing: bool,
+    test_completion: bool,
     session: Session = di.Manage["storage.persistent.session"],
     model: BaseChatModel = di.Provide["llm.dialogue_model"],
     env: jinja2.Environment = di.Provide["template.llm"],
@@ -431,6 +749,8 @@ def execute(
     mode_label = "Automated" if automated else "Manual"
     if test_pacing:
         mode_label += " + Pacing"
+    if test_completion:
+        mode_label += " + Completion"
     click.echo(f"Criteria Coverage Tracking - {mode_label} Test")
     click.echo("=" * 60)
 
@@ -450,45 +770,31 @@ def execute(
     click.echo(f"Mode: {'Automated' if automated else 'Manual'}")
     click.echo("")
 
-    # Get assignment
+    # Get or create assignment
     with session.begin():
         if assignment_id:
+            # Use explicitly provided assignment
             aid = AssignmentID(assignment_id)
             assignment = assignment_storage.get(aid, session=session)
             if assignment is None:
                 click.echo(f"Error: Assignment {assignment_id} not found", err=True)
                 sys.exit(1)
+
+            objective = obj_storage.get(assignment.objective_id, session=session)
+            if objective is None:
+                click.echo("Error: Objective not found", err=True)
+                sys.exit(1)
+
+            rubric_criteria = rubric_storage.find(objective_id=objective.objective_id, session=session)
+            if not rubric_criteria:
+                click.echo("Error: No rubric criteria found for objective", err=True)
+                sys.exit(1)
         else:
-            # Find first available assignment
-            import sqlalchemy as sqla
-
-            from socratic.storage.table import assignments
-
-            stmt = sqla.select(assignments.__table__).limit(1)
-            row = session.execute(stmt).mappings().first()
-            if row is None:
-                click.echo("Error: No assignments found in database", err=True)
-                sys.exit(1)
-            assignment = assignment_storage.get(AssignmentID(row["assignment_id"]), session=session)
-            if assignment is None:
-                click.echo("Error: Could not load assignment", err=True)
-                sys.exit(1)
+            # Create or reuse test fixture
+            assignment, objective, rubric_criteria = create_test_fixture(session)
 
         click.echo(f"Using assignment: {assignment.assignment_id}")
-
-        # Get objective
-        objective = obj_storage.get(assignment.objective_id, session=session)
-        if objective is None:
-            click.echo("Error: Objective not found", err=True)
-            sys.exit(1)
-
         click.echo(f"Objective: {objective.title}")
-
-        # Get rubric criteria
-        rubric_criteria = rubric_storage.find(objective_id=objective.objective_id, session=session)
-        if not rubric_criteria:
-            click.echo("Error: No rubric criteria found for objective", err=True)
-            sys.exit(1)
 
         serialized_criteria = [
             {
@@ -549,6 +855,7 @@ def execute(
             verifier=verifier,
             automated=automated,
             test_pacing=test_pacing,
+            test_completion=test_completion,
         )
     )
 
@@ -575,6 +882,7 @@ async def _run_test_flow(
     verifier: LangSmithVerifier | None,
     automated: bool,
     test_pacing: bool = False,
+    test_completion: bool = False,
 ) -> None:
     """Run the async test flow."""
     checkpointer = PostgresCheckpointer()
@@ -953,6 +1261,183 @@ async def _run_test_flow(
                 "Did the AI's response seem appropriately paced (direct, not verbose)?", default=True
             )
             results.record("AI adjusts behavior based on pacing", pacing_behavior)
+
+    # ========== PHASE 5: Completion Detection Tests (optional) ==========
+    if test_completion:
+        click.echo("\n" + "-" * 60)
+        click.echo("PHASE 5: Completion Detection Tests")
+        click.echo("-" * 60 + "\n")
+
+        # Get current state to see how many prompts we've covered
+        state = checkpointer.get(attempt_id)
+        if state:
+            prompts_covered = state.get("current_prompt_index", 0)
+            total_prompts = len(initial_prompts)
+
+            click.echo(f"Prompts covered so far: {prompts_covered} of {total_prompts}")
+
+            # Note: current_prompt_index tracks prompts DELIVERED, not prompts ANSWERED.
+            # After all prompts are delivered (index == total), the learner still needs
+            # to respond to trigger completion analysis. So we need to send at least
+            # one more response when index >= total.
+            remaining_prompts = total_prompts - prompts_covered
+            needs_final_response = prompts_covered >= total_prompts
+
+            # Define responses for remaining prompts
+            completion_responses = [
+                "For the map question, if 1 inch = 50 miles and the cities are 3.5 inches "
+                "apart, I would multiply 3.5 by 50 to get 175 miles. The scale is just "
+                "a ratio between map distance and real distance.",
+                "I think ratios are fundamental in many areas - cooking, maps, finance. "
+                "When you say a map has a 1:10000 scale, you're expressing a ratio.",
+                "The connection between ratios and fractions is that they both express "
+                "part-to-whole or part-to-part relationships. 3/4 is like saying 3:4 "
+                "when comparing parts.",
+                "In real life, I'd use ratios to figure out how to scale a recipe "
+                "or calculate proportional costs. If 3 items cost $15, then 9 items "
+                "would cost $45 because the ratio is maintained.",
+            ]
+
+            if remaining_prompts > 0 or needs_final_response:
+                if needs_final_response:
+                    click.echo("\nAll prompts delivered - sending final response to trigger completion analysis...")
+                    num_responses = 1
+                else:
+                    click.echo(f"\nContinuing assessment to complete remaining {remaining_prompts} prompts...")
+                    # Need remaining_prompts responses to deliver all prompts, plus 1 more
+                    # to respond to the final prompt and trigger completion analysis
+                    num_responses = remaining_prompts + 1
+                click.echo("(Completion analysis should trigger after learner responds to final prompt)\n")
+                for i in range(num_responses):
+                    # Use a response from our list, cycling if needed
+                    response = completion_responses[i % len(completion_responses)]
+
+                    click.echo(f"\n[Learner]: {response}")
+                    click.echo("\n[AI Interviewer]: ", nl=False)
+
+                    full_response = ""
+                    async for token in run_assessment_turn(
+                        attempt_id=attempt_id,
+                        learner_message=response,
+                        checkpointer=checkpointer,
+                        model=model,
+                        env=env,
+                    ):
+                        full_response += token
+                        click.echo(token, nl=False)
+
+                    click.echo("\n")
+
+                    # Check if completion analysis has been triggered
+                    state = checkpointer.get(attempt_id)
+                    if state and state.get("completion_analysis"):
+                        click.echo("[Completion analysis triggered!]")
+                        break
+
+            # Now verify completion analysis
+            click.echo("\n" + "=" * 60)
+            click.echo("VERIFICATION: Completion Analysis")
+            click.echo("=" * 60 + "\n")
+
+            state = checkpointer.get(attempt_id)
+
+            if automated:
+                if state:
+                    # Test: Completion analysis should exist after all prompts
+                    analysis = state.get("completion_analysis")
+
+                    results.record(
+                        "Completion analysis triggered after all prompts",
+                        analysis is not None,
+                        f"current_prompt_index={state.get('current_prompt_index')}, "
+                        f"total_prompts={len(initial_prompts)}",
+                    )
+
+                    if analysis:
+                        # Test: completion_ready is a boolean
+                        completion_ready = analysis.get("completion_ready")
+                        results.record(
+                            "completion_ready is boolean",
+                            isinstance(completion_ready, bool),
+                            f"type={type(completion_ready).__name__}",
+                        )
+
+                        # Test: confidence is valid
+                        confidence = analysis.get("confidence")
+                        results.record(
+                            "confidence is valid level",
+                            confidence in ("HIGH", "MEDIUM", "LOW"),
+                            f"confidence={confidence}",
+                        )
+
+                        # Test: criteria_status has entries
+                        criteria_status = analysis.get("criteria_status", {})
+                        results.record(
+                            "criteria_status contains entries",
+                            len(criteria_status) > 0,
+                            f"Found {len(criteria_status)} criteria",
+                        )
+
+                        # Test: All criteria_status values are valid
+                        valid_statuses = {"FULLY_EXPLORED", "PARTIALLY_EXPLORED", "NOT_TOUCHED"}
+                        all_valid = all(v in valid_statuses for v in criteria_status.values())
+                        results.record(
+                            "criteria_status values are valid",
+                            all_valid,
+                            f"statuses: {set(criteria_status.values())}",
+                        )
+
+                        # Test: reasoning is non-empty
+                        reasoning = analysis.get("reasoning", "")
+                        results.record(
+                            "reasoning is provided",
+                            len(reasoning) > 10,
+                            f"length={len(reasoning)}",
+                        )
+
+                        # Debug output
+                        click.echo("\nCompletion analysis result:")
+                        click.echo(f"  completion_ready: {completion_ready}")
+                        click.echo(f"  confidence: {confidence}")
+                        click.echo(f"  criteria_status: {criteria_status}")
+                        click.echo(f"  reasoning: {reasoning[:100]}...")
+                else:
+                    results.record("State exists for completion check", False, "State is None")
+            else:
+                # Manual mode: display completion analysis and ask for verification
+                display_state(state, "State Before Completion Analysis Check")
+                display_completion_analysis(state, "Completion Analysis Result")
+
+                console.print("[bold]Expected behavior:[/bold]")
+                click.echo("  - completion_analysis should exist in state after all prompts")
+                click.echo("  - completion_ready should be true or false (AI's decision)")
+                click.echo("  - confidence should be HIGH, MEDIUM, or LOW")
+                click.echo("  - criteria_status should have an entry for each criterion")
+                click.echo("  - reasoning should explain the AI's decision")
+                click.echo("")
+
+                if state and state.get("completion_analysis"):
+                    analysis = state["completion_analysis"]
+
+                    v5_analysis_exists = click.confirm("Does completion_analysis exist?", default=True)
+                    results.record("Completion analysis exists", v5_analysis_exists)
+
+                    v5_confidence_valid = click.confirm(
+                        f"Is confidence level valid? ({analysis.get('confidence')})", default=True
+                    )
+                    results.record("Confidence level is valid", v5_confidence_valid)
+
+                    v5_criteria_covered = click.confirm("Does criteria_status cover all rubric criteria?", default=True)
+                    results.record("Criteria status covers all criteria", v5_criteria_covered)
+
+                    v5_reasoning_coherent = click.confirm("Is the reasoning coherent and appropriate?", default=True)
+                    results.record("Reasoning is coherent", v5_reasoning_coherent)
+                else:
+                    results.record(
+                        "Completion analysis exists",
+                        False,
+                        "completion_analysis not found in state",
+                    )
 
     # ========== Summary ==========
     click.echo("\n" + "-" * 60)

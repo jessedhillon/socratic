@@ -12,7 +12,8 @@ from socratic.model import AttemptID
 
 from .checkpointer import PostgresCheckpointer
 from .graph import create_initial_state
-from .nodes import build_system_prompt, build_template_context, get_content_str, render_template
+from .nodes import analyze_completion_node, build_system_prompt, build_template_context, get_content_str, \
+    render_template
 from .state import AgentState, CoverageLevel, InterviewPhase
 
 if t.TYPE_CHECKING:
@@ -72,6 +73,44 @@ async def run_assessment_turn(
         analysis_result = await _analyze_response(state, learner_message, model, env)
         state.update(analysis_result)
 
+    # Check if all prompts are complete BEFORE generating response
+    if current_phase == InterviewPhase.PrimaryPrompts:
+        current_index = state.get("current_prompt_index", 0)
+        initial_prompts = state.get("initial_prompts", [])
+
+        if current_index >= len(initial_prompts):
+            # All prompts complete - run completion analysis now
+            completion_result = await analyze_completion_node(state, model, env)
+            state.update(completion_result)
+
+            # Route based on completion analysis
+            completion_ready = state.get("completion_ready", False)
+            extension_policy = state.get("extension_policy", "disallowed")
+
+            if completion_ready:
+                state["phase"] = InterviewPhase.Closure
+                current_phase = InterviewPhase.Closure
+            elif extension_policy == "allowed":
+                state["phase"] = InterviewPhase.Extension
+                current_phase = InterviewPhase.Extension
+            elif extension_policy == "conditional":
+                completion_analysis = state.get("completion_analysis")
+                if completion_analysis:
+                    criteria_status = completion_analysis.get("criteria_status", {})
+                    all_touched = all(status != "NOT_TOUCHED" for status in criteria_status.values())
+                    if all_touched:
+                        state["phase"] = InterviewPhase.Extension
+                        current_phase = InterviewPhase.Extension
+                    else:
+                        state["phase"] = InterviewPhase.Closure
+                        current_phase = InterviewPhase.Closure
+                else:
+                    state["phase"] = InterviewPhase.Closure
+                    current_phase = InterviewPhase.Closure
+            else:
+                state["phase"] = InterviewPhase.Closure
+                current_phase = InterviewPhase.Closure
+
     # Build prompts and generate response
     system_prompt = build_system_prompt(env, state)
     context = build_template_context(state, current_phase)
@@ -106,19 +145,12 @@ async def run_assessment_turn(
     messages.append(AIMessage(content=full_response))
     state["messages"] = messages
 
-    # Update phase tracking
+    # Update prompt index after delivering a prompt (if still in PrimaryPrompts)
     if current_phase == InterviewPhase.PrimaryPrompts:
-        # Increment prompt index after delivering a prompt
         current_index = state.get("current_prompt_index", 0)
         initial_prompts = state.get("initial_prompts", [])
         if current_index < len(initial_prompts):
             state["current_prompt_index"] = current_index + 1
-        else:
-            # Move to extension or closure
-            if state.get("extension_policy") == "allowed":
-                state["phase"] = InterviewPhase.Extension
-            else:
-                state["phase"] = InterviewPhase.Closure
 
     # Save updated state
     checkpointer.put(attempt_id, state)

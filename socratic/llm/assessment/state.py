@@ -7,6 +7,8 @@ import typing as t
 from datetime import datetime, timezone
 from typing import TypedDict
 
+import pydantic as p
+
 
 class InterviewPhase(enum.Enum):
     """Phases of the Socratic interview."""
@@ -117,6 +119,33 @@ def calculate_pacing_status(
     )
 
 
+CriterionStatus = t.Literal["FULLY_EXPLORED", "PARTIALLY_EXPLORED", "NOT_TOUCHED"]
+"""Status of exploration for a rubric criterion."""
+
+ConfidenceLevel = t.Literal["HIGH", "MEDIUM", "LOW"]
+"""Confidence level for completion analysis."""
+
+
+class CompletionAnalysis(p.BaseModel):
+    """Result of AI-driven completion analysis.
+
+    Used with LangChain's structured output to get reliable
+    schema-validated responses from the LLM.
+    """
+
+    completion_ready: bool = p.Field(
+        description="Whether the assessment has gathered sufficient information to conclude"
+    )
+    confidence: ConfidenceLevel = p.Field(description="Confidence level in the completion decision")
+    criteria_status: dict[str, CriterionStatus] = p.Field(
+        default_factory=dict, description="Exploration status for each rubric criterion by name"
+    )
+    reasoning: str = p.Field(description="Brief explanation of the completion decision")
+    summary: str | None = p.Field(
+        default=None, description="Summary of what was assessed (only if completion_ready is true)"
+    )
+
+
 # Using a regular dict type alias for more flexible state handling
 # TypedDict is too strict for LangGraph's dynamic state updates
 AgentState = dict[str, t.Any]
@@ -150,4 +179,6 @@ Expected keys:
 - current_point: str | None - For inconsistency probing
 - probing_topic: str | None - Current topic being probed
 - key_points_summary: list[str] - For closure
+- completion_analysis: CompletionAnalysis | None - Result of AI completion check
+- completion_ready: bool - Whether AI determined assessment should complete
 """
