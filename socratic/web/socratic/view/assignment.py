@@ -89,6 +89,9 @@ class AssignmentWithAttemptsResponse(p.BaseModel):
     assignment_id: AssignmentID
     organization_id: OrganizationID
     objective_id: ObjectiveID
+    objective_title: str | None = None
+    objective_description: str | None = None
+    expected_duration_minutes: int | None = None
     assigned_by: UserID
     assigned_to: UserID
     available_from: datetime.datetime | None = None
@@ -100,6 +103,8 @@ class AssignmentWithAttemptsResponse(p.BaseModel):
     update_time: datetime.datetime | None = None
     attempts: list[AttemptResponse] = []
     attempts_remaining: int = 0
+    is_available: bool = True
+    is_locked: bool = False
 
 
 class LearnerResponse(p.BaseModel):
