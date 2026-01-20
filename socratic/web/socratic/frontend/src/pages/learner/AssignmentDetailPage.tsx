@@ -236,7 +236,7 @@ const AssignmentDetailPage: React.FC = () => {
         {/* Main content card */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           {/* Header section */}
-          <div className="p-6 border-b">
+          <div className="p-6 border-b border-gray-200">
             <h1 className="text-2xl font-bold text-gray-800 mb-2">
               {assignment.objective_title ?? 'Assignment'}
             </h1>
@@ -248,7 +248,7 @@ const AssignmentDetailPage: React.FC = () => {
           </div>
 
           {/* Info section */}
-          <div className="p-6 border-b bg-gray-50">
+          <div className="p-6 border-b border-gray-200 bg-gray-50">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Duration */}
               <div>
@@ -333,7 +333,7 @@ const AssignmentDetailPage: React.FC = () => {
 
           {/* Status indicators */}
           {(assignment.is_locked || !assignment.is_available) && (
-            <div className="p-4 bg-yellow-50 border-b">
+            <div className="p-4 bg-yellow-50 border-b border-gray-200">
               {assignment.is_locked && (
                 <div className="flex items-center gap-2 text-yellow-700">
                   <svg
@@ -381,7 +381,7 @@ const AssignmentDetailPage: React.FC = () => {
           )}
 
           {/* Action section */}
-          <div className="p-6 border-b">
+          <div className="p-6">
             <button
               onClick={handleStartAssessment}
               disabled={!canStart}
