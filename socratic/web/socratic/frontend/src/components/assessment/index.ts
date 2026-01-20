@@ -18,3 +18,9 @@ export {
   type SendMessageResult,
 } from './useAssessmentApi';
 export { SpeakButton } from './SpeakButton';
+export {
+  AssessmentCompletionScreen,
+  type AssessmentCompletionScreenProps,
+  type AssessmentSummary,
+  type CompletionStep,
+} from './AssessmentCompletionScreen';
