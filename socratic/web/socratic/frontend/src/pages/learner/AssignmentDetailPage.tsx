@@ -251,68 +251,77 @@ const AssignmentDetailPage: React.FC = () => {
           <div className="p-6 border-b bg-gray-50">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Duration */}
-              {duration && (
-                <div>
-                  <div className="text-sm text-gray-500 mb-1">
-                    Expected Duration
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <svg
-                      className="w-5 h-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <span className="font-medium">{duration}</span>
-                  </div>
+              <div>
+                <div className="text-sm text-gray-500 mb-1">
+                  Expected Duration
                 </div>
-              )}
+                <div className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span
+                    className={
+                      duration ? 'font-medium' : 'font-medium text-gray-400'
+                    }
+                  >
+                    {duration ?? 'No time limit'}
+                  </span>
+                </div>
+              </div>
 
               {/* Attempts */}
               <div>
                 <div className="text-sm text-gray-500 mb-1">Attempts</div>
                 <div className="font-medium">
                   {attempts.length} of {assignment.max_attempts} used
-                  {(assignment.attempts_remaining ?? 0) > 0 && (
-                    <span className="text-gray-500 ml-1">
-                      ({assignment.attempts_remaining} remaining)
-                    </span>
-                  )}
                 </div>
+                {(assignment.attempts_remaining ?? 0) > 0 && (
+                  <div className="text-sm text-gray-500">
+                    {assignment.attempts_remaining} remaining
+                  </div>
+                )}
               </div>
 
               {/* Availability */}
               <div>
                 <div className="text-sm text-gray-500 mb-1">Availability</div>
-                <div className="font-medium">
-                  {assignment.available_from && (
-                    <div className="text-sm">
-                      From: {formatDate(assignment.available_from)}
+                {assignment.available_from && (
+                  <div>
+                    <div className="font-medium">
+                      {formatDate(assignment.available_from)}
                     </div>
-                  )}
-                  {assignment.available_until && (
-                    <div className="text-sm">
-                      Until: {formatDate(assignment.available_until)}
+                    <div className="text-sm text-gray-500">start</div>
+                  </div>
+                )}
+                {assignment.available_until && (
+                  <div>
+                    <div className="font-medium">
+                      {formatDate(assignment.available_until)}
                     </div>
-                  )}
-                  {!assignment.available_from &&
-                    !assignment.available_until && (
-                      <span className="text-green-600">Always available</span>
-                    )}
-                </div>
+                    <div className="text-sm text-gray-500">end</div>
+                  </div>
+                )}
+                {!assignment.available_from && !assignment.available_until && (
+                  <div className="font-medium text-green-600">
+                    Always available
+                  </div>
+                )}
               </div>
 
               {/* Retake Policy */}
               <div>
                 <div className="text-sm text-gray-500 mb-1">Retake Policy</div>
-                <div className="text-sm">
+                <div className="font-medium">
                   {getRetakePolicyDescription(
                     assignment.retake_policy,
                     assignment.retake_delay_hours
