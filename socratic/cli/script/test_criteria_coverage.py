@@ -1,8 +1,9 @@
-"""Manual test for criteria coverage and pacing tracking in assessments.
+"""Manual test for criteria coverage, pacing, and completion detection in assessments.
 
 Tests that criteria coverage is properly tracked and updated during
-assessment conversations, and that pacing information is communicated
-in prompts. The script can run in two modes:
+assessment conversations, pacing information is communicated in prompts,
+and completion detection works correctly with structured output. The
+script can run in two modes:
 - Manual: Displays state and prompts tester to verify correctness
 - Automated: Programmatically verifies state changes
 
@@ -11,6 +12,7 @@ Usage:
     socratic-cli script test-criteria-coverage --automated        # automated mode
     socratic-cli script test-criteria-coverage -a <assignment_id> # specific assignment
     socratic-cli script test-criteria-coverage --test-pacing      # simulate time passage
+    socratic-cli script test-criteria-coverage --test-completion  # test AI completion detection
 
 Prerequisites:
     - LANGSMITH_API_KEY and LANGSMITH_TRACING=true in environment
@@ -333,6 +335,76 @@ def display_state(state: dict[str, t.Any] | None, title: str = "Assessment State
     console.print()
 
 
+def display_completion_analysis(state: dict[str, t.Any] | None, title: str = "Completion Analysis") -> None:
+    """Display the completion analysis result using rich formatting."""
+    if state is None:
+        console.print(Panel("[red]State is None[/red]", title=title))
+        return
+
+    analysis = state.get("completion_analysis")
+    if analysis is None:
+        console.print(Panel("[yellow]No completion analysis in state[/yellow]", title=title))
+        return
+
+    tree = Tree(f"[bold blue]{title}[/bold blue]")
+
+    # Completion decision
+    completion_ready = analysis.get("completion_ready", False)
+    if completion_ready:
+        ready_styled = "[green]YES - Assessment Ready to Conclude[/green]"
+    else:
+        ready_styled = "[yellow]NO - Assessment Should Continue[/yellow]"
+    tree.add(f"[cyan]Completion Ready:[/cyan] {ready_styled}")
+
+    # Confidence level
+    confidence = analysis.get("confidence", "UNKNOWN")
+    if confidence == "HIGH":
+        conf_styled = f"[green]{confidence}[/green]"
+    elif confidence == "MEDIUM":
+        conf_styled = f"[yellow]{confidence}[/yellow]"
+    else:
+        conf_styled = f"[red]{confidence}[/red]"
+    tree.add(f"[cyan]Confidence:[/cyan] {conf_styled}")
+
+    # Criteria status
+    criteria_status = analysis.get("criteria_status", {})
+    if criteria_status:
+        criteria_branch = tree.add("[bold green]Criteria Status[/bold green]")
+
+        table = Table(show_header=True, header_style="bold magenta", box=None)
+        table.add_column("Criterion", style="cyan", width=40)
+        table.add_column("Status", style="yellow", width=25)
+
+        for criterion_name, status in criteria_status.items():
+            if status == "FULLY_EXPLORED":
+                status_styled = f"[green]{status}[/green]"
+            elif status == "PARTIALLY_EXPLORED":
+                status_styled = f"[yellow]{status}[/yellow]"
+            else:
+                status_styled = f"[red]{status}[/red]"
+            table.add_row(criterion_name, status_styled)
+
+        criteria_branch.add(table)
+
+    # Reasoning
+    reasoning = analysis.get("reasoning", "")
+    if reasoning:
+        reasoning_branch = tree.add("[bold yellow]Reasoning[/bold yellow]")
+        # Word wrap the reasoning
+        for i in range(0, len(reasoning), 80):
+            reasoning_branch.add(f"[dim]{reasoning[i : i + 80]}[/dim]")
+
+    # Summary (if completing)
+    summary = analysis.get("summary")
+    if summary:
+        summary_branch = tree.add("[bold green]Summary[/bold green]")
+        for i in range(0, len(summary), 80):
+            summary_branch.add(f"[italic]{summary[i : i + 80]}[/italic]")
+
+    console.print(tree)
+    console.print()
+
+
 def parse_start_time(start_time: t.Any) -> datetime | None:
     """Parse start_time from state, handling string serialization.
 
@@ -413,12 +485,19 @@ def simulate_time_passage(
     default=False,
     help="Include pacing simulation tests (manipulate time to test different pacing scenarios)",
 )
+@click.option(
+    "--test-completion",
+    is_flag=True,
+    default=False,
+    help="Include completion detection tests (runs full assessment to test AI-driven completion)",
+)
 @di.inject
 def execute(
     assignment_id: str | None,
     automated: bool,
     project: str,
     test_pacing: bool,
+    test_completion: bool,
     session: Session = di.Manage["storage.persistent.session"],
     model: BaseChatModel = di.Provide["llm.dialogue_model"],
     env: jinja2.Environment = di.Provide["template.llm"],
@@ -431,6 +510,8 @@ def execute(
     mode_label = "Automated" if automated else "Manual"
     if test_pacing:
         mode_label += " + Pacing"
+    if test_completion:
+        mode_label += " + Completion"
     click.echo(f"Criteria Coverage Tracking - {mode_label} Test")
     click.echo("=" * 60)
 
@@ -549,6 +630,7 @@ def execute(
             verifier=verifier,
             automated=automated,
             test_pacing=test_pacing,
+            test_completion=test_completion,
         )
     )
 
@@ -575,6 +657,7 @@ async def _run_test_flow(
     verifier: LangSmithVerifier | None,
     automated: bool,
     test_pacing: bool = False,
+    test_completion: bool = False,
 ) -> None:
     """Run the async test flow."""
     checkpointer = PostgresCheckpointer()
@@ -953,6 +1036,170 @@ async def _run_test_flow(
                 "Did the AI's response seem appropriately paced (direct, not verbose)?", default=True
             )
             results.record("AI adjusts behavior based on pacing", pacing_behavior)
+
+    # ========== PHASE 5: Completion Detection Tests (optional) ==========
+    if test_completion:
+        click.echo("\n" + "-" * 60)
+        click.echo("PHASE 5: Completion Detection Tests")
+        click.echo("-" * 60 + "\n")
+
+        # Get current state to see how many prompts we've covered
+        state = checkpointer.get(attempt_id)
+        if state:
+            prompts_covered = state.get("current_prompt_index", 0)
+            total_prompts = len(initial_prompts)
+
+            click.echo(f"Prompts covered so far: {prompts_covered} of {total_prompts}")
+
+            # If we haven't covered all prompts yet, continue the assessment
+            remaining_prompts = total_prompts - prompts_covered
+
+            if remaining_prompts > 0:
+                click.echo(f"\nContinuing assessment to complete remaining {remaining_prompts} prompts...")
+                click.echo("(Completion analysis should trigger only after all prompts are complete)\n")
+
+                # Define responses for remaining prompts
+                completion_responses = [
+                    "I think ratios are fundamental in many areas - cooking, maps, finance. "
+                    "When you say a map has a 1:10000 scale, you're expressing a ratio.",
+                    "The connection between ratios and fractions is that they both express "
+                    "part-to-whole or part-to-part relationships. 3/4 is like saying 3:4 "
+                    "when comparing parts.",
+                    "In real life, I'd use ratios to figure out how to scale a recipe "
+                    "or calculate proportional costs. If 3 items cost $15, then 9 items "
+                    "would cost $45 because the ratio is maintained.",
+                ]
+
+                for i in range(remaining_prompts):
+                    # Use a response from our list, cycling if needed
+                    response = completion_responses[i % len(completion_responses)]
+
+                    click.echo(f"\n[Learner]: {response}")
+                    click.echo("\n[AI Interviewer]: ", nl=False)
+
+                    full_response = ""
+                    async for token in run_assessment_turn(
+                        attempt_id=attempt_id,
+                        learner_message=response,
+                        checkpointer=checkpointer,
+                        model=model,
+                        env=env,
+                    ):
+                        full_response += token
+                        click.echo(token, nl=False)
+
+                    click.echo("\n")
+
+                    # Check if completion analysis has been triggered
+                    state = checkpointer.get(attempt_id)
+                    if state and state.get("completion_analysis"):
+                        click.echo("[Completion analysis triggered!]")
+                        break
+
+            # Now verify completion analysis
+            click.echo("\n" + "=" * 60)
+            click.echo("VERIFICATION: Completion Analysis")
+            click.echo("=" * 60 + "\n")
+
+            state = checkpointer.get(attempt_id)
+
+            if automated:
+                if state:
+                    # Test: Completion analysis should exist after all prompts
+                    analysis = state.get("completion_analysis")
+
+                    results.record(
+                        "Completion analysis triggered after all prompts",
+                        analysis is not None,
+                        f"current_prompt_index={state.get('current_prompt_index')}, "
+                        f"total_prompts={len(initial_prompts)}",
+                    )
+
+                    if analysis:
+                        # Test: completion_ready is a boolean
+                        completion_ready = analysis.get("completion_ready")
+                        results.record(
+                            "completion_ready is boolean",
+                            isinstance(completion_ready, bool),
+                            f"type={type(completion_ready).__name__}",
+                        )
+
+                        # Test: confidence is valid
+                        confidence = analysis.get("confidence")
+                        results.record(
+                            "confidence is valid level",
+                            confidence in ("HIGH", "MEDIUM", "LOW"),
+                            f"confidence={confidence}",
+                        )
+
+                        # Test: criteria_status has entries
+                        criteria_status = analysis.get("criteria_status", {})
+                        results.record(
+                            "criteria_status contains entries",
+                            len(criteria_status) > 0,
+                            f"Found {len(criteria_status)} criteria",
+                        )
+
+                        # Test: All criteria_status values are valid
+                        valid_statuses = {"FULLY_EXPLORED", "PARTIALLY_EXPLORED", "NOT_TOUCHED"}
+                        all_valid = all(v in valid_statuses for v in criteria_status.values())
+                        results.record(
+                            "criteria_status values are valid",
+                            all_valid,
+                            f"statuses: {set(criteria_status.values())}",
+                        )
+
+                        # Test: reasoning is non-empty
+                        reasoning = analysis.get("reasoning", "")
+                        results.record(
+                            "reasoning is provided",
+                            len(reasoning) > 10,
+                            f"length={len(reasoning)}",
+                        )
+
+                        # Debug output
+                        click.echo("\nCompletion analysis result:")
+                        click.echo(f"  completion_ready: {completion_ready}")
+                        click.echo(f"  confidence: {confidence}")
+                        click.echo(f"  criteria_status: {criteria_status}")
+                        click.echo(f"  reasoning: {reasoning[:100]}...")
+                else:
+                    results.record("State exists for completion check", False, "State is None")
+            else:
+                # Manual mode: display completion analysis and ask for verification
+                display_state(state, "State Before Completion Analysis Check")
+                display_completion_analysis(state, "Completion Analysis Result")
+
+                console.print("[bold]Expected behavior:[/bold]")
+                click.echo("  - completion_analysis should exist in state after all prompts")
+                click.echo("  - completion_ready should be true or false (AI's decision)")
+                click.echo("  - confidence should be HIGH, MEDIUM, or LOW")
+                click.echo("  - criteria_status should have an entry for each criterion")
+                click.echo("  - reasoning should explain the AI's decision")
+                click.echo("")
+
+                if state and state.get("completion_analysis"):
+                    analysis = state["completion_analysis"]
+
+                    v5_analysis_exists = click.confirm("Does completion_analysis exist?", default=True)
+                    results.record("Completion analysis exists", v5_analysis_exists)
+
+                    v5_confidence_valid = click.confirm(
+                        f"Is confidence level valid? ({analysis.get('confidence')})", default=True
+                    )
+                    results.record("Confidence level is valid", v5_confidence_valid)
+
+                    v5_criteria_covered = click.confirm("Does criteria_status cover all rubric criteria?", default=True)
+                    results.record("Criteria status covers all criteria", v5_criteria_covered)
+
+                    v5_reasoning_coherent = click.confirm("Is the reasoning coherent and appropriate?", default=True)
+                    results.record("Reasoning is coherent", v5_reasoning_coherent)
+                else:
+                    results.record(
+                        "Completion analysis exists",
+                        False,
+                        "completion_analysis not found in state",
+                    )
 
     # ========== Summary ==========
     click.echo("\n" + "-" * 60)
