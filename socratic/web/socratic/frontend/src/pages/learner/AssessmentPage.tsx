@@ -5,6 +5,8 @@ import {
   useAssessmentState,
   useAssessmentApi,
 } from '../../components/assessment';
+import { RecordingStatusOverlay } from '../../components/RecordingStatusOverlay';
+import { useRecordingSession } from '../../hooks/useRecordingSession';
 
 /**
  * Assessment page - where learners complete their assessments.
@@ -21,8 +23,21 @@ const AssessmentPage: React.FC = () => {
   const { state, actions } = useAssessmentState();
   const api = useAssessmentApi();
 
+  // Recording session for video/audio capture
+  const {
+    sessionState,
+    stream,
+    duration,
+    isPausedByVisibility,
+    initialize: initializeRecording,
+  } = useRecordingSession({
+    pauseOnHidden: true,
+    autoStart: true,
+  });
+
   // Track if we've started initialization to prevent double-starts
   const initStartedRef = useRef(false);
+  const recordingInitStartedRef = useRef(false);
 
   // Track streamed content for the current message
   const streamedContentRef = useRef('');
@@ -73,6 +88,19 @@ const AssessmentPage: React.FC = () => {
 
     startAssessmentFlow();
   }, [state.phase, state.assignmentId, actions, api]);
+
+  // Initialize recording when assessment becomes active
+  useEffect(() => {
+    const initRecording = async () => {
+      if (state.phase !== 'active') return;
+      if (recordingInitStartedRef.current) return;
+      recordingInitStartedRef.current = true;
+
+      await initializeRecording();
+    };
+
+    initRecording();
+  }, [state.phase, initializeRecording]);
 
   // Handle sending messages
   const handleSendMessage = useCallback(
@@ -208,10 +236,15 @@ const AssessmentPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Progress indicator placeholder */}
-        <div className="text-sm text-gray-500">
-          {state.messages.filter((m) => m.type === 'learner').length} responses
-        </div>
+        {/* Recording status overlay */}
+        <RecordingStatusOverlay
+          isRecording={sessionState === 'recording'}
+          isPaused={sessionState === 'paused'}
+          durationSeconds={duration}
+          isPausedByVisibility={isPausedByVisibility}
+          stream={stream}
+          showAudioLevel
+        />
       </header>
 
       {/* Chat interface */}

@@ -160,7 +160,7 @@ const AssignmentDetailPage: React.FC = () => {
 
   const handleStartAssessment = () => {
     if (assignmentId) {
-      navigate(`/assessment/${assignmentId}`);
+      navigate(`/assessments/${assignmentId}`);
     }
   };
 
