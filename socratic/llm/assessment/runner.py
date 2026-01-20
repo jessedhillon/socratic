@@ -13,7 +13,7 @@ from socratic.model import AttemptID
 from .checkpointer import PostgresCheckpointer
 from .graph import create_initial_state
 from .nodes import build_system_prompt, build_template_context, get_content_str, render_template
-from .state import InterviewPhase
+from .state import AgentState, CoverageLevel, InterviewPhase
 
 if t.TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -66,6 +66,11 @@ async def run_assessment_turn(
             if _check_decline(learner_message):
                 state["phase"] = InterviewPhase.Closure
                 current_phase = InterviewPhase.Closure
+
+    # Analyze learner response for criteria coverage (after consent confirmed)
+    if state.get("learner_consent_confirmed", False) and current_phase != InterviewPhase.Closure:
+        analysis_result = await _analyze_response(state, learner_message, model, env)
+        state.update(analysis_result)
 
     # Build prompts and generate response
     system_prompt = build_system_prompt(env, state)
@@ -209,6 +214,131 @@ def _check_decline(message: str) -> bool:
     message_lower = message.lower()
     decline_keywords = ["no", "not ready", "stop", "cancel", "quit", "don't", "cant", "can't"]
     return any(keyword in message_lower for keyword in decline_keywords)
+
+
+async def _analyze_response(
+    state: AgentState,
+    learner_message: str,
+    model: BaseChatModel,
+    env: jinja2.Environment,
+) -> dict[str, t.Any]:
+    """Analyze the learner's response for criteria coverage.
+
+    This is a simplified version of analyze_response_node that focuses
+    on criteria coverage tracking without the full probing analysis.
+
+    Args:
+        state: Current assessment state
+        learner_message: The learner's message text
+        model: LLM for analysis
+        env: Jinja2 environment for prompts
+
+    Returns:
+        Dict with updated criteria_coverage and current_turn
+    """
+    current_turn = state.get("current_turn", 0) + 1
+    criteria_coverage = dict(state.get("criteria_coverage", {}))
+    rubric_criteria = state.get("rubric_criteria", [])
+
+    result: dict[str, t.Any] = {
+        "current_turn": current_turn,
+    }
+
+    if not rubric_criteria:
+        return result
+
+    # Build system prompt for context
+    system_prompt = build_system_prompt(env, state)
+
+    # Build coverage analysis prompt
+    coverage_prompt = render_template(
+        env,
+        "assessment/analyze_coverage.j2",
+        learner_response=learner_message,
+        rubric_criteria=rubric_criteria,
+        criteria_coverage=criteria_coverage,
+        conversation_history=[get_content_str(m.content) for m in state.get("messages", [])[-6:]],
+    )
+
+    # Get coverage analysis from LLM
+    analysis_messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=coverage_prompt),
+    ]
+
+    response = await model.ainvoke(analysis_messages)
+    response_text = get_content_str(response.content)
+
+    # Parse coverage updates
+    updated_coverage = _parse_coverage_response(
+        response_text,
+        criteria_coverage,
+        current_turn,
+    )
+    result["criteria_coverage"] = updated_coverage
+
+    return result
+
+
+def _parse_coverage_response(
+    response_text: str,
+    current_coverage: dict[str, dict[str, t.Any]],
+    current_turn: int,
+) -> dict[str, dict[str, t.Any]]:
+    """Parse the coverage analysis response and update coverage tracking.
+
+    Expected format:
+    - criterion_id: [none/partial/full] - "evidence quote"
+    """
+    import re as regex
+
+    updated = dict(current_coverage)
+
+    # Pattern to match coverage entries
+    pattern = r"-\s*(\S+):\s*(none|partial|full)\s*-\s*\"([^\"]*)\""
+    matches = regex.findall(pattern, response_text, regex.IGNORECASE)
+
+    for criterion_id, level, evidence in matches:
+        if criterion_id not in updated:
+            continue
+
+        entry = dict(updated[criterion_id])
+        level_lower = level.lower()
+
+        # Determine new coverage level
+        if level_lower == "full":
+            new_level = CoverageLevel.FullyExplored.value
+        elif level_lower == "partial":
+            new_level = CoverageLevel.PartiallyExplored.value
+        else:
+            new_level = entry.get("coverage_level", CoverageLevel.NotStarted.value)
+
+        # Only upgrade coverage, never downgrade
+        current_level = entry.get("coverage_level", CoverageLevel.NotStarted.value)
+        if _coverage_level_rank(new_level) > _coverage_level_rank(current_level):
+            entry["coverage_level"] = new_level
+
+        # Add evidence if provided and not "no evidence"
+        if evidence and evidence.lower() not in ("no evidence", "none", "n/a"):
+            evidence_list = list(entry.get("evidence_found", []))
+            if evidence not in evidence_list:
+                evidence_list.append(evidence)
+            entry["evidence_found"] = evidence_list
+            entry["last_touched_turn"] = current_turn
+
+        updated[criterion_id] = entry
+
+    return updated
+
+
+def _coverage_level_rank(level: str) -> int:
+    """Get numeric rank for coverage level comparison."""
+    ranks = {
+        CoverageLevel.NotStarted.value: 0,
+        CoverageLevel.PartiallyExplored.value: 1,
+        CoverageLevel.FullyExplored.value: 2,
+    }
+    return ranks.get(level, 0)
 
 
 def get_assessment_status(
