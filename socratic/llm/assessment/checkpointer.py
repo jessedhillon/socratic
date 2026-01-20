@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typing as t
 import uuid
+from datetime import datetime, timezone
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
@@ -69,6 +70,9 @@ class PostgresCheckpointer:
                 data[key] = [self._serialize_message(m) for m in value]
             elif key == "phase" and isinstance(value, InterviewPhase):
                 data[key] = value.value
+            elif key == "start_time" and isinstance(value, datetime):
+                # Serialize datetime to ISO format string
+                data[key] = value.isoformat()
             else:
                 data[key] = value
 
@@ -83,10 +87,37 @@ class PostgresCheckpointer:
                 state[key] = [self._deserialize_message(m) for m in value]
             elif key == "phase" and value is not None:
                 state[key] = InterviewPhase(value)
+            elif key == "start_time" and value is not None:
+                state[key] = self._parse_datetime(value)
             else:
                 state[key] = value
 
         return state
+
+    def _parse_datetime(self, value: t.Any) -> datetime | None:
+        """Parse a datetime value from JSON serialization.
+
+        Handles both datetime objects (already parsed) and ISO format strings.
+        """
+        if value is None:
+            return None
+
+        if isinstance(value, datetime):
+            return value
+
+        if isinstance(value, str):
+            try:
+                if value.endswith("Z"):
+                    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+                elif "+" in value or value.count("-") > 2:
+                    return datetime.fromisoformat(value)
+                else:
+                    # Naive datetime string - assume UTC
+                    return datetime.fromisoformat(value).replace(tzinfo=timezone.utc)
+            except ValueError:
+                return None
+
+        return None
 
     def _serialize_message(self, message: BaseMessage) -> dict[str, t.Any]:
         """Serialize a LangChain message to JSON."""
