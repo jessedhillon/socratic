@@ -25,6 +25,7 @@ import os
 import sys
 import time
 import typing as t
+from datetime import datetime
 
 import jinja2
 from langchain_core.language_models import BaseChatModel
@@ -250,7 +251,7 @@ def display_state(state: dict[str, t.Any] | None, title: str = "Assessment State
     tree.add(f"[cyan]Message Count:[/cyan] {len(messages)}")
 
     # Pacing information
-    start_time = state.get("start_time")
+    start_time = parse_start_time(state.get("start_time"))
     time_expectation = state.get("time_expectation_minutes")
     pacing = calculate_pacing_status(start_time, time_expectation)
 
@@ -330,6 +331,34 @@ def display_state(state: dict[str, t.Any] | None, title: str = "Assessment State
 
     console.print(tree)
     console.print()
+
+
+def parse_start_time(start_time: t.Any) -> datetime | None:
+    """Parse start_time from state, handling string serialization.
+
+    The checkpointer may serialize datetime to ISO string format.
+    """
+    from datetime import datetime, timezone
+
+    if start_time is None:
+        return None
+
+    if isinstance(start_time, datetime):
+        return start_time
+
+    if isinstance(start_time, str):
+        try:
+            if start_time.endswith("Z"):
+                return datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+            elif "+" in start_time or start_time.count("-") > 2:
+                return datetime.fromisoformat(start_time)
+            else:
+                # Naive datetime string - assume UTC
+                return datetime.fromisoformat(start_time).replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+    return None
 
 
 def simulate_time_passage(
@@ -844,7 +873,7 @@ async def _run_test_flow(
             # Get state and verify pacing
             state = checkpointer.get(attempt_id)
             if state:
-                pacing = calculate_pacing_status(state.get("start_time"), estimated_time)
+                pacing = calculate_pacing_status(parse_start_time(state.get("start_time")), estimated_time)
                 if pacing:
                     actual_pace = pacing["pace"]
                     if automated:
