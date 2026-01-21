@@ -24,7 +24,9 @@ import { RecordingStatusOverlay } from '../../components/RecordingStatusOverlay'
 import { PermissionGate } from '../../components/PermissionGate';
 import { CameraPreview } from '../../components/CameraPreview';
 import { TabVisibilityWarning } from '../../components/TabVisibilityWarning';
+import { NavigationConfirmDialog } from '../../components/NavigationConfirmDialog';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
+import { useNavigationGuard } from '../../hooks/useNavigationGuard';
 import {
   completeAssessment as completeAssessmentApi,
   uploadAssessmentVideo,
@@ -192,6 +194,18 @@ const AssessmentPage: React.FC = () => {
     autoStart: false,
   });
 
+  // Navigation guard - block navigation when assessment is active
+  const shouldBlockNavigation =
+    state.phase === 'in_progress' || sessionState === 'recording';
+  const {
+    isBlocked: isNavigationBlocked,
+    proceed: proceedNavigation,
+    cancel: cancelNavigation,
+  } = useNavigationGuard({
+    shouldBlock: shouldBlockNavigation,
+    message: 'Your recording will be stopped if you leave this page.',
+  });
+
   // Keep refs to cleanup functions for unmount
   const abandonRef = useRef(abandonRecording);
   abandonRef.current = abandonRecording;
@@ -220,6 +234,9 @@ const AssessmentPage: React.FC = () => {
 
   // Track streamed content for the current message
   const streamedContentRef = useRef('');
+
+  // Track if user is leaving the page (confirmed navigation)
+  const [isLeavingPage, setIsLeavingPage] = useState(false);
 
   // Track if user has confirmed ready to start
   const [isStartingAssessment, setIsStartingAssessment] = useState(false);
@@ -378,6 +395,15 @@ const AssessmentPage: React.FC = () => {
     // Mark completion as pending - will show banner when speech starts
     completionPendingRef.current = true;
   }, [state.attemptId, state.phase]);
+
+  // Handle confirmed navigation away - stop speech before proceeding
+  const handleConfirmLeave = useCallback(() => {
+    setIsLeavingPage(true);
+    // Give a brief moment for speech to stop before navigation
+    setTimeout(() => {
+      proceedNavigation();
+    }, 50);
+  }, [proceedNavigation]);
 
   // Handle turn changes from VoiceConversationLoop
   const handleTurnChange = useCallback(
@@ -838,6 +864,7 @@ const AssessmentPage: React.FC = () => {
           onSendMessage={handleSendMessage}
           isWaitingForResponse={state.isWaitingForResponse}
           isAssessmentComplete={state.phase === 'completing'}
+          isLeavingPage={isLeavingPage}
           autoPlayResponses={!isMockClosure}
           voice="nova"
           speechSpeed={1.1}
@@ -901,6 +928,13 @@ const AssessmentPage: React.FC = () => {
 
       {/* Tab visibility warning overlay */}
       <TabVisibilityWarning isVisible={isPausedByVisibility} />
+
+      {/* Navigation confirmation dialog */}
+      <NavigationConfirmDialog
+        isOpen={isNavigationBlocked}
+        onConfirm={handleConfirmLeave}
+        onCancel={cancelNavigation}
+      />
     </div>
   );
 };

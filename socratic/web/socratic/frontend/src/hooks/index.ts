@@ -48,3 +48,9 @@ export type {
 } from './useSpeech';
 
 export { useSSE } from './useSSE';
+
+export { useNavigationGuard } from './useNavigationGuard';
+export type {
+  UseNavigationGuardOptions,
+  UseNavigationGuardResult,
+} from './useNavigationGuard';

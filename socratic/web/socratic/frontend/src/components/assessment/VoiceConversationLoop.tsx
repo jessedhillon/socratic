@@ -32,6 +32,8 @@ export interface VoiceConversationLoopProps {
   isWaitingForResponse: boolean;
   /** Whether the assessment is complete */
   isAssessmentComplete: boolean;
+  /** Whether the user is leaving the page (stops speech) */
+  isLeavingPage?: boolean;
   /** Whether input is disabled */
   disabled?: boolean;
   /** Whether to auto-play AI responses */
@@ -74,6 +76,7 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
   onSendMessage,
   isWaitingForResponse,
   isAssessmentComplete,
+  isLeavingPage = false,
   disabled = false,
   autoPlayResponses = true,
   voice = 'nova',
@@ -152,12 +155,12 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
     onTurnChange,
   ]);
 
-  // Stop speech when assessment completes
+  // Stop speech when assessment completes or user is leaving page
   useEffect(() => {
-    if (isAssessmentComplete) {
+    if (isAssessmentComplete || isLeavingPage) {
       stopSpeech();
     }
-  }, [isAssessmentComplete, stopSpeech]);
+  }, [isAssessmentComplete, isLeavingPage, stopSpeech]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
