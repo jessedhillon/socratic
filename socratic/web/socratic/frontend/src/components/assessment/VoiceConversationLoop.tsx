@@ -42,6 +42,8 @@ export interface VoiceConversationLoopProps {
   speechSpeed?: number;
   /** Callback when turn changes */
   onTurnChange?: (turn: ConversationTurn) => void;
+  /** Content to render above the input area (e.g., closure banner) */
+  inputHeaderContent?: React.ReactNode;
 }
 
 /**
@@ -77,13 +79,11 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
   voice = 'nova',
   speechSpeed = 1.1,
   onTurnChange,
+  inputHeaderContent,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastSpokenMessageId = useRef<string | null>(null);
   const [currentTurn, setCurrentTurn] = useState<ConversationTurn>('idle');
-  const [showTextInput, setShowTextInput] = useState(false);
-  const [textInputValue, setTextInputValue] = useState('');
-  const textInputRef = useRef<HTMLTextAreaElement>(null);
   // Track message ID that's waiting for audio to start playing
   const [pendingAudioMessageId, setPendingAudioMessageId] = useState<
     string | null
@@ -227,27 +227,6 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
     },
     [disabled, isAssessmentComplete, onSendMessage]
   );
-
-  const handleTextSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = textInputValue.trim();
-    if (
-      trimmed &&
-      !disabled &&
-      !isAssessmentComplete &&
-      !isWaitingForResponse
-    ) {
-      onSendMessage(trimmed);
-      setTextInputValue('');
-    }
-  };
-
-  const handleTextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleTextSubmit(e);
-    }
-  };
 
   const handleSkipSpeech = () => {
     stopSpeech();
@@ -427,103 +406,33 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
       </div>
 
       {/* Input area */}
-      <div className="border-t bg-white px-4 py-4">
-        <div className="max-w-3xl mx-auto">
-          {isAssessmentComplete ? (
-            <div className="text-center text-gray-500 py-2">
-              Assessment complete. Your responses have been submitted.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Voice input (default) */}
-              {!showTextInput && (
-                <div className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <VoiceInput
-                      onSubmit={handleVoiceSubmit}
-                      disabled={isInputDisabled}
-                    />
-                  </div>
-                  <button
-                    onClick={() => setShowTextInput(true)}
-                    className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-                    title="Switch to text input"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              )}
+      <div className="border-t bg-white">
+        {/* Optional header content (e.g., closure banner) */}
+        {inputHeaderContent}
 
-              {/* Text input (fallback) */}
-              {showTextInput && (
-                <form onSubmit={handleTextSubmit}>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowTextInput(false)}
-                      className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-                      title="Switch to voice input"
-                    >
-                      <svg
-                        className="w-5 h-5"
-                        fill="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                      </svg>
-                    </button>
-                    <div className="flex-1">
-                      <textarea
-                        ref={textInputRef}
-                        value={textInputValue}
-                        onChange={(e) => setTextInputValue(e.target.value)}
-                        onKeyDown={handleTextKeyDown}
-                        placeholder={
-                          isInputDisabled
-                            ? 'Please wait...'
-                            : 'Type your response...'
-                        }
-                        disabled={isInputDisabled}
-                        rows={1}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-500"
-                        style={{
-                          minHeight: '48px',
-                          maxHeight: '200px',
-                        }}
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={!textInputValue.trim() || isInputDisabled}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Send
-                    </button>
-                  </div>
-                </form>
-              )}
+        <div className="px-4 py-4">
+          <div className="max-w-3xl mx-auto">
+            {isAssessmentComplete ? (
+              <div className="text-center text-gray-500 py-2">
+                Assessment complete. Your responses have been submitted.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Voice input */}
+                <VoiceInput
+                  onSubmit={handleVoiceSubmit}
+                  disabled={isInputDisabled}
+                />
 
-              {/* Speech error display */}
-              {speechState.error && (
-                <div className="text-sm text-red-600 text-center">
-                  {speechState.error}
-                </div>
-              )}
-            </div>
-          )}
+                {/* Speech error display */}
+                {speechState.error && (
+                  <div className="text-sm text-red-600 text-center">
+                    {speechState.error}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

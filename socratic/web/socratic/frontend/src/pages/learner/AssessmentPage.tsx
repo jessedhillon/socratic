@@ -5,7 +5,12 @@ import React, {
   useState,
   useMemo,
 } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  useParams,
+  useNavigate,
+  Link,
+  useSearchParams,
+} from 'react-router-dom';
 import {
   VoiceConversationLoop,
   useAssessmentState,
@@ -13,6 +18,7 @@ import {
   AssessmentCompletionScreen,
   type CompletionStep,
   type AssessmentSummary,
+  type ConversationTurn,
 } from '../../components/assessment';
 import { RecordingStatusOverlay } from '../../components/RecordingStatusOverlay';
 import { PermissionGate } from '../../components/PermissionGate';
@@ -30,11 +36,142 @@ import { completeAssessment as completeAssessmentApi } from '../../api/sdk.gen';
  * 4. Turn-based conversation with AI (recording active)
  * 5. Completion with summary and confirmation
  */
+// Mock messages for testing closure_ready state
+const MOCK_MESSAGES = [
+  {
+    id: 'mock-1',
+    type: 'interviewer' as const,
+    content:
+      "Hello! Let's talk about ratios and proportional reasoning. Can you tell me, in your own words, what a ratio is?",
+    timestamp: new Date(Date.now() - 600000).toISOString(),
+  },
+  {
+    id: 'mock-2',
+    type: 'learner' as const,
+    content:
+      'A ratio is a way to compare two quantities, like saying there are 3 apples for every 2 oranges.',
+    timestamp: new Date(Date.now() - 570000).toISOString(),
+  },
+  {
+    id: 'mock-3',
+    type: 'interviewer' as const,
+    content:
+      "That's a good start! How would you explain the difference between a ratio and a fraction?",
+    timestamp: new Date(Date.now() - 540000).toISOString(),
+  },
+  {
+    id: 'mock-4',
+    type: 'learner' as const,
+    content:
+      "I think they're related but a fraction is part of a whole, while a ratio compares two separate things. Like if I have a pizza cut into 8 slices and I eat 3, that's a fraction - 3/8 of the pizza. But if I'm comparing how many slices I ate versus how many my friend ate, that's more of a ratio.",
+    timestamp: new Date(Date.now() - 510000).toISOString(),
+  },
+  {
+    id: 'mock-5',
+    type: 'interviewer' as const,
+    content:
+      "Excellent example with the pizza! You're showing good intuition there. Now, let's explore proportional relationships. If a recipe calls for 2 cups of flour for every 3 cups of sugar, and you want to use 6 cups of flour, how much sugar would you need?",
+    timestamp: new Date(Date.now() - 480000).toISOString(),
+  },
+  {
+    id: 'mock-6',
+    type: 'learner' as const,
+    content:
+      "Okay, so if 2 cups of flour goes with 3 cups of sugar, and I'm tripling the flour to 6 cups, I'd need to triple the sugar too. So that would be 9 cups of sugar.",
+    timestamp: new Date(Date.now() - 450000).toISOString(),
+  },
+  {
+    id: 'mock-7',
+    type: 'interviewer' as const,
+    content:
+      "Perfect! You recognized that you needed to scale both quantities by the same factor. That's the heart of proportional reasoning. Can you think of a real-world situation where understanding ratios and proportions would be important?",
+    timestamp: new Date(Date.now() - 420000).toISOString(),
+  },
+  {
+    id: 'mock-8',
+    type: 'learner' as const,
+    content:
+      "Maybe like when you're mixing paint colors? If you want to make a certain shade of green, you need to mix blue and yellow in the right ratio. And if you want more paint, you have to keep the same ratio or the color will be different.",
+    timestamp: new Date(Date.now() - 390000).toISOString(),
+  },
+  {
+    id: 'mock-9',
+    type: 'interviewer' as const,
+    content:
+      "That's a fantastic real-world application! Artists and designers use proportional reasoning all the time. Let me ask you something a bit more challenging: if you're driving at 60 miles per hour, how far will you travel in 2.5 hours?",
+    timestamp: new Date(Date.now() - 360000).toISOString(),
+  },
+  {
+    id: 'mock-10',
+    type: 'learner' as const,
+    content:
+      "So 60 miles per hour means 60 miles in 1 hour. For 2.5 hours, I'd multiply 60 times 2.5, which is... 150 miles.",
+    timestamp: new Date(Date.now() - 330000).toISOString(),
+  },
+  {
+    id: 'mock-11',
+    type: 'interviewer' as const,
+    content:
+      "Correct! You're applying the concept of unit rates there - miles per hour is a rate that tells you the ratio of distance to time. Now, here's a question that requires a bit more thought: if 4 workers can build a wall in 6 days, how long would it take 3 workers to build the same wall?",
+    timestamp: new Date(Date.now() - 300000).toISOString(),
+  },
+  {
+    id: 'mock-12',
+    type: 'learner' as const,
+    content:
+      "Hmm, this one is tricky. If you have fewer workers, it takes longer... So it's not a direct proportion. Let me think. 4 workers times 6 days is 24 worker-days of work total. So with 3 workers, it would be 24 divided by 3, which is 8 days.",
+    timestamp: new Date(Date.now() - 270000).toISOString(),
+  },
+  {
+    id: 'mock-13',
+    type: 'interviewer' as const,
+    content:
+      "Excellent reasoning! You identified that this is an inverse proportion - as the number of workers decreases, the time increases. You used the concept of 'worker-days' which is a sophisticated way to think about the total work needed. That shows strong proportional reasoning skills.",
+    timestamp: new Date(Date.now() - 240000).toISOString(),
+  },
+  {
+    id: 'mock-14',
+    type: 'learner' as const,
+    content:
+      "Thanks! I wasn't sure at first but thinking about the total work helped me figure it out.",
+    timestamp: new Date(Date.now() - 210000).toISOString(),
+  },
+  {
+    id: 'mock-15',
+    type: 'interviewer' as const,
+    content:
+      "Thank you for sharing your thoughts today! You've demonstrated a solid understanding of ratios and proportional reasoning. You correctly identified that ratios compare quantities, distinguished them from fractions with a great pizza example, successfully scaled recipes, applied unit rates to distance problems, and even handled inverse proportions with the worker problem. Is there anything else you'd like to add before we wrap up?",
+    timestamp: new Date(Date.now() - 60000).toISOString(),
+  },
+];
+
 const AssessmentPage: React.FC = () => {
   const { assignmentId } = useParams<{ assignmentId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { state, actions } = useAssessmentState();
   const api = useAssessmentApi();
+
+  // Check for mock mode
+  const isMockClosure = searchParams.get('mockClosure') === 'true';
+  const mockInitializedRef = useRef(false);
+
+  // Set up mock state if in mock mode - runs once before normal init
+  useEffect(() => {
+    if (isMockClosure && !mockInitializedRef.current) {
+      mockInitializedRef.current = true;
+      actions.setMockState({
+        phase: 'closure_ready',
+        attemptId: 'mock-attempt-id',
+        assignmentId: assignmentId || 'mock-assignment',
+        objectiveTitle: 'Ratios and Proportional Reasoning (Mock)',
+        messages: MOCK_MESSAGES,
+        isWaitingForResponse: false,
+        error: null,
+        startedAt: new Date(Date.now() - 300000).toISOString(),
+      });
+    }
+  }, [isMockClosure, assignmentId, actions]);
 
   // Recording session for video/audio capture
   const {
@@ -74,12 +211,16 @@ const AssessmentPage: React.FC = () => {
   // Track if user has confirmed ready to start
   const [isStartingAssessment, setIsStartingAssessment] = useState(false);
 
-  // Initialize assessment state when component mounts
+  // Track if completion is pending (waiting for final message speech to start)
+  const completionPendingRef = useRef(false);
+
+  // Initialize assessment state when component mounts (skip in mock mode)
   useEffect(() => {
+    if (isMockClosure) return; // Skip normal init in mock mode
     if (assignmentId && state.phase === 'idle') {
       actions.initialize(assignmentId);
     }
-  }, [assignmentId, state.phase, actions]);
+  }, [assignmentId, state.phase, actions, isMockClosure]);
 
   // Handle permission granted - transition to ready state
   const handlePermissionsGranted = useCallback(async () => {
@@ -196,23 +337,36 @@ const AssessmentPage: React.FC = () => {
     }
   }, [state.attemptId, actions]);
 
-  // Handle AI-triggered completion (backend already marked as complete)
+  // Handle AI-triggered completion - defer showing banner until speech starts
   const handleAICompletion = useCallback(() => {
-    if (!state.attemptId || completionStep !== null) return;
+    if (!state.attemptId || state.phase !== 'in_progress') {
+      return;
+    }
+    // Mark completion as pending - will show banner when speech starts
+    completionPendingRef.current = true;
+  }, [state.attemptId, state.phase]);
 
-    // Skip API call since backend already completed - just do frontend flow
-    setCompletionStep('stopping');
-    setCompletionError(null);
-    actions.beginCompletion();
+  // Handle turn changes from VoiceConversationLoop
+  const handleTurnChange = useCallback(
+    (turn: ConversationTurn) => {
+      // When speech starts playing and completion is pending, show the banner
+      if (turn === 'ai_speaking' && completionPendingRef.current) {
+        completionPendingRef.current = false;
+        actions.closureReady();
+      }
+    },
+    [actions]
+  );
 
-    // Simulated upload step (actual implementation in SOC-123)
-    setCompletionStep('uploading');
-    setTimeout(() => {
-      setCompletedAt(new Date().toISOString());
-      setCompletionStep('complete');
-      actions.completeAssessment();
-    }, 500);
-  }, [state.attemptId, completionStep, actions]);
+  // Handle learner choosing to finish from closure_ready state
+  const handleFinishAssessment = useCallback(() => {
+    if (state.phase !== 'closure_ready') return;
+
+    // Backend already marked as complete, skip straight to done
+    setCompletedAt(new Date().toISOString());
+    setCompletionStep('complete');
+    actions.completeAssessment();
+  }, [state.phase, actions]);
 
   // Set up completion callback when API signals assessment is done
   useEffect(() => {
@@ -554,7 +708,7 @@ const AssessmentPage: React.FC = () => {
     );
   }
 
-  // Render active assessment (in_progress or completing)
+  // Render active assessment (in_progress, closure_ready, or completing)
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -564,7 +718,9 @@ const AssessmentPage: React.FC = () => {
             {state.objectiveTitle || 'Assessment'}
           </h1>
           <p className="text-sm text-gray-500">
-            Assessment in progress
+            {state.phase === 'closure_ready'
+              ? 'Interview concluded'
+              : 'Assessment in progress'}
             {state.startedAt && (
               <>
                 {' '}
@@ -578,24 +734,26 @@ const AssessmentPage: React.FC = () => {
         <div className="flex items-center gap-4">
           {/* Recording status overlay */}
           <RecordingStatusOverlay
-            isRecording={sessionState === 'recording'}
-            isPaused={sessionState === 'paused'}
-            durationSeconds={duration}
-            isPausedByVisibility={isPausedByVisibility}
+            isRecording={isMockClosure || sessionState === 'recording'}
+            isPaused={!isMockClosure && sessionState === 'paused'}
+            durationSeconds={isMockClosure ? 127 : duration}
+            isPausedByVisibility={!isMockClosure && isPausedByVisibility}
             stream={stream}
-            showAudioLevel
+            showAudioLevel={!isMockClosure}
           />
 
-          {/* Complete button */}
-          <button
-            onClick={handleCompleteAssessment}
-            disabled={
-              state.isWaitingForResponse || state.phase === 'completing'
-            }
-            className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-          >
-            Complete Assessment
-          </button>
+          {/* Complete button - only show when not in closure_ready (banner handles it) */}
+          {state.phase !== 'closure_ready' && (
+            <button
+              onClick={handleCompleteAssessment}
+              disabled={
+                state.isWaitingForResponse || state.phase === 'completing'
+              }
+              className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              Complete Assessment
+            </button>
+          )}
         </div>
       </header>
 
@@ -606,19 +764,65 @@ const AssessmentPage: React.FC = () => {
           onSendMessage={handleSendMessage}
           isWaitingForResponse={state.isWaitingForResponse}
           isAssessmentComplete={state.phase === 'completing'}
-          autoPlayResponses
+          autoPlayResponses={!isMockClosure}
           voice="nova"
           speechSpeed={1.1}
+          onTurnChange={handleTurnChange}
+          inputHeaderContent={
+            state.phase === 'closure_ready' ? (
+              <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">
+                <div className="max-w-3xl mx-auto space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">
+                      The interviewer has concluded the assessment.
+                    </p>
+                    <p className="text-sm text-blue-600">
+                      You can add more thoughts or complete when ready.
+                    </p>
+                  </div>
+                  {/* Actions row */}
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => actions.continueAssessment()}
+                      className="px-4 py-2 text-sm font-medium text-blue-700 bg-white border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+                    >
+                      Add Response
+                    </button>
+                    <button
+                      onClick={handleFinishAssessment}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      Complete Assessment
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : undefined
+          }
         />
       </div>
 
       {/* Camera preview (minimizable) */}
       <CameraPreview
         stream={stream}
-        isRecording={sessionState === 'recording'}
+        isRecording={isMockClosure || sessionState === 'recording'}
         hasAudio
         position="bottom-right"
         defaultMinimized={false}
+        showPlaceholder={isMockClosure}
       />
     </div>
   );

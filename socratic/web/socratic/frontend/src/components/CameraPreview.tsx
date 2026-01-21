@@ -15,6 +15,8 @@ export interface CameraPreviewProps {
   position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   /** Callback when minimize state changes */
   onMinimizeChange?: (minimized: boolean) => void;
+  /** Show placeholder when no stream (for mock/preview mode) */
+  showPlaceholder?: boolean;
 }
 
 /**
@@ -35,6 +37,7 @@ export function CameraPreview({
   defaultMinimized = false,
   position = 'bottom-right',
   onMinimizeChange,
+  showPlaceholder = false,
 }: CameraPreviewProps): React.ReactElement | null {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [minimized, setMinimized] = useState(defaultMinimized);
@@ -52,7 +55,7 @@ export function CameraPreview({
     onMinimizeChange?.(newState);
   };
 
-  if (!stream) {
+  if (!stream && !showPlaceholder) {
     return null;
   }
 
@@ -77,14 +80,35 @@ export function CameraPreview({
         }`}
       >
         {/* Video element - mirrored horizontally */}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className={`w-full h-full object-cover ${minimized ? 'hidden' : 'block'}`}
-          style={{ transform: 'scaleX(-1)' }}
-        />
+        {stream ? (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`w-full h-full object-cover ${minimized ? 'hidden' : 'block'}`}
+            style={{ transform: 'scaleX(-1)' }}
+          />
+        ) : (
+          /* Placeholder when no stream */
+          !minimized && (
+            <div className="w-full h-full flex items-center justify-center bg-gray-700">
+              <svg
+                className="w-12 h-12 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
+              </svg>
+            </div>
+          )
+        )}
 
         {/* Minimized state - show camera icon */}
         {minimized && (

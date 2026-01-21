@@ -9,6 +9,7 @@ export type AssessmentPhase =
   | 'initializing' // Loading assignment, requesting permissions
   | 'ready' // Ready to begin (permissions granted)
   | 'in_progress' // Assessment active, turn-based interaction
+  | 'closure_ready' // AI signaled completion, learner can still respond or finish
   | 'completing' // Wrapping up, final processing
   | 'completed' // Assessment finished
   | 'error'; // Recoverable error state
@@ -40,11 +41,14 @@ export type AssessmentAction =
   | { type: 'SEND_MESSAGE'; content: string }
   | { type: 'RESPONSE_STARTED' }
   | { type: 'RESPONSE_COMPLETE' }
+  | { type: 'CLOSURE_READY' } // AI signaled completion, learner can still respond
+  | { type: 'CONTINUE_ASSESSMENT' } // Learner chose to continue after closure_ready
   | { type: 'ASSESSMENT_COMPLETING' }
   | { type: 'ASSESSMENT_COMPLETE' }
   | { type: 'SET_ERROR'; error: string }
   | { type: 'CLEAR_ERROR' }
-  | { type: 'RESET' };
+  | { type: 'RESET' }
+  | { type: 'SET_MOCK_STATE'; state: Partial<AssessmentState> }; // For testing
 
 const initialState: AssessmentState = {
   phase: 'idle',
@@ -143,6 +147,21 @@ function assessmentReducer(
         isWaitingForResponse: false,
       };
 
+    case 'CLOSURE_READY':
+      if (state.phase !== 'in_progress') return state;
+      return {
+        ...state,
+        phase: 'closure_ready',
+        isWaitingForResponse: false,
+      };
+
+    case 'CONTINUE_ASSESSMENT':
+      if (state.phase !== 'closure_ready') return state;
+      return {
+        ...state,
+        phase: 'in_progress',
+      };
+
     case 'ASSESSMENT_COMPLETING':
       return {
         ...state,
@@ -175,6 +194,13 @@ function assessmentReducer(
 
     case 'RESET':
       return initialState;
+
+    case 'SET_MOCK_STATE':
+      // For testing - directly set state values
+      return {
+        ...state,
+        ...action.state,
+      };
 
     default:
       return state;
@@ -254,12 +280,24 @@ export function useAssessmentState() {
     dispatch({ type: 'RESPONSE_COMPLETE' });
   }, []);
 
+  const closureReady = useCallback(() => {
+    dispatch({ type: 'CLOSURE_READY' });
+  }, []);
+
+  const continueAssessment = useCallback(() => {
+    dispatch({ type: 'CONTINUE_ASSESSMENT' });
+  }, []);
+
   const beginCompletion = useCallback(() => {
     dispatch({ type: 'ASSESSMENT_COMPLETING' });
   }, []);
 
   const completeAssessment = useCallback(() => {
     dispatch({ type: 'ASSESSMENT_COMPLETE' });
+  }, []);
+
+  const setMockState = useCallback((mockState: Partial<AssessmentState>) => {
+    dispatch({ type: 'SET_MOCK_STATE', state: mockState });
   }, []);
 
   const setError = useCallback((error: string) => {
@@ -288,8 +326,11 @@ export function useAssessmentState() {
       sendMessage,
       responseStarted,
       responseComplete,
+      closureReady,
+      continueAssessment,
       beginCompletion,
       completeAssessment,
+      setMockState,
       setError,
       clearError,
       reset,

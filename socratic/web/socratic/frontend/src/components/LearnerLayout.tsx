@@ -62,10 +62,10 @@ function LearnerLayoutContent(): React.ReactElement {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="h-screen bg-gray-100 flex overflow-hidden">
       {/* Side Menu */}
       <aside
-        className={`bg-white shadow-lg transition-all duration-300 flex flex-col ${
+        className={`bg-white shadow-lg transition-all duration-300 flex flex-col flex-shrink-0 ${
           collapsed ? 'w-16' : 'w-56'
         }`}
       >
@@ -161,7 +161,7 @@ function LearnerLayoutContent(): React.ReactElement {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-hidden">
         <Outlet />
       </main>
     </div>
