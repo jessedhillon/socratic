@@ -134,6 +134,9 @@ import type {
   TriggerEvaluationData,
   TriggerEvaluationResponse,
   TriggerEvaluationError,
+  UploadAssessmentVideoData,
+  UploadAssessmentVideoResponse,
+  UploadAssessmentVideoError,
   ListPendingReviewsData,
   ListPendingReviewsResponse,
   ListPendingReviewsError,
@@ -1302,6 +1305,37 @@ export const triggerEvaluation = <ThrowOnError extends boolean = false>(
     ],
     url: '/api/assessments/{attempt_id}/evaluate',
     ...options,
+  });
+};
+
+/**
+ * Upload Video Route
+ * Upload the recorded video for an assessment attempt.
+ *
+ * The video is uploaded to object storage and the attempt is updated
+ * with the video URL.
+ */
+export const uploadAssessmentVideo = <ThrowOnError extends boolean = false>(
+  options: Options<UploadAssessmentVideoData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).post<
+    UploadAssessmentVideoResponse,
+    UploadAssessmentVideoError,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/assessments/{attempt_id}/video',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options?.headers,
+    },
   });
 };
 

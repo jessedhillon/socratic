@@ -137,6 +137,10 @@ export type BodyTranscribeAudio = {
   include_word_timings?: boolean;
 };
 
+export type BodyUploadAssessmentVideo = {
+  video: Blob | File;
+};
+
 /**
  * Request to create assignments for multiple learners.
  */
@@ -747,6 +751,15 @@ export type TranscriptionResponse = {
    * Word-level timing data (only present if include_word_timings=true)
    */
   words?: Array<SocraticWebSocraticViewTranscriptionWordTimingResponse> | null;
+};
+
+/**
+ * Response after uploading assessment video.
+ */
+export type UploadVideoResponse = {
+  attempt_id: string;
+  video_url: string;
+  size: number;
 };
 
 /**
@@ -2231,6 +2244,40 @@ export type TriggerEvaluationResponses = {
 
 export type TriggerEvaluationResponse =
   TriggerEvaluationResponses[keyof TriggerEvaluationResponses];
+
+export type UploadAssessmentVideoData = {
+  body: BodyUploadAssessmentVideo;
+  path: {
+    attempt_id: string;
+  };
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/assessments/{attempt_id}/video';
+};
+
+export type UploadAssessmentVideoErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UploadAssessmentVideoError =
+  UploadAssessmentVideoErrors[keyof UploadAssessmentVideoErrors];
+
+export type UploadAssessmentVideoResponses = {
+  /**
+   * Successful Response
+   */
+  200: UploadVideoResponse;
+};
+
+export type UploadAssessmentVideoResponse =
+  UploadAssessmentVideoResponses[keyof UploadAssessmentVideoResponses];
 
 export type ListPendingReviewsData = {
   body?: never;

@@ -18,9 +18,20 @@ class MemcachedDsn(p.AnyUrl):
     )
 
 
+class ObjectSettings(BaseSettings):
+    """Object storage settings for file uploads (videos, etc.)."""
+
+    backend: t.Literal["local", "s3"] = "local"
+    local_path: Path | None = None
+    s3_bucket: str | None = None
+    s3_region: str | None = None
+    s3_prefix: str = "uploads/"
+
+
 class StorageSettings(BaseSettings):
     persistent: PersistentSettings
     streaming: StreamingSettings | None = None
+    object: ObjectSettings = ObjectSettings()
     # ephemeral: MemcachedDsn
 
 

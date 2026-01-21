@@ -23,8 +23,12 @@ import {
 import { RecordingStatusOverlay } from '../../components/RecordingStatusOverlay';
 import { PermissionGate } from '../../components/PermissionGate';
 import { CameraPreview } from '../../components/CameraPreview';
+import { TabVisibilityWarning } from '../../components/TabVisibilityWarning';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
-import { completeAssessment as completeAssessmentApi } from '../../api/sdk.gen';
+import {
+  completeAssessment as completeAssessmentApi,
+  uploadAssessmentVideo,
+} from '../../api/sdk.gen';
 
 /**
  * Assessment page - where learners complete their assessments.
@@ -187,14 +191,17 @@ const AssessmentPage: React.FC = () => {
     autoStart: false,
   });
 
-  // Keep a ref to the abandon function for cleanup on unmount
+  // Keep refs to cleanup functions for unmount
   const abandonRef = useRef(abandonRecording);
   abandonRef.current = abandonRecording;
+  const cancelStreamRef = useRef(api.cancelStream);
+  cancelStreamRef.current = api.cancelStream;
 
-  // Cleanup recording session on unmount (e.g., navigation away)
+  // Cleanup recording session and API streams on unmount (e.g., navigation away)
   useEffect(() => {
     return () => {
       abandonRef.current();
+      cancelStreamRef.current();
     };
   }, []);
 
@@ -304,12 +311,21 @@ const AssessmentPage: React.FC = () => {
     actions.beginCompletion();
 
     try {
-      // Step 1: Stop recording (simulated - actual implementation in SOC-123)
-      setCompletionStep('uploading');
+      // Step 1: Stop recording and get the video blob
+      const videoBlob = await stopRecording();
 
-      // Step 2: Upload video (simulated - actual implementation in SOC-123)
-      // In real implementation, this would upload the video blob to S3
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Step 2: Upload video if we have a blob
+      if (videoBlob) {
+        setCompletionStep('uploading');
+        const uploadResponse = await uploadAssessmentVideo({
+          path: { attempt_id: state.attemptId },
+          body: { video: videoBlob },
+        });
+        if (uploadResponse.error) {
+          console.warn('Video upload failed:', uploadResponse.error);
+          // Continue with completion even if video upload fails
+        }
+      }
 
       // Step 3: Complete assessment via API
       setCompletionStep('completing');
@@ -824,6 +840,9 @@ const AssessmentPage: React.FC = () => {
         defaultMinimized={false}
         showPlaceholder={isMockClosure}
       />
+
+      {/* Tab visibility warning overlay */}
+      <TabVisibilityWarning isVisible={isPausedByVisibility} />
     </div>
   );
 };
