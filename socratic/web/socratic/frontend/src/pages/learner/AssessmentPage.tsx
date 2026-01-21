@@ -34,7 +34,38 @@ const AssessmentPage: React.FC = () => {
   const { assignmentId } = useParams<{ assignmentId: string }>();
   const navigate = useNavigate();
   const { state, actions } = useAssessmentState();
-  const api = useAssessmentApi();
+
+  // Completion state - declared before useAssessmentApi so callback can access it
+  const [completionStep, setCompletionStep] = useState<CompletionStep | null>(
+    null
+  );
+  const [completionError, setCompletionError] = useState<string | null>(null);
+  const [completedAt, setCompletedAt] = useState<string | null>(null);
+
+  // Handle assessment_complete SSE event from backend
+  // This can be triggered by AI determining completion or manual completion
+  const handleAssessmentComplete = useCallback(() => {
+    // If we're already in the completion flow (manual completion), this is a no-op
+    // The manual completion handler will have already set the state
+    if (completionStep === 'complete') {
+      return;
+    }
+
+    // If not in a completion flow, this is AI-triggered completion
+    // Transition directly to completed state
+    if (completionStep === null) {
+      setCompletionStep('complete');
+      setCompletedAt(new Date().toISOString());
+    }
+
+    // Always ensure state machine is in completed state
+    actions.completeAssessment();
+  }, [completionStep, actions]);
+
+  // API hook with completion callback
+  const api = useAssessmentApi({
+    onComplete: handleAssessmentComplete,
+  });
 
   // Recording session for video/audio capture
   const {
@@ -44,6 +75,7 @@ const AssessmentPage: React.FC = () => {
     isPausedByVisibility,
     initialize: initializeRecording,
     startRecording,
+    stopRecording,
     abandon: abandonRecording,
   } = useRecordingSession({
     pauseOnHidden: true,
@@ -60,13 +92,6 @@ const AssessmentPage: React.FC = () => {
       abandonRef.current();
     };
   }, []);
-
-  // Completion state
-  const [completionStep, setCompletionStep] = useState<CompletionStep | null>(
-    null
-  );
-  const [completionError, setCompletionError] = useState<string | null>(null);
-  const [completedAt, setCompletedAt] = useState<string | null>(null);
 
   // Track streamed content for the current message
   const streamedContentRef = useRef('');
@@ -144,8 +169,8 @@ const AssessmentPage: React.FC = () => {
         actions.finishStreamingMessage(messageId);
         actions.responseComplete();
 
-        // TODO: Check for completion signal from backend
-        // The backend should signal when the assessment is complete
+        // Assessment completion is handled via SSE event (assessment_complete)
+        // which triggers handleAssessmentComplete callback
       } catch (err) {
         console.error('Failed to send message:', err);
         actions.setError('Failed to send message. Please try again.');
@@ -163,14 +188,16 @@ const AssessmentPage: React.FC = () => {
     actions.beginCompletion();
 
     try {
-      // Step 1: Stop recording (simulated - actual implementation in SOC-123)
-      setCompletionStep('uploading');
+      // Step 1: Stop recording
+      await stopRecording();
 
-      // Step 2: Upload video (simulated - actual implementation in SOC-123)
+      // Step 2: Upload video (placeholder - actual implementation in SOC-123)
       // In real implementation, this would upload the video blob to S3
+      setCompletionStep('uploading');
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Step 3: Complete assessment via API
+      // This triggers the assessment_complete SSE event from the backend
       setCompletionStep('completing');
       const response = await completeAssessmentApi({
         path: { attempt_id: state.attemptId },
@@ -181,7 +208,7 @@ const AssessmentPage: React.FC = () => {
         throw new Error('Failed to complete assessment');
       }
 
-      // Success!
+      // Success! Set local state (SSE event will also call handleAssessmentComplete)
       setCompletedAt(response.data.completed_at);
       setCompletionStep('complete');
       actions.completeAssessment();
@@ -194,7 +221,7 @@ const AssessmentPage: React.FC = () => {
           : 'An error occurred while completing your assessment.'
       );
     }
-  }, [state.attemptId, actions]);
+  }, [state.attemptId, actions, stopRecording]);
 
   // Handle retry completion
   const handleRetryCompletion = useCallback(() => {

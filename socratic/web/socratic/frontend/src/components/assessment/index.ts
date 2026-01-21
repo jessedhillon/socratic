@@ -14,6 +14,7 @@ export {
 } from './useAssessmentState';
 export {
   useAssessmentApi,
+  type UseAssessmentApiOptions,
   type StartAssessmentResult,
   type SendMessageResult,
 } from './useAssessmentApi';

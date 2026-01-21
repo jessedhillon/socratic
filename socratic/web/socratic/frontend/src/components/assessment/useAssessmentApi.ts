@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { client } from '../../api/client.gen';
 import { getAuthToken } from '../../auth';
 
@@ -7,6 +7,21 @@ import { getAuthToken } from '../../auth';
  */
 interface TokenEvent {
   content: string;
+}
+
+/**
+ * Data from the assessment_complete event.
+ */
+interface AssessmentCompleteEvent {
+  evaluation_id?: string;
+}
+
+/**
+ * Options for configuring the assessment API hook.
+ */
+export interface UseAssessmentApiOptions {
+  /** Called when the backend signals assessment completion */
+  onComplete?: (evaluationId?: string) => void;
 }
 
 /**
@@ -37,7 +52,9 @@ export interface SendMessageResult {
  *
  * Events are streamed via a persistent EventSource connection.
  */
-export function useAssessmentApi() {
+export function useAssessmentApi(options: UseAssessmentApiOptions = {}) {
+  const { onComplete } = options;
+
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedContent, setStreamedContent] = useState('');
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -50,6 +67,12 @@ export function useAssessmentApi() {
   const messageResolverRef = useRef<((content: string) => void) | null>(null);
   const messageRejecterRef = useRef<((error: Error) => void) | null>(null);
   const currentContentRef = useRef<string>('');
+
+  // Store onComplete in a ref so it can be accessed in event handlers
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   /**
    * Ensure EventSource is connected for the given attempt.
@@ -137,6 +160,16 @@ export function useAssessmentApi() {
       setIsStreaming(false);
       eventSource.close();
       eventSourceRef.current = null;
+
+      // Parse event data and notify caller
+      let evaluationId: string | undefined;
+      try {
+        const data = JSON.parse(event.data) as AssessmentCompleteEvent;
+        evaluationId = data.evaluation_id;
+      } catch {
+        // Empty data is acceptable
+      }
+      onCompleteRef.current?.(evaluationId);
     });
 
     return eventSource;
