@@ -7,7 +7,7 @@ import React, {
 } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  ChatInterface,
+  VoiceConversationLoop,
   useAssessmentState,
   useAssessmentApi,
   AssessmentCompletionScreen,
@@ -494,11 +494,12 @@ const AssessmentPage: React.FC = () => {
 
         {/* Show final conversation */}
         <div className="flex-1 overflow-hidden">
-          <ChatInterface
+          <VoiceConversationLoop
             messages={state.messages}
             onSendMessage={() => {}}
             isWaitingForResponse={false}
             isAssessmentComplete={true}
+            autoPlayResponses={false}
           />
         </div>
 
@@ -566,13 +567,16 @@ const AssessmentPage: React.FC = () => {
         </div>
       </header>
 
-      {/* Chat interface */}
+      {/* Voice conversation interface */}
       <div className="flex-1 overflow-hidden">
-        <ChatInterface
+        <VoiceConversationLoop
           messages={state.messages}
           onSendMessage={handleSendMessage}
           isWaitingForResponse={state.isWaitingForResponse}
           isAssessmentComplete={state.phase === 'completing'}
+          autoPlayResponses
+          voice="nova"
+          speechSpeed={1.1}
         />
       </div>
 
