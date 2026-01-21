@@ -1,14 +1,24 @@
-import React, { useEffect, useCallback, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useCallback,
+  useRef,
+  useState,
+  useMemo,
+} from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  ChatInterface,
+  VoiceConversationLoop,
   useAssessmentState,
   useAssessmentApi,
+  AssessmentCompletionScreen,
+  type CompletionStep,
+  type AssessmentSummary,
 } from '../../components/assessment';
 import { RecordingStatusOverlay } from '../../components/RecordingStatusOverlay';
 import { PermissionGate } from '../../components/PermissionGate';
 import { CameraPreview } from '../../components/CameraPreview';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
+import { completeAssessment as completeAssessmentApi } from '../../api/sdk.gen';
 
 /**
  * Assessment page - where learners complete their assessments.
@@ -18,7 +28,7 @@ import { useRecordingSession } from '../../hooks/useRecordingSession';
  * 2. Request permissions (PermissionGate)
  * 3. Show camera preview and confirm ready
  * 4. Turn-based conversation with AI (recording active)
- * 5. Completion and submission
+ * 5. Completion with summary and confirmation
  */
 const AssessmentPage: React.FC = () => {
   const { assignmentId } = useParams<{ assignmentId: string }>();
@@ -50,6 +60,13 @@ const AssessmentPage: React.FC = () => {
       abandonRef.current();
     };
   }, []);
+
+  // Completion state
+  const [completionStep, setCompletionStep] = useState<CompletionStep | null>(
+    null
+  );
+  const [completionError, setCompletionError] = useState<string | null>(null);
+  const [completedAt, setCompletedAt] = useState<string | null>(null);
 
   // Track streamed content for the current message
   const streamedContentRef = useRef('');
@@ -136,6 +153,88 @@ const AssessmentPage: React.FC = () => {
     },
     [state.attemptId, actions, api]
   );
+
+  // Handle completing the assessment
+  const handleCompleteAssessment = useCallback(async () => {
+    if (!state.attemptId) return;
+
+    setCompletionStep('stopping');
+    setCompletionError(null);
+    actions.beginCompletion();
+
+    try {
+      // Step 1: Stop recording (simulated - actual implementation in SOC-123)
+      setCompletionStep('uploading');
+
+      // Step 2: Upload video (simulated - actual implementation in SOC-123)
+      // In real implementation, this would upload the video blob to S3
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Step 3: Complete assessment via API
+      setCompletionStep('completing');
+      const response = await completeAssessmentApi({
+        path: { attempt_id: state.attemptId },
+        body: { feedback: null },
+      });
+
+      if (response.error) {
+        throw new Error('Failed to complete assessment');
+      }
+
+      // Success!
+      setCompletedAt(response.data.completed_at);
+      setCompletionStep('complete');
+      actions.completeAssessment();
+    } catch (err) {
+      console.error('Failed to complete assessment:', err);
+      setCompletionStep('error');
+      setCompletionError(
+        err instanceof Error
+          ? err.message
+          : 'An error occurred while completing your assessment.'
+      );
+    }
+  }, [state.attemptId, actions]);
+
+  // Handle retry completion
+  const handleRetryCompletion = useCallback(() => {
+    setCompletionStep(null);
+    setCompletionError(null);
+  }, []);
+
+  // Calculate assessment summary
+  const assessmentSummary = useMemo<AssessmentSummary | null>(() => {
+    if (!state.startedAt || !state.objectiveTitle) return null;
+
+    const startTime = new Date(state.startedAt).getTime();
+    const endTime = completedAt ? new Date(completedAt).getTime() : Date.now();
+    const durationMs = Math.floor((endTime - startTime) / 1000);
+
+    const learnerMessages = state.messages.filter((m) => m.type === 'learner');
+
+    return {
+      objectiveTitle: state.objectiveTitle,
+      startedAt: state.startedAt,
+      completedAt: completedAt || new Date().toISOString(),
+      messageCount: state.messages.length,
+      learnerResponseCount: learnerMessages.length,
+      duration: durationMs,
+    };
+  }, [state.startedAt, state.objectiveTitle, state.messages, completedAt]);
+
+  // Render completion screen
+  if (completionStep !== null && assessmentSummary) {
+    return (
+      <AssessmentCompletionScreen
+        summary={assessmentSummary}
+        step={completionStep}
+        uploadProgress={completionStep === 'uploading' ? 75 : 100}
+        error={completionError}
+        onRetry={handleRetryCompletion}
+        messages={state.messages}
+      />
+    );
+  }
 
   // Render loading state
   if (state.phase === 'idle') {
@@ -381,7 +480,7 @@ const AssessmentPage: React.FC = () => {
     );
   }
 
-  // Render completed state
+  // Render completed state (legacy - now uses completion screen)
   if (state.phase === 'completed') {
     return (
       <div className="h-full flex flex-col">
@@ -395,11 +494,12 @@ const AssessmentPage: React.FC = () => {
 
         {/* Show final conversation */}
         <div className="flex-1 overflow-hidden">
-          <ChatInterface
+          <VoiceConversationLoop
             messages={state.messages}
             onSendMessage={() => {}}
             isWaitingForResponse={false}
             isAssessmentComplete={true}
+            autoPlayResponses={false}
           />
         </div>
 
@@ -443,24 +543,40 @@ const AssessmentPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Recording status overlay */}
-        <RecordingStatusOverlay
-          isRecording={sessionState === 'recording'}
-          isPaused={sessionState === 'paused'}
-          durationSeconds={duration}
-          isPausedByVisibility={isPausedByVisibility}
-          stream={stream}
-          showAudioLevel
-        />
+        <div className="flex items-center gap-4">
+          {/* Recording status overlay */}
+          <RecordingStatusOverlay
+            isRecording={sessionState === 'recording'}
+            isPaused={sessionState === 'paused'}
+            durationSeconds={duration}
+            isPausedByVisibility={isPausedByVisibility}
+            stream={stream}
+            showAudioLevel
+          />
+
+          {/* Complete button */}
+          <button
+            onClick={handleCompleteAssessment}
+            disabled={
+              state.isWaitingForResponse || state.phase === 'completing'
+            }
+            className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            Complete Assessment
+          </button>
+        </div>
       </header>
 
-      {/* Chat interface */}
+      {/* Voice conversation interface */}
       <div className="flex-1 overflow-hidden">
-        <ChatInterface
+        <VoiceConversationLoop
           messages={state.messages}
           onSendMessage={handleSendMessage}
           isWaitingForResponse={state.isWaitingForResponse}
           isAssessmentComplete={state.phase === 'completing'}
+          autoPlayResponses
+          voice="nova"
+          speechSpeed={1.1}
         />
       </div>
 
