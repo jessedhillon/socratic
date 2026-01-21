@@ -24,7 +24,9 @@ import { RecordingStatusOverlay } from '../../components/RecordingStatusOverlay'
 import { PermissionGate } from '../../components/PermissionGate';
 import { CameraPreview } from '../../components/CameraPreview';
 import { TabVisibilityWarning } from '../../components/TabVisibilityWarning';
+import { NavigationConfirmDialog } from '../../components/NavigationConfirmDialog';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
+import { useNavigationGuard } from '../../hooks/useNavigationGuard';
 import {
   completeAssessment as completeAssessmentApi,
   uploadAssessmentVideo,
@@ -190,6 +192,18 @@ const AssessmentPage: React.FC = () => {
   } = useRecordingSession({
     pauseOnHidden: true,
     autoStart: false,
+  });
+
+  // Navigation guard - block navigation when assessment is active
+  const shouldBlockNavigation =
+    state.phase === 'in_progress' || sessionState === 'recording';
+  const {
+    isBlocked: isNavigationBlocked,
+    proceed: proceedNavigation,
+    cancel: cancelNavigation,
+  } = useNavigationGuard({
+    shouldBlock: shouldBlockNavigation,
+    message: 'Your recording will be stopped if you leave this page.',
   });
 
   // Keep refs to cleanup functions for unmount
@@ -901,6 +915,13 @@ const AssessmentPage: React.FC = () => {
 
       {/* Tab visibility warning overlay */}
       <TabVisibilityWarning isVisible={isPausedByVisibility} />
+
+      {/* Navigation confirmation dialog */}
+      <NavigationConfirmDialog
+        isOpen={isNavigationBlocked}
+        onConfirm={proceedNavigation}
+        onCancel={cancelNavigation}
+      />
     </div>
   );
 };
