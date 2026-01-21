@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useMediaPermissions } from '../hooks/useMediaPermissions';
 
 export interface PermissionGateProps {
@@ -64,6 +64,17 @@ export function PermissionGate({
   const [isRequesting, setIsRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
 
+  // Track if we've already called onGranted to prevent double-firing
+  const grantedCalledRef = useRef(false);
+
+  // Call onGranted when permissions are already granted on mount
+  useEffect(() => {
+    if (allGranted && !isChecking && !grantedCalledRef.current) {
+      grantedCalledRef.current = true;
+      onGranted?.();
+    }
+  }, [allGranted, isChecking, onGranted]);
+
   const handleRequestPermissions = useCallback(async () => {
     setIsRequesting(true);
     setRequestError(null);
@@ -73,6 +84,7 @@ export function PermissionGate({
     setIsRequesting(false);
 
     if (result.success) {
+      grantedCalledRef.current = true;
       onGranted?.();
     } else {
       setRequestError(result.error);

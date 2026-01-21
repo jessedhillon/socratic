@@ -2,6 +2,10 @@
 export { CameraPreview, type CameraPreviewProps } from './CameraPreview';
 export { PermissionGate } from './PermissionGate';
 export {
+  RecordingStatusOverlay,
+  type RecordingStatusOverlayProps,
+} from './RecordingStatusOverlay';
+export {
   default as SynchronizedPlayback,
   type WordTiming,
 } from './SynchronizedPlayback';
