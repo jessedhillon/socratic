@@ -196,6 +196,36 @@ const AssessmentPage: React.FC = () => {
     }
   }, [state.attemptId, actions]);
 
+  // Handle AI-triggered completion (backend already marked as complete)
+  const handleAICompletion = useCallback(() => {
+    if (!state.attemptId || completionStep !== null) return;
+
+    // Skip API call since backend already completed - just do frontend flow
+    setCompletionStep('stopping');
+    setCompletionError(null);
+    actions.beginCompletion();
+
+    // Simulated upload step (actual implementation in SOC-123)
+    setCompletionStep('uploading');
+    setTimeout(() => {
+      setCompletedAt(new Date().toISOString());
+      setCompletionStep('complete');
+      actions.completeAssessment();
+    }, 500);
+  }, [state.attemptId, completionStep, actions]);
+
+  // Set up completion callback when API signals assessment is done
+  useEffect(() => {
+    api.onComplete(() => {
+      // AI has determined the assessment is complete
+      handleAICompletion();
+    });
+
+    return () => {
+      api.onComplete(null);
+    };
+  }, [api, handleAICompletion]);
+
   // Handle retry completion
   const handleRetryCompletion = useCallback(() => {
     setCompletionStep(null);
@@ -414,35 +444,37 @@ const AssessmentPage: React.FC = () => {
               <button
                 onClick={handleStartAssessment}
                 disabled={isStartingAssessment || !stream}
-                className="w-full px-6 py-4 bg-blue-600 text-white text-lg font-medium rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors flex flex-col items-center justify-center"
               >
                 {isStartingAssessment ? (
                   <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                    Starting Assessment...
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                      <span className="text-lg font-medium">Starting...</span>
+                    </div>
+                    <span className="text-sm text-blue-200 mt-1">
+                      Please wait
+                    </span>
                   </>
                 ) : (
                   <>
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    I'm Ready - Begin Assessment
+                    <div className="flex items-center gap-2">
+                      <svg
+                        className="w-5 h-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span className="text-lg font-medium">I'm Ready</span>
+                    </div>
+                    <span className="text-sm text-blue-200 mt-1">
+                      Begin Assessment
+                    </span>
                   </>
                 )}
               </button>

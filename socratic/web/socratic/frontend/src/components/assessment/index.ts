@@ -16,6 +16,7 @@ export {
   useAssessmentApi,
   type StartAssessmentResult,
   type SendMessageResult,
+  type CompletionCallback,
 } from './useAssessmentApi';
 export { SpeakButton } from './SpeakButton';
 export {

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { client } from '../../api/client.gen';
 import { getAuthToken } from '../../auth';
 
@@ -8,6 +8,11 @@ import { getAuthToken } from '../../auth';
 interface TokenEvent {
   content: string;
 }
+
+/**
+ * Callback for assessment completion.
+ */
+export type CompletionCallback = () => void;
 
 /**
  * Result from starting an assessment.
@@ -50,6 +55,7 @@ export function useAssessmentApi() {
   const messageResolverRef = useRef<((content: string) => void) | null>(null);
   const messageRejecterRef = useRef<((error: Error) => void) | null>(null);
   const currentContentRef = useRef<string>('');
+  const completionCallbackRef = useRef<CompletionCallback | null>(null);
 
   /**
    * Ensure EventSource is connected for the given attempt.
@@ -137,6 +143,8 @@ export function useAssessmentApi() {
       setIsStreaming(false);
       eventSource.close();
       eventSourceRef.current = null;
+      // Notify the page that the assessment is complete
+      completionCallbackRef.current?.();
     });
 
     return eventSource;
@@ -298,13 +306,23 @@ export function useAssessmentApi() {
     messageResolverRef.current = null;
     messageRejecterRef.current = null;
     lastEventIdRef.current = null;
+    completionCallbackRef.current = null;
     setIsStreaming(false);
+  }, []);
+
+  /**
+   * Set a callback to be invoked when the assessment_complete event is received.
+   * This is called when the AI determines the assessment is complete.
+   */
+  const onComplete = useCallback((callback: CompletionCallback | null) => {
+    completionCallbackRef.current = callback;
   }, []);
 
   return {
     startAssessment,
     sendMessage,
     cancelStream,
+    onComplete,
     isStreaming,
     streamedContent,
   };
