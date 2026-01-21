@@ -5,7 +5,13 @@
  * Manages turn-taking between the learner and AI interviewer.
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+} from 'react';
 import ChatMessage, { type ChatMessageData } from './ChatMessage';
 import VoiceInput from './VoiceInput';
 import { useSpeech, type Voice } from '../../hooks';
@@ -42,9 +48,10 @@ export interface VoiceConversationLoopProps {
  * Voice-based conversation loop for assessments.
  *
  * Features:
- * - Voice input for learner responses (record → transcribe → edit → send)
- * - Auto-play AI responses via TTS
+ * - Voice input for learner responses (record → transcribe → review → send)
+ * - Auto-play AI responses via TTS (text hidden until audio plays)
  * - Turn management (disables input while AI speaks)
+ * - Skip button inside AI message bubbles when speaking
  * - Visual indicators for current turn state
  * - Fallback to text input if voice is unavailable
  *
@@ -68,7 +75,7 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
   disabled = false,
   autoPlayResponses = true,
   voice = 'nova',
-  speechSpeed = 1.0,
+  speechSpeed = 1.1,
   onTurnChange,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -77,8 +84,40 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
   const [showTextInput, setShowTextInput] = useState(false);
   const [textInputValue, setTextInputValue] = useState('');
   const textInputRef = useRef<HTMLTextAreaElement>(null);
+  // Track message ID that's waiting for audio to start playing
+  const [pendingAudioMessageId, setPendingAudioMessageId] = useState<
+    string | null
+  >(null);
+  // Track message ID that should animate with typewriter effect
+  const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(
+    null
+  );
 
   const { state: speechState, speak, stop: stopSpeech } = useSpeech();
+
+  // When audio starts playing AND we have the duration, move message from pending to animating
+  useEffect(() => {
+    if (
+      speechState.isPlaying &&
+      pendingAudioMessageId &&
+      speechState.duration &&
+      speechState.duration > 0
+    ) {
+      setAnimatingMessageId(pendingAudioMessageId);
+      setPendingAudioMessageId(null);
+    }
+  }, [speechState.isPlaying, pendingAudioMessageId, speechState.duration]);
+
+  // Clear animation when audio stops
+  useEffect(() => {
+    if (!speechState.isPlaying && animatingMessageId) {
+      // Keep animating until the typewriter finishes (handled by onAnimationComplete)
+    }
+  }, [speechState.isPlaying, animatingMessageId]);
+
+  const handleAnimationComplete = useCallback(() => {
+    setAnimatingMessageId(null);
+  }, []);
 
   // Update turn state based on various conditions
   useEffect(() => {
@@ -88,7 +127,12 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
       newTurn = 'idle';
     } else if (speechState.isPlaying) {
       newTurn = 'ai_speaking';
-    } else if (isWaitingForResponse) {
+    } else if (
+      isWaitingForResponse ||
+      speechState.isLoading ||
+      pendingAudioMessageId
+    ) {
+      // Include audio loading in "thinking" state
       newTurn = 'ai_thinking';
     } else {
       newTurn = 'learner';
@@ -101,7 +145,9 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
   }, [
     isAssessmentComplete,
     speechState.isPlaying,
+    speechState.isLoading,
     isWaitingForResponse,
+    pendingAudioMessageId,
     currentTurn,
     onTurnChange,
   ]);
@@ -132,12 +178,16 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
       !speechState.isPlaying
     ) {
       lastSpokenMessageId.current = latestInterviewerMessage.id;
+      // Hide the message until audio starts playing
+      setPendingAudioMessageId(latestInterviewerMessage.id);
       speak(latestInterviewerMessage.content, {
         voice,
         speed: speechSpeed,
         autoPlay: true,
       }).catch((err) => {
         console.error('Failed to speak AI response:', err);
+        // Show the message on error so user can still read it
+        setPendingAudioMessageId(null);
       });
     }
   }, [
@@ -150,6 +200,24 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
     voice,
     speechSpeed,
   ]);
+
+  // Filter out messages that shouldn't be visible yet (streaming or pending audio)
+  const visibleMessages = useMemo(() => {
+    return messages.filter((msg) => {
+      // Always show learner and system messages
+      if (msg.type !== 'interviewer') return true;
+      // Hide streaming interviewer messages
+      if (msg.isStreaming) return false;
+      // Hide messages waiting for audio to start playing
+      if (msg.id === pendingAudioMessageId) return false;
+      return true;
+    });
+  }, [messages, pendingAudioMessageId]);
+
+  // Check if we should show the "loading audio" indicator
+  const isLoadingAudio =
+    pendingAudioMessageId !== null ||
+    messages.some((msg) => msg.type === 'interviewer' && msg.isStreaming);
 
   const handleVoiceSubmit = useCallback(
     (text: string) => {
@@ -183,6 +251,8 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
 
   const handleSkipSpeech = () => {
     stopSpeech();
+    // Also skip the typewriter animation by clearing the animating state
+    setAnimatingMessageId(null);
   };
 
   const isInputDisabled =
@@ -267,16 +337,6 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
             )}
             <span className="text-sm font-medium">{turnIndicator.text}</span>
           </div>
-
-          {/* Skip button when AI is speaking */}
-          {currentTurn === 'ai_speaking' && (
-            <button
-              onClick={handleSkipSpeech}
-              className="text-sm px-3 py-1 rounded-full bg-white/50 hover:bg-white/80 transition-colors"
-            >
-              Skip
-            </button>
-          )}
         </div>
       )}
 
@@ -289,12 +349,59 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
             </div>
           )}
 
-          {messages.map((message) => (
-            <ChatMessage key={message.id} message={message} />
+          {visibleMessages.map((message) => (
+            <ChatMessage
+              key={message.id}
+              message={message}
+              isSpeaking={
+                speechState.isPlaying &&
+                message.id === lastSpokenMessageId.current
+              }
+              onSkipSpeech={handleSkipSpeech}
+              animateReveal={message.id === animatingMessageId}
+              onAnimationComplete={handleAnimationComplete}
+              audioDurationSeconds={
+                message.id === animatingMessageId ? speechState.duration : null
+              }
+              speechSpeed={speechSpeed}
+            />
           ))}
 
+          {/* Audio loading indicator - shown while preparing TTS */}
+          {isLoadingAudio && (
+            <div className="flex justify-start mb-4">
+              <div className="bg-white text-gray-800 shadow-sm border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-md">
+                <div className="text-xs text-gray-500 mb-1 font-medium">
+                  Interviewer
+                </div>
+                <div className="flex items-center gap-2 text-gray-500">
+                  <svg
+                    className="w-4 h-4 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  <span className="text-sm">Preparing response...</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Typing indicator */}
-          {currentTurn === 'ai_thinking' && (
+          {currentTurn === 'ai_thinking' && !isLoadingAudio && (
             <div className="flex justify-start mb-4">
               <div className="bg-white text-gray-800 shadow-sm border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-md">
                 <div className="flex items-center gap-1">

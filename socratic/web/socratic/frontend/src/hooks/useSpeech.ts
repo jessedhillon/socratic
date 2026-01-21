@@ -24,6 +24,8 @@ export interface SpeechState {
   isPlaying: boolean;
   /** Error message if synthesis or playback failed */
   error: string | null;
+  /** Duration of the current/last audio in seconds */
+  duration: number | null;
 }
 
 export interface UseSpeechResult {
@@ -65,6 +67,7 @@ export function useSpeech(): UseSpeechResult {
     isLoading: false,
     isPlaying: false,
     error: null,
+    duration: null,
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -72,6 +75,10 @@ export function useSpeech(): UseSpeechResult {
 
   const cleanupAudio = useCallback(() => {
     if (audioRef.current) {
+      // Remove event handlers before cleanup to prevent spurious error events
+      audioRef.current.onplay = null;
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
       audioRef.current.pause();
       audioRef.current.src = '';
       audioRef.current = null;
@@ -143,6 +150,23 @@ export function useSpeech(): UseSpeechResult {
         const audio = new Audio(url);
         audioRef.current = audio;
 
+        // Wait for metadata to get duration before playing
+        audio.onloadedmetadata = () => {
+          const duration = audio.duration;
+          setState((prev) => ({ ...prev, duration }));
+
+          // Now start playback
+          audio.play().catch((err) => {
+            setState((prev) => ({
+              ...prev,
+              isPlaying: false,
+              error: 'Could not start playback',
+            }));
+            cleanupAudio();
+            reject(err);
+          });
+        };
+
         audio.onplay = () => {
           setState((prev) => ({ ...prev, isPlaying: true }));
         };
@@ -163,15 +187,8 @@ export function useSpeech(): UseSpeechResult {
           reject(new Error('Audio playback failed'));
         };
 
-        audio.play().catch((err) => {
-          setState((prev) => ({
-            ...prev,
-            isPlaying: false,
-            error: 'Could not start playback',
-          }));
-          cleanupAudio();
-          reject(err);
-        });
+        // Trigger loading
+        audio.load();
       });
     },
     [cleanupAudio]

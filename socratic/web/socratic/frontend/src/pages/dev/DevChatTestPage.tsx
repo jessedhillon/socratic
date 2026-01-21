@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ChatInterface,
   ChatMessage,
   useAssessmentState,
   type AssessmentPhase,
+  type ChatMessageData,
 } from '../../components/assessment';
+import { useSpeech } from '../../hooks';
 
 const phaseColors: Record<AssessmentPhase, string> = {
   idle: 'bg-gray-400',
@@ -16,11 +18,88 @@ const phaseColors: Record<AssessmentPhase, string> = {
   error: 'bg-red-500',
 };
 
+/** Sample messages for TTS testing */
+const TTS_TEST_MESSAGES = [
+  "Hello! Let's begin the assessment. Can you tell me about your experience with React?",
+  "That's interesting. How do you handle state management in complex applications?",
+  'Good point. Can you explain the difference between useEffect and useLayoutEffect?',
+  "Excellent explanation. Now, let's talk about performance optimization techniques.",
+];
+
 /**
  * Development test page for chat components and assessment state machine.
  */
 const DevChatTestPage: React.FC = () => {
   const { state, actions } = useAssessmentState();
+  const { state: speechState, speak, stop: stopSpeech } = useSpeech();
+
+  // TTS + animated text demo state
+  const [ttsMessages, setTtsMessages] = useState<ChatMessageData[]>([]);
+  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
+  const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(
+    null
+  );
+  const [speechSpeed, setSpeechSpeed] = useState(1.1);
+  const [ttsMessageIndex, setTtsMessageIndex] = useState(0);
+
+  // When audio starts playing, move message from pending to animating
+  useEffect(() => {
+    if (speechState.isPlaying && pendingMessageId) {
+      setAnimatingMessageId(pendingMessageId);
+      setPendingMessageId(null);
+    }
+  }, [speechState.isPlaying, pendingMessageId]);
+
+  const handleAnimationComplete = useCallback(() => {
+    setAnimatingMessageId(null);
+  }, []);
+
+  const handleTtsDemo = useCallback(async () => {
+    const text = TTS_TEST_MESSAGES[ttsMessageIndex % TTS_TEST_MESSAGES.length];
+    const msgId = `tts-demo-${Date.now()}`;
+
+    // Add message to list (hidden until audio plays)
+    const newMessage: ChatMessageData = {
+      id: msgId,
+      type: 'interviewer',
+      content: text,
+    };
+    setTtsMessages((prev) => [...prev, newMessage]);
+    setPendingMessageId(msgId);
+
+    // Cycle to next message for next demo
+    setTtsMessageIndex((prev) => prev + 1);
+
+    try {
+      await speak(text, {
+        voice: 'nova',
+        speed: speechSpeed,
+        autoPlay: true,
+      });
+    } catch (err) {
+      console.error('TTS failed:', err);
+      // Show message anyway on error
+      setPendingMessageId(null);
+    }
+  }, [ttsMessageIndex, speak, speechSpeed]);
+
+  const handleSkipSpeech = () => {
+    stopSpeech();
+    // Also skip the typewriter animation
+    setAnimatingMessageId(null);
+  };
+
+  const handleClearTtsMessages = () => {
+    stopSpeech();
+    setTtsMessages([]);
+    setPendingMessageId(null);
+    setAnimatingMessageId(null);
+  };
+
+  // Filter visible messages (hide pending)
+  const visibleTtsMessages = ttsMessages.filter(
+    (msg) => msg.id !== pendingMessageId
+  );
 
   // Initialize with a fake assignment on mount
   useEffect(() => {
@@ -186,6 +265,114 @@ const DevChatTestPage: React.FC = () => {
           >
             Demo Streaming
           </button>
+        </div>
+      </div>
+
+      {/* TTS + Animated Text Demo */}
+      <div className="bg-blue-50 px-6 py-4 border-b">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-gray-700">
+            TTS + Synchronized Text Animation Test
+          </h2>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-600">Speed:</label>
+              <select
+                value={speechSpeed}
+                onChange={(e) => setSpeechSpeed(parseFloat(e.target.value))}
+                className="text-xs border rounded px-2 py-1"
+              >
+                <option value={0.8}>0.8x</option>
+                <option value={1}>1.0x</option>
+                <option value={1.1}>1.1x</option>
+                <option value={1.25}>1.25x</option>
+                <option value={1.5}>1.5x</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  speechState.isLoading
+                    ? 'bg-yellow-500'
+                    : speechState.isPlaying
+                      ? 'bg-green-500 animate-pulse'
+                      : 'bg-gray-300'
+                }`}
+              />
+              <span>
+                {speechState.isLoading
+                  ? 'Loading...'
+                  : speechState.isPlaying
+                    ? 'Playing'
+                    : 'Idle'}
+              </span>
+              {pendingMessageId && (
+                <span className="text-blue-600">(text hidden)</span>
+              )}
+              {animatingMessageId && (
+                <span className="text-green-600">(animating)</span>
+              )}
+              {speechState.duration && (
+                <span className="text-purple-600">
+                  (duration: {speechState.duration.toFixed(2)}s)
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mb-3">
+          <button
+            onClick={handleTtsDemo}
+            disabled={speechState.isLoading || speechState.isPlaying}
+            className="text-sm px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            Play TTS Demo
+          </button>
+          <button
+            onClick={stopSpeech}
+            disabled={!speechState.isPlaying}
+            className="text-sm px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            Stop
+          </button>
+          <button
+            onClick={handleClearTtsMessages}
+            className="text-sm px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
+          >
+            Clear Messages
+          </button>
+        </div>
+
+        {speechState.error && (
+          <div className="text-sm text-red-600 mb-3">
+            Error: {speechState.error}
+          </div>
+        )}
+
+        <div className="max-w-2xl bg-white rounded-lg p-4 max-h-64 overflow-y-auto">
+          {visibleTtsMessages.length === 0 ? (
+            <div className="text-gray-400 text-sm text-center py-4">
+              Click "Play TTS Demo" to test TTS with synchronized text animation
+            </div>
+          ) : (
+            visibleTtsMessages.map((msg) => (
+              <ChatMessage
+                key={msg.id}
+                message={msg}
+                isSpeaking={
+                  speechState.isPlaying && msg.id === animatingMessageId
+                }
+                onSkipSpeech={handleSkipSpeech}
+                animateReveal={msg.id === animatingMessageId}
+                onAnimationComplete={handleAnimationComplete}
+                audioDurationSeconds={
+                  msg.id === animatingMessageId ? speechState.duration : null
+                }
+                speechSpeed={speechSpeed}
+              />
+            ))
+          )}
         </div>
       </div>
 

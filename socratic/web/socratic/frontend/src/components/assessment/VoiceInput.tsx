@@ -2,13 +2,13 @@
  * Voice input component for speech-to-text recording.
  *
  * Phases:
- * 1. Idle - "Click to record" button
+ * 1. Idle - "Click to respond" button
  * 2. Recording - Timer, stop button
  * 3. Transcribing - Loading spinner
- * 4. Review - Editable text field, "Send" and "Re-record" buttons
+ * 4. Review - Read-only transcription display, "Send" and "Re-record" buttons
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useMediaRecorder, useTranscription } from '../../hooks';
 
 export interface VoiceInputProps {
@@ -16,8 +16,6 @@ export interface VoiceInputProps {
   onSubmit: (text: string) => void;
   /** Whether input is disabled */
   disabled?: boolean;
-  /** Placeholder text for the review textarea */
-  placeholder?: string;
 }
 
 type Phase = 'idle' | 'recording' | 'transcribing' | 'review';
@@ -28,11 +26,9 @@ type Phase = 'idle' | 'recording' | 'transcribing' | 'review';
 const VoiceInput: React.FC<VoiceInputProps> = ({
   onSubmit,
   disabled = false,
-  placeholder = 'Edit your response if needed...',
 }) => {
   const [phase, setPhase] = useState<Phase>('idle');
-  const [editedText, setEditedText] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [transcribedText, setTranscribedText] = useState('');
 
   const {
     state: recordingState,
@@ -72,10 +68,8 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   // Handle transcription completion
   useEffect(() => {
     if (transcriptionState === 'success' && transcriptionResult) {
-      setEditedText(transcriptionResult.text);
+      setTranscribedText(transcriptionResult.text);
       setPhase('review');
-      // Focus textarea after transition
-      setTimeout(() => textareaRef.current?.focus(), 100);
     } else if (transcriptionState === 'error') {
       setPhase('idle');
     }
@@ -103,25 +97,17 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   const handleReRecord = useCallback(() => {
     resetRecording();
     resetTranscription();
-    setEditedText('');
+    setTranscribedText('');
     setPhase('idle');
   }, [resetRecording, resetTranscription]);
 
   const handleSubmit = useCallback(() => {
-    const trimmed = editedText.trim();
+    const trimmed = transcribedText.trim();
     if (trimmed) {
       onSubmit(trimmed);
       handleReRecord();
     }
-  }, [editedText, onSubmit, handleReRecord]);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Submit on Enter (without Shift)
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
+  }, [transcribedText, onSubmit, handleReRecord]);
 
   if (!isSupported) {
     return (
@@ -146,7 +132,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
               <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
               <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
             </svg>
-            Record
+            Respond
           </button>
           {transcriptionError && (
             <span className="text-red-500 text-sm">
@@ -201,16 +187,16 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
       return (
         <div className="flex flex-col gap-3">
           <div className="relative">
-            <textarea
-              ref={textareaRef}
-              value={editedText}
-              onChange={(e) => setEditedText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              rows={3}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              style={{ minHeight: '80px', maxHeight: '200px' }}
-            />
+            <div
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-800"
+              style={{
+                minHeight: '80px',
+                maxHeight: '200px',
+                overflowY: 'auto',
+              }}
+            >
+              {transcribedText}
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -234,7 +220,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!editedText.trim()}
+              disabled={!transcribedText.trim()}
               className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
               Send
