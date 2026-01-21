@@ -320,6 +320,8 @@ export function useRecordingSession(
   // Handle visibility changes
   // Note: We use refs for sessionState and callbacks to avoid stale closures
   // and prevent the effect from re-running on every state change.
+  const resumeDelayTimeoutRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!pauseOnHidden) return;
 
@@ -327,6 +329,11 @@ export function useRecordingSession(
       if (document.hidden) {
         // Tab became hidden - pause if recording
         if (sessionStateRef.current === 'recording') {
+          // Clear any pending resume timeout
+          if (resumeDelayTimeoutRef.current !== null) {
+            clearTimeout(resumeDelayTimeoutRef.current);
+            resumeDelayTimeoutRef.current = null;
+          }
           wasRecordingBeforeHiddenRef.current = true;
           pause();
           setSessionState('paused');
@@ -335,17 +342,27 @@ export function useRecordingSession(
           onPauseRef.current?.();
         }
       } else {
-        // Tab became visible - resume if we paused due to visibility
+        // Tab became visible - resume after brief delay so user sees paused state
         if (
           wasRecordingBeforeHiddenRef.current &&
           sessionStateRef.current === 'paused'
         ) {
-          wasRecordingBeforeHiddenRef.current = false;
-          resume();
-          setSessionState('recording');
-          setIsPausedByVisibility(false);
-          setupMaxDurationTimeout();
-          onResumeRef.current?.();
+          // Brief delay (1.5s) so user can see "Paused" indicator before auto-resume
+          resumeDelayTimeoutRef.current = window.setTimeout(() => {
+            resumeDelayTimeoutRef.current = null;
+            // Double-check we should still resume (user might have manually resumed)
+            if (
+              wasRecordingBeforeHiddenRef.current &&
+              sessionStateRef.current === 'paused'
+            ) {
+              wasRecordingBeforeHiddenRef.current = false;
+              resume();
+              setSessionState('recording');
+              setIsPausedByVisibility(false);
+              setupMaxDurationTimeout();
+              onResumeRef.current?.();
+            }
+          }, 1500);
         }
       }
     };
@@ -353,6 +370,10 @@ export function useRecordingSession(
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // Clean up any pending timeout on unmount
+      if (resumeDelayTimeoutRef.current !== null) {
+        clearTimeout(resumeDelayTimeoutRef.current);
+      }
     };
   }, [
     pauseOnHidden,

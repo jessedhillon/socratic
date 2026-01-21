@@ -173,6 +173,7 @@ export function useMediaRecorder(
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startTimeRef = useRef<number>(0);
+  const accumulatedDurationRef = useRef<number>(0);
   const durationIntervalRef = useRef<number | null>(null);
   const finalBlobRef = useRef<Blob | null>(null);
 
@@ -180,23 +181,41 @@ export function useMediaRecorder(
 
   /**
    * Start duration tracking interval.
+   * @param fromResume - If true, continues from accumulated duration instead of resetting
    */
-  const startDurationTracking = useCallback(() => {
+  const startDurationTracking = useCallback((fromResume: boolean = false) => {
     startTimeRef.current = Date.now();
+    if (!fromResume) {
+      accumulatedDurationRef.current = 0;
+    }
     durationIntervalRef.current = window.setInterval(() => {
-      setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      const currentSegment = Math.floor(
+        (Date.now() - startTimeRef.current) / 1000
+      );
+      setDuration(accumulatedDurationRef.current + currentSegment);
     }, 1000);
   }, []);
 
   /**
    * Stop duration tracking interval.
+   * @param saveAccumulated - If true, saves current duration to accumulated for resume
    */
-  const stopDurationTracking = useCallback(() => {
-    if (durationIntervalRef.current !== null) {
-      clearInterval(durationIntervalRef.current);
-      durationIntervalRef.current = null;
-    }
-  }, []);
+  const stopDurationTracking = useCallback(
+    (saveAccumulated: boolean = false) => {
+      if (durationIntervalRef.current !== null) {
+        if (saveAccumulated) {
+          // Save the current total duration for resuming later
+          const currentSegment = Math.floor(
+            (Date.now() - startTimeRef.current) / 1000
+          );
+          accumulatedDurationRef.current += currentSegment;
+        }
+        clearInterval(durationIntervalRef.current);
+        durationIntervalRef.current = null;
+      }
+    },
+    []
+  );
 
   /**
    * Clean up media resources.
@@ -374,7 +393,7 @@ export function useMediaRecorder(
     if (recorder && recorder.state === 'recording') {
       recorder.pause();
       setState('paused');
-      stopDurationTracking();
+      stopDurationTracking(true); // Save accumulated duration for resume
     }
   }, [stopDurationTracking]);
 
@@ -386,7 +405,7 @@ export function useMediaRecorder(
     if (recorder && recorder.state === 'paused') {
       recorder.resume();
       setState('recording');
-      startDurationTracking();
+      startDurationTracking(true); // Continue from accumulated duration
     }
   }, [startDurationTracking]);
 
@@ -400,6 +419,7 @@ export function useMediaRecorder(
     setChunks([]);
     chunksRef.current = [];
     finalBlobRef.current = null;
+    accumulatedDurationRef.current = 0;
     setDuration(0);
   }, [cleanup]);
 

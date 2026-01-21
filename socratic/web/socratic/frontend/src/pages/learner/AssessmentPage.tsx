@@ -34,10 +34,22 @@ const AssessmentPage: React.FC = () => {
     isPausedByVisibility,
     initialize: initializeRecording,
     startRecording,
+    abandon: abandonRecording,
   } = useRecordingSession({
     pauseOnHidden: true,
     autoStart: false,
   });
+
+  // Keep a ref to the abandon function for cleanup on unmount
+  const abandonRef = useRef(abandonRecording);
+  abandonRef.current = abandonRecording;
+
+  // Cleanup recording session on unmount (e.g., navigation away)
+  useEffect(() => {
+    return () => {
+      abandonRef.current();
+    };
+  }, []);
 
   // Track streamed content for the current message
   const streamedContentRef = useRef('');
