@@ -244,11 +244,14 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
     setAnimatingMessageId(null);
   };
 
-  const isInputDisabled =
-    disabled ||
-    isAssessmentComplete ||
+  // AI's turn: waiting for response, loading audio, playing audio, or audio pending
+  const isAiTurn =
     isWaitingForResponse ||
-    speechState.isPlaying;
+    speechState.isLoading ||
+    speechState.isPlaying ||
+    pendingAudioMessageId !== null;
+
+  const isInputDisabled = disabled || isAssessmentComplete || isAiTurn;
 
   // Determine turn indicator content
   const getTurnIndicator = (): { text: string; className: string } => {
