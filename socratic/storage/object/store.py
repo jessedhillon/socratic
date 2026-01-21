@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import abc
+import shutil
 import typing as t
 from pathlib import Path
 
 import pydantic as p
 
 if t.TYPE_CHECKING:
-    from socratic.core.config.storage import ObjectSettings
+    from typing import BinaryIO
 
 
 class UploadResult(p.BaseModel):
@@ -42,6 +43,25 @@ class ObjectStore(abc.ABC):
         Args:
             key: The storage key (path/filename) for the object.
             data: The file contents as bytes.
+            content_type: MIME type of the file.
+
+        Returns:
+            UploadResult with the URL and metadata.
+        """
+        ...
+
+    @abc.abstractmethod
+    async def upload_stream(
+        self,
+        key: str,
+        file: BinaryIO,
+        content_type: str = "application/octet-stream",
+    ) -> UploadResult:
+        """Upload from a file-like object to storage (streaming, memory-efficient).
+
+        Args:
+            key: The storage key (path/filename) for the object.
+            file: A file-like object to read from.
             content_type: MIME type of the file.
 
         Returns:
@@ -111,6 +131,31 @@ class LocalObjectStore(ObjectStore):
             content_type=content_type,
         )
 
+    async def upload_stream(
+        self,
+        key: str,
+        file: BinaryIO,
+        content_type: str = "application/octet-stream",
+    ) -> UploadResult:
+        """Upload from file-like object to local filesystem (streaming)."""
+        file_path = self._base_path / key
+
+        # Ensure parent directories exist
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Stream copy in chunks (default 64KB chunks)
+        with open(file_path, "wb") as dest:
+            shutil.copyfileobj(file, dest)
+
+        # Get final size
+        size = file_path.stat().st_size
+
+        return UploadResult(
+            url=self.get_url(key),
+            size=size,
+            content_type=content_type,
+        )
+
     async def delete(self, key: str) -> bool:
         """Delete file from local filesystem."""
         file_path = self._base_path / key
@@ -124,24 +169,3 @@ class LocalObjectStore(ObjectStore):
     def get_url(self, key: str) -> str:
         """Get URL for local file (served by web server)."""
         return f"{self._url_prefix}/{key}"
-
-
-def create_object_store(settings: ObjectSettings, root: Path) -> ObjectStore:
-    """Factory function to create appropriate object store.
-
-    Args:
-        settings: Object store configuration.
-        root: Application root directory.
-
-    Returns:
-        Configured ObjectStore instance.
-    """
-    if settings.backend == "local":
-        base_path = settings.local_path or root / ".state" / "uploads"
-        return LocalObjectStore(base_path=base_path)
-    elif settings.backend == "s3":
-        # S3 implementation would go here
-        # For now, fall back to local
-        raise NotImplementedError("S3 backend not yet implemented")
-    else:
-        raise ValueError(f"Unknown storage backend: {settings.backend}")

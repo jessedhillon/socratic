@@ -152,6 +152,13 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
     onTurnChange,
   ]);
 
+  // Stop speech when assessment completes
+  useEffect(() => {
+    if (isAssessmentComplete) {
+      stopSpeech();
+    }
+  }, [isAssessmentComplete, stopSpeech]);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

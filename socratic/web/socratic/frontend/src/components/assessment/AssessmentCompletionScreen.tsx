@@ -100,12 +100,6 @@ export function AssessmentCompletionScreen({
         icon: '💾',
         description: 'Submitting your responses...',
       },
-      {
-        id: 'complete',
-        label: 'Complete',
-        icon: '✓',
-        description: 'Assessment submitted successfully!',
-      },
     ];
 
     const currentIndex = steps.findIndex((s) => s.id === currentStep);

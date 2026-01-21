@@ -712,14 +712,6 @@ async def upload_video_route(
                 detail="You do not have access to this assessment",
             )
 
-    # Read video data
-    video_data = await video.read()
-    if not video_data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Video file is empty",
-        )
-
     # Determine content type
     content_type = video.content_type or "video/webm"
 
@@ -727,8 +719,15 @@ async def upload_video_route(
     extension = "webm" if "webm" in content_type else "mp4"
     storage_key = f"assessments/{aid}/recording.{extension}"
 
-    # Upload to object storage
-    result = await object_store.upload(storage_key, video_data, content_type)
+    # Upload to object storage using streaming (avoids loading entire file into RAM)
+    result = await object_store.upload_stream(storage_key, video.file, content_type)
+
+    # Check if file was empty
+    if result.size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Video file is empty",
+        )
 
     # Update attempt with video URL
     with session.begin():
