@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useAssessmentApi, type ConnectionState } from '../../hooks';
+import { useAssessmentStream, type ConnectionState } from '../../hooks';
 import {
   ChatInterface,
   type ChatMessageData as Message,
@@ -29,7 +29,7 @@ const DevApiTestPage: React.FC = () => {
     completeAssessment,
     disconnect,
     connectionState,
-  } = useAssessmentApi();
+  } = useAssessmentStream();
 
   const [assignmentId, setAssignmentId] = useState('');
   const [attemptId, setAttemptId] = useState<string | null>(null);
