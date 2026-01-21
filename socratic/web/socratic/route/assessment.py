@@ -15,6 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 from socratic.auth import AuthContext, require_educator, require_learner
 from socratic.core import di
 from socratic.llm.assessment import get_assessment_status, PostgresCheckpointer, run_assessment_turn, start_assessment
+from socratic.llm.assessment.state import InterviewPhase
 from socratic.llm.evaluation import EvaluationPipeline
 from socratic.llm.factory import ModelFactory
 from socratic.model import AssignmentID, AttemptID, AttemptStatus, UtteranceType
@@ -147,6 +148,34 @@ async def run_response_task(
             attempt_id,
             StreamEvent(event_type="message_done", data={}),
         )
+
+        # Check if assessment reached closure phase
+        state = checkpointer.get(attempt_id)
+        if state is not None:
+            phase = state.get("phase")
+            if phase == InterviewPhase.Closure:
+                # Check if attempt is still in progress (avoid race with manual completion)
+                should_complete = False
+                with session.begin():
+                    attempt = attempt_storage.get(attempt_id, session=session)
+                    if attempt is not None and attempt.status == AttemptStatus.InProgress:
+                        # Update attempt status to completed
+                        now = datetime.datetime.now(datetime.UTC)
+                        attempt_storage.update(
+                            attempt_id,
+                            status=AttemptStatus.Completed,
+                            completed_at=now,
+                            session=session,
+                        )
+                        should_complete = True
+
+                # Publish completion event after transaction commits
+                if should_complete:
+                    await broker.publish(
+                        attempt_id,
+                        StreamEvent(event_type="assessment_complete", data={}),
+                    )
+                    await broker.close_stream(attempt_id)
 
     except Exception as e:
         await broker.publish(
