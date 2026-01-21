@@ -23,8 +23,12 @@ import {
 import { RecordingStatusOverlay } from '../../components/RecordingStatusOverlay';
 import { PermissionGate } from '../../components/PermissionGate';
 import { CameraPreview } from '../../components/CameraPreview';
+import { TabVisibilityWarning } from '../../components/TabVisibilityWarning';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
-import { completeAssessment as completeAssessmentApi } from '../../api/sdk.gen';
+import {
+  completeAssessment as completeAssessmentApi,
+  uploadAssessmentVideo,
+} from '../../api/sdk.gen';
 
 /**
  * Assessment page - where learners complete their assessments.
@@ -181,20 +185,24 @@ const AssessmentPage: React.FC = () => {
     isPausedByVisibility,
     initialize: initializeRecording,
     startRecording,
+    stopRecording,
     abandon: abandonRecording,
   } = useRecordingSession({
     pauseOnHidden: true,
     autoStart: false,
   });
 
-  // Keep a ref to the abandon function for cleanup on unmount
+  // Keep refs to cleanup functions for unmount
   const abandonRef = useRef(abandonRecording);
   abandonRef.current = abandonRecording;
+  const cancelStreamRef = useRef(api.cancelStream);
+  cancelStreamRef.current = api.cancelStream;
 
-  // Cleanup recording session on unmount (e.g., navigation away)
+  // Cleanup recording session and API streams on unmount (e.g., navigation away)
   useEffect(() => {
     return () => {
       abandonRef.current();
+      cancelStreamRef.current();
     };
   }, []);
 
@@ -204,6 +212,11 @@ const AssessmentPage: React.FC = () => {
   );
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [completedAt, setCompletedAt] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const completionStartTimeRef = useRef<number | null>(null);
+
+  // Minimum time to show completion screen before transitioning to complete
+  const COMPLETION_MIN_DISPLAY_MS = 3000;
 
   // Track streamed content for the current message
   const streamedContentRef = useRef('');
@@ -299,17 +312,30 @@ const AssessmentPage: React.FC = () => {
   const handleCompleteAssessment = useCallback(async () => {
     if (!state.attemptId) return;
 
+    // Track when completion screen first appears
+    completionStartTimeRef.current = Date.now();
+    setUploadProgress(0);
     setCompletionStep('stopping');
     setCompletionError(null);
     actions.beginCompletion();
 
     try {
-      // Step 1: Stop recording (simulated - actual implementation in SOC-123)
-      setCompletionStep('uploading');
+      // Step 1: Stop recording and get the video blob
+      const videoBlob = await stopRecording();
 
-      // Step 2: Upload video (simulated - actual implementation in SOC-123)
-      // In real implementation, this would upload the video blob to S3
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Step 2: Upload video if we have a blob
+      if (videoBlob) {
+        setCompletionStep('uploading');
+        const uploadResponse = await uploadAssessmentVideo({
+          path: { attempt_id: state.attemptId },
+          body: { video: videoBlob },
+        });
+        setUploadProgress(100);
+        if (uploadResponse.error) {
+          console.warn('Video upload failed:', uploadResponse.error);
+          // Continue with completion even if video upload fails
+        }
+      }
 
       // Step 3: Complete assessment via API
       setCompletionStep('completing');
@@ -320,6 +346,13 @@ const AssessmentPage: React.FC = () => {
 
       if (response.error) {
         throw new Error('Failed to complete assessment');
+      }
+
+      // Ensure minimum display time before showing complete
+      const elapsed = Date.now() - (completionStartTimeRef.current || 0);
+      const remainingTime = COMPLETION_MIN_DISPLAY_MS - elapsed;
+      if (remainingTime > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remainingTime));
       }
 
       // Success!
@@ -335,7 +368,7 @@ const AssessmentPage: React.FC = () => {
           : 'An error occurred while completing your assessment.'
       );
     }
-  }, [state.attemptId, actions]);
+  }, [state.attemptId, actions, stopRecording]);
 
   // Handle AI-triggered completion - defer showing banner until speech starts
   const handleAICompletion = useCallback(() => {
@@ -359,14 +392,55 @@ const AssessmentPage: React.FC = () => {
   );
 
   // Handle learner choosing to finish from closure_ready state
-  const handleFinishAssessment = useCallback(() => {
-    if (state.phase !== 'closure_ready') return;
+  const handleFinishAssessment = useCallback(async () => {
+    if (state.phase !== 'closure_ready' || !state.attemptId) return;
 
-    // Backend already marked as complete, skip straight to done
-    setCompletedAt(new Date().toISOString());
-    setCompletionStep('complete');
-    actions.completeAssessment();
-  }, [state.phase, actions]);
+    // Track when completion screen first appears
+    completionStartTimeRef.current = Date.now();
+    setUploadProgress(0);
+    setCompletionStep('stopping');
+    actions.beginCompletion();
+
+    try {
+      // Stop recording and get the video blob
+      const videoBlob = await stopRecording();
+
+      // Upload video if we have a blob
+      if (videoBlob) {
+        setCompletionStep('uploading');
+        const uploadResponse = await uploadAssessmentVideo({
+          path: { attempt_id: state.attemptId },
+          body: { video: videoBlob },
+        });
+        setUploadProgress(100);
+        if (uploadResponse.error) {
+          console.warn('Video upload failed:', uploadResponse.error);
+          // Continue with completion even if video upload fails
+        }
+      }
+
+      // Show completing step (backend already marked complete, but show for UX)
+      setCompletionStep('completing');
+
+      // Ensure minimum display time before showing complete
+      const elapsed = Date.now() - (completionStartTimeRef.current || 0);
+      const remainingTime = COMPLETION_MIN_DISPLAY_MS - elapsed;
+      if (remainingTime > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remainingTime));
+      }
+
+      // Done!
+      setCompletedAt(new Date().toISOString());
+      setCompletionStep('complete');
+      actions.completeAssessment();
+    } catch (error) {
+      console.error('Error during finish assessment:', error);
+      // Still complete even if recording/upload fails
+      setCompletedAt(new Date().toISOString());
+      setCompletionStep('complete');
+      actions.completeAssessment();
+    }
+  }, [state.phase, state.attemptId, actions, stopRecording]);
 
   // Set up completion callback when API signals assessment is done
   useEffect(() => {
@@ -412,7 +486,7 @@ const AssessmentPage: React.FC = () => {
       <AssessmentCompletionScreen
         summary={assessmentSummary}
         step={completionStep}
-        uploadProgress={completionStep === 'uploading' ? 75 : 100}
+        uploadProgress={uploadProgress}
         error={completionError}
         onRetry={handleRetryCompletion}
         messages={state.messages}
@@ -824,6 +898,9 @@ const AssessmentPage: React.FC = () => {
         defaultMinimized={false}
         showPlaceholder={isMockClosure}
       />
+
+      {/* Tab visibility warning overlay */}
+      <TabVisibilityWarning isVisible={isPausedByVisibility} />
     </div>
   );
 };

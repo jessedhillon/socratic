@@ -97,6 +97,14 @@ class TranscriptResponse(p.BaseModel):
     messages: list[TranscriptMessageResponse]
 
 
+class UploadVideoResponse(p.BaseModel):
+    """Response after uploading assessment video."""
+
+    attempt_id: AttemptID
+    video_url: str
+    size: int
+
+
 class ErrorResponse(p.BaseModel):
     """Error response for assessment operations."""
 

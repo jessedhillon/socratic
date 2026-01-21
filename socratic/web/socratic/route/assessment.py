@@ -7,7 +7,7 @@ import json
 import typing as t
 
 import jinja2
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status, UploadFile
 from langchain_core.language_models import BaseChatModel
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
@@ -25,11 +25,12 @@ from socratic.storage import evaluation as eval_storage
 from socratic.storage import objective as obj_storage
 from socratic.storage import rubric as rubric_storage
 from socratic.storage import transcript as transcript_storage
+from socratic.storage.object import ObjectStore
 from socratic.storage.streaming import AssessmentStreamBroker, StreamEvent
 
 from ..view.assessment import AssessmentStatusResponse, CompleteAssessmentOkResponse, CompleteAssessmentRequest, \
     MessageAcceptedResponse, SendMessageRequest, StartAssessmentOkResponse, TranscriptMessageResponse, \
-    TranscriptResponse
+    TranscriptResponse, UploadVideoResponse
 
 if t.TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -679,3 +680,61 @@ async def trigger_evaluation_route(
         "confidence_score": float(result["confidence_score"]),
         "flags": [f.value for f in result["flags"]],
     }
+
+
+@router.post("/{attempt_id}/video", operation_id="upload_assessment_video")
+@di.inject
+async def upload_video_route(
+    attempt_id: str,
+    video: UploadFile,
+    auth: AuthContext = Depends(require_learner),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+    object_store: ObjectStore = Depends(di.Provide["storage.object"]),
+) -> UploadVideoResponse:
+    """Upload the recorded video for an assessment attempt.
+
+    The video is uploaded to object storage and the attempt is updated
+    with the video URL.
+    """
+    aid = AttemptID(attempt_id)
+
+    # Validate attempt exists and belongs to the learner
+    with session.begin():
+        attempt = attempt_storage.get(aid, session=session)
+        if attempt is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assessment attempt not found",
+            )
+        if attempt.learner_id != auth.user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this assessment",
+            )
+
+    # Determine content type
+    content_type = video.content_type or "video/webm"
+
+    # Generate storage key
+    extension = "webm" if "webm" in content_type else "mp4"
+    storage_key = f"assessments/{aid}/recording.{extension}"
+
+    # Upload to object storage using streaming (avoids loading entire file into RAM)
+    result = await object_store.upload_stream(storage_key, video.file, content_type)
+
+    # Check if file was empty
+    if result.size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Video file is empty",
+        )
+
+    # Update attempt with video URL
+    with session.begin():
+        attempt_storage.update(aid, video_url=result.url, session=session)
+
+    return UploadVideoResponse(
+        attempt_id=aid,
+        video_url=result.url,
+        size=result.size,
+    )

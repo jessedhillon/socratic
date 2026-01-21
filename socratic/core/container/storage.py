@@ -23,9 +23,10 @@ from sqlalchemy.engine.url import URL as DSN
 import socratic.lib.json as json
 import socratic.lib.uuid as uuid
 from socratic.lib.sql import DebugQuery, DebugSession
+from socratic.storage.object import LocalObjectStore, ObjectStore
 
 from ..config.secrets import PostgresqlSecrets
-from ..config.storage import PostgresqlSettings, StorageSettings
+from ..config.storage import ObjectSettings, PostgresqlSettings, StorageSettings
 from ..di import NotReady
 from ..provider import LoggingProvider
 from .streaming import StreamingContainer
@@ -132,6 +133,23 @@ class PersistentContainer(DeclarativeContainer):
     session: Provider[sqlalchemy.orm.Session] = Factory(provide_session, debug=debug, engine=engine)
 
 
+def provide_object_store(config: ObjectSettings, root: Path | NotReady) -> ObjectStore:
+    """Create object store instance based on configuration.
+
+    Reads configuration and selects the appropriate storage backend.
+    """
+    if isinstance(root, NotReady):
+        raise RuntimeError("root path is unavailable")
+
+    if config.backend == "local":
+        base_path = config.local_path or root / ".state" / "uploads"
+        return LocalObjectStore(base_path=base_path)
+    elif config.backend == "s3":
+        raise NotImplementedError("S3 backend not yet implemented")
+    else:
+        raise ValueError(f"Unknown storage backend: {config.backend}")
+
+
 class StorageContainer(DeclarativeContainer):
     config: Provider[StorageSettings] = Configuration(strict=True)
     secrets: Provider[StorageSettings] = Configuration(strict=True)
@@ -144,6 +162,7 @@ class StorageContainer(DeclarativeContainer):
         PersistentContainer, config=config.persistent, secrets=secrets, debug=debug, logging=logging, root=root
     )
     streaming: Provider[StreamingContainer] = Container(StreamingContainer, config=config.streaming)
+    object: Provider[ObjectStore] = Singleton(provide_object_store, config=config.object.as_(ObjectSettings), root=root)
 
 
 class UUIDLoader(Loader):

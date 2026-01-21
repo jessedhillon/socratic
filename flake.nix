@@ -124,6 +124,7 @@
         packages = with pkgs; [
           bubblewrap
           claude-code
+          ffmpeg
           fzf
           gh
           isort

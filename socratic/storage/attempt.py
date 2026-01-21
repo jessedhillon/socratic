@@ -75,6 +75,7 @@ def update(
     grade: Grade | None | NotSet = NotSet(),
     confidence_score: decimal.Decimal | None | NotSet = NotSet(),
     audio_url: str | None | NotSet = NotSet(),
+    video_url: str | None | NotSet = NotSet(),
     session: Session = di.Provide["storage.persistent.session"],
 ) -> None:
     """Update an attempt.
@@ -98,6 +99,8 @@ def update(
         values["confidence_score"] = confidence_score
     if not isinstance(audio_url, NotSet):
         values["audio_url"] = audio_url
+    if not isinstance(video_url, NotSet):
+        values["video_url"] = video_url
 
     if values:
         stmt = sqla.update(assessment_attempts).where(assessment_attempts.attempt_id == attempt_id).values(**values)
