@@ -1,5 +1,9 @@
 /**
- * Hook for assessment API interactions with EventSource streaming.
+ * Low-level hook for assessment EventSource streaming.
+ *
+ * This hook provides explicit control over the SSE connection lifecycle,
+ * useful for debugging and development tools. For production assessment
+ * flows, use the higher-level useAssessmentStream from components/assessment.
  *
  * Uses native EventSource for SSE streaming which provides:
  * - Automatic reconnection with Last-Event-ID
@@ -58,7 +62,7 @@ export type ConnectionState =
   | 'connected'
   | 'error';
 
-export interface UseAssessmentApiResult {
+export interface UseAssessmentStreamResult {
   /** Start a new assessment attempt */
   startAssessment: (assignmentId: string) => Promise<StartAssessmentOkResponse>;
 
@@ -98,7 +102,7 @@ export interface UseAssessmentApiResult {
  *
  * @example
  * ```tsx
- * const { startAssessment, connectStream, sendMessage, connectionState } = useAssessmentApi();
+ * const { startAssessment, connectStream, sendMessage, connectionState } = useAssessmentStream();
  *
  * const handleStart = async () => {
  *   const { attempt_id, objective_title } = await startAssessment(assignmentId);
@@ -112,7 +116,7 @@ export interface UseAssessmentApiResult {
  * };
  * ```
  */
-export function useAssessmentApi(): UseAssessmentApiResult {
+export function useAssessmentStream(): UseAssessmentStreamResult {
   const eventSourceRef = useRef<EventSource | null>(null);
   const callbacksRef = useRef<StreamCallbacks | null>(null);
   const [connectionState, setConnectionState] =
@@ -294,4 +298,4 @@ export function useAssessmentApi(): UseAssessmentApiResult {
   };
 }
 
-export default useAssessmentApi;
+export default useAssessmentStream;

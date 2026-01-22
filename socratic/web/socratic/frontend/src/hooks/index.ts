@@ -1,9 +1,9 @@
-export { useAssessmentApi } from './useAssessmentApi';
+export { useAssessmentStream } from './useAssessmentStream';
 export type {
-  UseAssessmentApiResult,
+  UseAssessmentStreamResult,
   StreamCallbacks,
   ConnectionState,
-} from './useAssessmentApi';
+} from './useAssessmentStream';
 
 export { useMediaRecorder } from './useMediaRecorder';
 export type {
