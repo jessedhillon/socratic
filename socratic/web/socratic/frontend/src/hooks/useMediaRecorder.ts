@@ -36,6 +36,19 @@ export interface MediaRecorderOptions {
   videoBitsPerSecond?: number;
   /** Audio bits per second (default: 128000 for 128 kbps) */
   audioBitsPerSecond?: number;
+  /**
+   * Optional audio stream to use for recording instead of the mic audio.
+   * When provided, the recording will use video from getUserMedia but audio
+   * from this stream. The original mic audio is still available in the
+   * returned stream for preview/visualization.
+   */
+  audioOverrideStream?: MediaStream | null;
+  /**
+   * Optional externally-provided media stream to use instead of calling getUserMedia.
+   * When provided, the hook will use this stream for both preview and recording
+   * (with audioOverrideStream applied if also provided).
+   */
+  externalStream?: MediaStream | null;
 }
 
 /**
@@ -71,13 +84,20 @@ export interface UseMediaRecorderResult {
 /**
  * Default options for MediaRecorder.
  */
-const DEFAULT_OPTIONS: Required<MediaRecorderOptions> = {
+const DEFAULT_OPTIONS: Required<
+  Omit<MediaRecorderOptions, 'audioOverrideStream' | 'externalStream'>
+> & {
+  audioOverrideStream: MediaStream | null;
+  externalStream: MediaStream | null;
+} = {
   video: true,
   audio: true,
   mimeType: '',
   timeslice: 1000,
   videoBitsPerSecond: 2500000,
   audioBitsPerSecond: 128000,
+  audioOverrideStream: null,
+  externalStream: null,
 };
 
 /**
@@ -149,6 +169,8 @@ export function useMediaRecorder(
     timeslice = DEFAULT_OPTIONS.timeslice,
     videoBitsPerSecond = DEFAULT_OPTIONS.videoBitsPerSecond,
     audioBitsPerSecond = DEFAULT_OPTIONS.audioBitsPerSecond,
+    audioOverrideStream = DEFAULT_OPTIONS.audioOverrideStream,
+    externalStream = DEFAULT_OPTIONS.externalStream,
   } = options;
 
   const opts = useMemo(
@@ -159,8 +181,19 @@ export function useMediaRecorder(
       timeslice,
       videoBitsPerSecond,
       audioBitsPerSecond,
+      audioOverrideStream,
+      externalStream,
     }),
-    [video, audio, mimeType, timeslice, videoBitsPerSecond, audioBitsPerSecond]
+    [
+      video,
+      audio,
+      mimeType,
+      timeslice,
+      videoBitsPerSecond,
+      audioBitsPerSecond,
+      audioOverrideStream,
+      externalStream,
+    ]
   );
 
   const [state, setState] = useState<RecordingState>('idle');
@@ -259,14 +292,29 @@ export function useMediaRecorder(
     setDuration(0);
 
     try {
-      // Request media stream
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: opts.video,
-        audio: opts.audio,
-      });
+      // Get media stream - either use external stream or request via getUserMedia
+      let mediaStream: MediaStream;
+      if (opts.externalStream) {
+        mediaStream = opts.externalStream;
+      } else {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: opts.video,
+          audio: opts.audio,
+        });
+      }
 
       streamRef.current = mediaStream;
       setStream(mediaStream);
+
+      // Determine which stream to use for recording
+      // If audioOverrideStream is provided, create a composite stream with
+      // video from the media stream and audio from the override stream
+      let recordingStream = mediaStream;
+      if (opts.audioOverrideStream) {
+        const videoTracks = mediaStream.getVideoTracks();
+        const audioTracks = opts.audioOverrideStream.getAudioTracks();
+        recordingStream = new MediaStream([...videoTracks, ...audioTracks]);
+      }
 
       // Determine MIME type
       const mimeType = opts.mimeType || getSupportedMimeType();
@@ -281,7 +329,7 @@ export function useMediaRecorder(
         recorderOptions.mimeType = mimeType;
       }
 
-      const recorder = new MediaRecorder(mediaStream, recorderOptions);
+      const recorder = new MediaRecorder(recordingStream, recorderOptions);
       mediaRecorderRef.current = recorder;
 
       // Handle data availability
