@@ -39,6 +39,8 @@ export interface RecordingSessionOptions {
   autoStart?: boolean;
   /** Maximum recording duration in seconds (0 = unlimited) */
   maxDuration?: number;
+  /** Interval in ms between chunk uploads (default: 10000 for 10 seconds, 0 = disabled) */
+  chunkUploadIntervalMs?: number;
   /** Callback when recording starts */
   onStart?: () => void;
   /** Callback when recording is paused */
@@ -51,6 +53,8 @@ export interface RecordingSessionOptions {
   onError?: (error: RecordingError) => void;
   /** Callback when max duration is reached */
   onMaxDurationReached?: () => void;
+  /** Callback when a chunk is ready for upload (progressive upload) */
+  onChunkReady?: (chunk: Blob, sequence: number) => void;
 }
 
 /**
@@ -134,18 +138,23 @@ export function useRecordingSession(
     pauseOnHidden = true,
     autoStart = false,
     maxDuration = 0,
+    chunkUploadIntervalMs = 10000,
     onStart,
     onPause,
     onResume,
     onStop,
     onError,
     onMaxDurationReached,
+    onChunkReady,
   } = options;
 
   const [sessionState, setSessionState] = useState<SessionState>('idle');
   const [isPausedByVisibility, setIsPausedByVisibility] = useState(false);
   const wasRecordingBeforeHiddenRef = useRef(false);
   const maxDurationTimeoutRef = useRef<number | null>(null);
+  const chunkUploadIntervalRef = useRef<number | null>(null);
+  const lastProcessedChunkIndexRef = useRef(0);
+  const chunkSequenceRef = useRef(0);
 
   // Keep refs to current values for use in event handlers (avoids stale closures)
   const sessionStateRef = useLatest(sessionState);
@@ -155,11 +164,13 @@ export function useRecordingSession(
   const onStopRef = useLatest(onStop);
   const onErrorRef = useLatest(onError);
   const onMaxDurationReachedRef = useLatest(onMaxDurationReached);
+  const onChunkReadyRef = useLatest(onChunkReady);
 
   const {
     state: recordingState,
     error,
     stream,
+    chunks,
     duration,
     start,
     stop,
@@ -171,6 +182,9 @@ export function useRecordingSession(
     video: true,
     audio: true,
   });
+
+  // Keep a ref to chunks to avoid stale closures in interval
+  const chunksRef = useLatest(chunks);
 
   /**
    * Clear max duration timeout.
@@ -196,6 +210,55 @@ export function useRecordingSession(
   }, [maxDuration, clearMaxDurationTimeout, onMaxDurationReachedRef]);
 
   /**
+   * Process new chunks and call onChunkReady.
+   */
+  const processChunks = useCallback(() => {
+    const currentChunks = chunksRef.current;
+    const lastIndex = lastProcessedChunkIndexRef.current;
+
+    if (currentChunks.length > lastIndex) {
+      // Get new chunks since last processing
+      const newChunks = currentChunks.slice(lastIndex);
+      lastProcessedChunkIndexRef.current = currentChunks.length;
+
+      // Combine new chunks into a single blob
+      if (newChunks.length > 0 && onChunkReadyRef.current) {
+        const blob = new Blob(newChunks, { type: 'video/webm' });
+        const sequence = chunkSequenceRef.current;
+        chunkSequenceRef.current += 1;
+        onChunkReadyRef.current(blob, sequence);
+      }
+    }
+  }, [chunksRef, onChunkReadyRef]);
+
+  /**
+   * Clear chunk upload interval.
+   */
+  const clearChunkUploadInterval = useCallback(() => {
+    if (chunkUploadIntervalRef.current !== null) {
+      clearInterval(chunkUploadIntervalRef.current);
+      chunkUploadIntervalRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Set up chunk upload interval.
+   */
+  const setupChunkUploadInterval = useCallback(() => {
+    clearChunkUploadInterval();
+    if (chunkUploadIntervalMs > 0 && onChunkReadyRef.current) {
+      chunkUploadIntervalRef.current = window.setInterval(() => {
+        processChunks();
+      }, chunkUploadIntervalMs);
+    }
+  }, [
+    chunkUploadIntervalMs,
+    clearChunkUploadInterval,
+    processChunks,
+    onChunkReadyRef,
+  ]);
+
+  /**
    * Initialize the session (request permissions and get stream).
    */
   const initialize = useCallback(async (): Promise<boolean> => {
@@ -205,6 +268,10 @@ export function useRecordingSession(
     }
 
     setSessionState('initializing');
+
+    // Reset chunk tracking for new session
+    lastProcessedChunkIndexRef.current = 0;
+    chunkSequenceRef.current = 0;
 
     try {
       await start();
@@ -223,6 +290,7 @@ export function useRecordingSession(
       } else {
         setSessionState('recording');
         setupMaxDurationTimeout();
+        setupChunkUploadInterval();
         onStartRef.current?.();
       }
       return true;
@@ -236,6 +304,7 @@ export function useRecordingSession(
     pause,
     autoStart,
     setupMaxDurationTimeout,
+    setupChunkUploadInterval,
     onStartRef,
   ]);
 
@@ -247,16 +316,28 @@ export function useRecordingSession(
       resume();
       setSessionState('recording');
       setupMaxDurationTimeout();
+      setupChunkUploadInterval();
       onStartRef.current?.();
     } else if (sessionStateRef.current === 'idle') {
       // Initialize and start
       setSessionState('initializing');
+      // Reset chunk tracking for new session
+      lastProcessedChunkIndexRef.current = 0;
+      chunkSequenceRef.current = 0;
       await start();
       setSessionState('recording');
       setupMaxDurationTimeout();
+      setupChunkUploadInterval();
       onStartRef.current?.();
     }
-  }, [sessionStateRef, resume, start, setupMaxDurationTimeout, onStartRef]);
+  }, [
+    sessionStateRef,
+    resume,
+    start,
+    setupMaxDurationTimeout,
+    setupChunkUploadInterval,
+    onStartRef,
+  ]);
 
   /**
    * Stop recording and get final blob.
@@ -264,11 +345,22 @@ export function useRecordingSession(
   const stopRecording = useCallback(async (): Promise<Blob | null> => {
     setSessionState('stopping');
     clearMaxDurationTimeout();
+    clearChunkUploadInterval();
+
+    // Process any remaining chunks before stopping
+    processChunks();
+
     const blob = await stop();
     setSessionState('completed');
     onStopRef.current?.(blob);
     return blob;
-  }, [stop, clearMaxDurationTimeout, onStopRef]);
+  }, [
+    stop,
+    clearMaxDurationTimeout,
+    clearChunkUploadInterval,
+    processChunks,
+    onStopRef,
+  ]);
 
   /**
    * Pause recording.
@@ -278,9 +370,16 @@ export function useRecordingSession(
       pause();
       setSessionState('paused');
       clearMaxDurationTimeout();
+      clearChunkUploadInterval();
       onPauseRef.current?.();
     }
-  }, [sessionStateRef, pause, clearMaxDurationTimeout, onPauseRef]);
+  }, [
+    sessionStateRef,
+    pause,
+    clearMaxDurationTimeout,
+    clearChunkUploadInterval,
+    onPauseRef,
+  ]);
 
   /**
    * Resume recording.
@@ -291,31 +390,47 @@ export function useRecordingSession(
       setSessionState('recording');
       setIsPausedByVisibility(false);
       setupMaxDurationTimeout();
+      setupChunkUploadInterval();
       onResumeRef.current?.();
     }
-  }, [sessionStateRef, resume, setupMaxDurationTimeout, onResumeRef]);
+  }, [
+    sessionStateRef,
+    resume,
+    setupMaxDurationTimeout,
+    setupChunkUploadInterval,
+    onResumeRef,
+  ]);
 
   /**
    * Abandon the session without completing.
    */
   const abandon = useCallback(() => {
     clearMaxDurationTimeout();
+    clearChunkUploadInterval();
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
     }
     resetRecorder();
     setSessionState('abandoned');
-  }, [stream, resetRecorder, clearMaxDurationTimeout]);
+  }, [
+    stream,
+    resetRecorder,
+    clearMaxDurationTimeout,
+    clearChunkUploadInterval,
+  ]);
 
   /**
    * Reset to initial state.
    */
   const reset = useCallback(() => {
     clearMaxDurationTimeout();
+    clearChunkUploadInterval();
     resetRecorder();
     setSessionState('idle');
     setIsPausedByVisibility(false);
-  }, [resetRecorder, clearMaxDurationTimeout]);
+    lastProcessedChunkIndexRef.current = 0;
+    chunkSequenceRef.current = 0;
+  }, [resetRecorder, clearMaxDurationTimeout, clearChunkUploadInterval]);
 
   // Handle visibility changes
   // Note: We use refs for sessionState and callbacks to avoid stale closures
@@ -339,6 +454,7 @@ export function useRecordingSession(
           setSessionState('paused');
           setIsPausedByVisibility(true);
           clearMaxDurationTimeout();
+          clearChunkUploadInterval();
           onPauseRef.current?.();
         }
       } else {
@@ -360,6 +476,7 @@ export function useRecordingSession(
               setSessionState('recording');
               setIsPausedByVisibility(false);
               setupMaxDurationTimeout();
+              setupChunkUploadInterval();
               onResumeRef.current?.();
             }
           }, 1500);
@@ -381,6 +498,8 @@ export function useRecordingSession(
     resume,
     clearMaxDurationTimeout,
     setupMaxDurationTimeout,
+    clearChunkUploadInterval,
+    setupChunkUploadInterval,
     sessionStateRef,
     onPauseRef,
     onResumeRef,
@@ -399,8 +518,9 @@ export function useRecordingSession(
   useEffect(() => {
     return () => {
       clearMaxDurationTimeout();
+      clearChunkUploadInterval();
     };
-  }, [clearMaxDurationTimeout]);
+  }, [clearMaxDurationTimeout, clearChunkUploadInterval]);
 
   const isActive = sessionState === 'recording' || sessionState === 'paused';
 

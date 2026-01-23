@@ -29,8 +29,8 @@ from socratic.storage.object import ObjectStore
 from socratic.storage.streaming import AssessmentStreamBroker, StreamEvent
 
 from ..view.assessment import AssessmentStatusResponse, CompleteAssessmentOkResponse, CompleteAssessmentRequest, \
-    MessageAcceptedResponse, SendMessageRequest, StartAssessmentOkResponse, TranscriptMessageResponse, \
-    TranscriptResponse, UploadVideoResponse
+    FinalizeVideoResponse, MessageAcceptedResponse, SendMessageRequest, StartAssessmentOkResponse, \
+    TranscriptMessageResponse, TranscriptResponse, UploadVideoChunkResponse, UploadVideoResponse
 
 if t.TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -737,4 +737,109 @@ async def upload_video_route(
         attempt_id=aid,
         video_url=result.url,
         size=result.size,
+    )
+
+
+@router.post("/{attempt_id}/video/chunk", operation_id="upload_video_chunk")
+@di.inject
+async def upload_video_chunk_route(
+    attempt_id: str,
+    sequence: int,
+    chunk: UploadFile,
+    auth: AuthContext = Depends(require_learner),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+    object_store: ObjectStore = Depends(di.Provide["storage.object"]),
+) -> UploadVideoChunkResponse:
+    """Upload a video chunk for progressive recording upload.
+
+    Chunks are stored temporarily and assembled when finalize is called.
+    The sequence parameter indicates the order of chunks (0-indexed).
+    """
+    aid = AttemptID(attempt_id)
+
+    # Validate attempt exists and belongs to the learner
+    with session.begin():
+        attempt = attempt_storage.get(aid, session=session)
+        if attempt is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assessment attempt not found",
+            )
+        if attempt.learner_id != auth.user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this assessment",
+            )
+
+    # Determine content type
+    content_type = chunk.content_type or "video/webm"
+
+    # Generate storage key prefix for chunks
+    key_prefix = f"assessments/{aid}/video"
+
+    # Upload chunk to object storage
+    result = await object_store.upload_chunk(key_prefix, sequence, chunk.file, content_type)
+
+    return UploadVideoChunkResponse(
+        attempt_id=aid,
+        sequence=result.sequence,
+        size=result.size,
+        total_chunks=result.total_chunks,
+    )
+
+
+@router.post("/{attempt_id}/video/finalize", operation_id="finalize_video_upload")
+@di.inject
+async def finalize_video_route(
+    attempt_id: str,
+    auth: AuthContext = Depends(require_learner),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+    object_store: ObjectStore = Depends(di.Provide["storage.object"]),
+) -> FinalizeVideoResponse:
+    """Finalize a chunked video upload.
+
+    Assembles all uploaded chunks into the final video file and updates
+    the attempt with the video URL.
+    """
+    aid = AttemptID(attempt_id)
+
+    # Validate attempt exists and belongs to the learner
+    with session.begin():
+        attempt = attempt_storage.get(aid, session=session)
+        if attempt is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assessment attempt not found",
+            )
+        if attempt.learner_id != auth.user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this assessment",
+            )
+
+    # Check that chunks exist
+    key_prefix = f"assessments/{aid}/video"
+    chunk_count = await object_store.get_chunk_count(key_prefix)
+
+    if chunk_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No video chunks have been uploaded",
+        )
+
+    # Finalize chunks into final video file
+    content_type = "video/webm"
+    final_key = f"assessments/{aid}/recording.webm"
+
+    result = await object_store.finalize_chunks(key_prefix, final_key, content_type)
+
+    # Update attempt with video URL
+    with session.begin():
+        attempt_storage.update(aid, video_url=result.url, session=session)
+
+    return FinalizeVideoResponse(
+        attempt_id=aid,
+        video_url=result.url,
+        total_size=result.total_size,
+        chunks_assembled=result.chunks_assembled,
     )

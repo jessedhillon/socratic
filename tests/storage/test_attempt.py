@@ -162,7 +162,7 @@ class TestCreate(object):
             )
 
         assert attempt.status == AttemptStatus.NotStarted
-        assert attempt.started_at is None
+        assert attempt.started_at is not None  # Defaults to NOW() per migration
         assert attempt.completed_at is None
         assert attempt.grade is None
         assert attempt.confidence_score is None
