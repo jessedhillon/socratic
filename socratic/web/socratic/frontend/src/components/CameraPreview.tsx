@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface CameraPreviewProps {
   /** The media stream to display */
@@ -17,6 +17,8 @@ export interface CameraPreviewProps {
   onMinimizeChange?: (minimized: boolean) => void;
   /** Show placeholder when no stream (for mock/preview mode) */
   showPlaceholder?: boolean;
+  /** Show audio level indicator */
+  showAudioLevel?: boolean;
 }
 
 /**
@@ -38,9 +40,17 @@ export function CameraPreview({
   position = 'bottom-right',
   onMinimizeChange,
   showPlaceholder = false,
+  showAudioLevel = false,
 }: CameraPreviewProps): React.ReactElement | null {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [minimized, setMinimized] = useState(defaultMinimized);
+  const [audioLevel, setAudioLevel] = useState(0);
+
+  // Web Audio API refs for audio level analysis
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   // Attach stream to video element
   useEffect(() => {
@@ -48,6 +58,81 @@ export function CameraPreview({
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
+
+  // Set up audio level analysis
+  useEffect(() => {
+    if (!showAudioLevel || !stream) {
+      setAudioLevel(0);
+      return;
+    }
+
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length === 0) {
+      return;
+    }
+
+    // Create audio context and analyser
+    const audioContext = new AudioContext();
+    audioContextRef.current = audioContext;
+
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+    analyserRef.current = analyser;
+
+    // Create source from stream audio track
+    const audioOnlyStream = new MediaStream(audioTracks);
+    const source = audioContext.createMediaStreamSource(audioOnlyStream);
+    sourceRef.current = source;
+    source.connect(analyser);
+
+    // Buffer for frequency data
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    // Animation loop to update audio level
+    const updateLevel = () => {
+      if (!analyserRef.current) return;
+
+      analyserRef.current.getByteFrequencyData(dataArray);
+
+      // Calculate average level from frequency data
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / dataArray.length;
+
+      // Normalize to 0-1 range (values are 0-255)
+      const normalizedLevel = Math.min(average / 128, 1);
+      setAudioLevel(normalizedLevel);
+
+      animationFrameRef.current = requestAnimationFrame(updateLevel);
+    };
+
+    // Start the animation loop
+    animationFrameRef.current = requestAnimationFrame(updateLevel);
+
+    // Cleanup
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      if (sourceRef.current) {
+        sourceRef.current.disconnect();
+        sourceRef.current = null;
+      }
+      if (analyserRef.current) {
+        analyserRef.current.disconnect();
+        analyserRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      setAudioLevel(0);
+    };
+  }, [showAudioLevel, stream]);
 
   const handleMinimize = () => {
     const newState = !minimized;
@@ -166,6 +251,16 @@ export function CameraPreview({
                 d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
               />
             </svg>
+          </div>
+        )}
+
+        {/* Audio level indicator */}
+        {showAudioLevel && !minimized && stream && (
+          <div className="absolute bottom-2 left-2 right-2 h-1.5 bg-black/30 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-green-500 rounded-full transition-all duration-75"
+              style={{ width: `${audioLevel * 100}%` }}
+            />
           </div>
         )}
 

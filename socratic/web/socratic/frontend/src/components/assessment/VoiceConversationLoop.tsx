@@ -46,6 +46,28 @@ export interface VoiceConversationLoopProps {
   onTurnChange?: (turn: ConversationTurn) => void;
   /** Content to render above the input area (e.g., closure banner) */
   inputHeaderContent?: React.ReactNode;
+  /**
+   * Optional custom audio playback function.
+   * When provided, TTS audio will be played through this function instead of
+   * the default useSpeech player. Use this to route audio through an audio mixer
+   * for recording both sides of the conversation.
+   */
+  playAudio?: (blob: Blob) => Promise<void>;
+  /**
+   * Optional callback to stop audio playback from the custom player.
+   * Required when playAudio is provided.
+   */
+  stopAudio?: () => void;
+  /**
+   * Whether external audio is currently playing.
+   * Required when playAudio is provided, so the component knows when audio starts/stops.
+   */
+  isExternalAudioPlaying?: boolean;
+  /**
+   * Duration of external audio in seconds.
+   * Used to sync typewriter animation with audio playback.
+   */
+  externalAudioDuration?: number | null;
 }
 
 /**
@@ -83,6 +105,10 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
   speechSpeed = 1.1,
   onTurnChange,
   inputHeaderContent,
+  playAudio: externalPlayAudio,
+  stopAudio: externalStopAudio,
+  isExternalAudioPlaying,
+  externalAudioDuration,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastSpokenMessageId = useRef<string | null>(null);
@@ -98,25 +124,35 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
 
   const { state: speechState, speak, stop: stopSpeech } = useSpeech();
 
+  // Determine if audio is playing (either internal or external)
+  const isAudioPlaying = externalPlayAudio
+    ? (isExternalAudioPlaying ?? false)
+    : speechState.isPlaying;
+
+  // Determine audio duration (either internal or external)
+  const audioDuration = externalPlayAudio
+    ? (externalAudioDuration ?? null)
+    : speechState.duration;
+
   // When audio starts playing AND we have the duration, move message from pending to animating
   useEffect(() => {
     if (
-      speechState.isPlaying &&
+      isAudioPlaying &&
       pendingAudioMessageId &&
-      speechState.duration &&
-      speechState.duration > 0
+      audioDuration &&
+      audioDuration > 0
     ) {
       setAnimatingMessageId(pendingAudioMessageId);
       setPendingAudioMessageId(null);
     }
-  }, [speechState.isPlaying, pendingAudioMessageId, speechState.duration]);
+  }, [isAudioPlaying, pendingAudioMessageId, audioDuration]);
 
   // Clear animation when audio stops
   useEffect(() => {
-    if (!speechState.isPlaying && animatingMessageId) {
+    if (!isAudioPlaying && animatingMessageId) {
       // Keep animating until the typewriter finishes (handled by onAnimationComplete)
     }
-  }, [speechState.isPlaying, animatingMessageId]);
+  }, [isAudioPlaying, animatingMessageId]);
 
   const handleAnimationComplete = useCallback(() => {
     setAnimatingMessageId(null);
@@ -128,7 +164,7 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
 
     if (isAssessmentComplete) {
       newTurn = 'idle';
-    } else if (speechState.isPlaying) {
+    } else if (isAudioPlaying) {
       newTurn = 'ai_speaking';
     } else if (
       isWaitingForResponse ||
@@ -147,7 +183,7 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
     }
   }, [
     isAssessmentComplete,
-    speechState.isPlaying,
+    isAudioPlaying,
     speechState.isLoading,
     isWaitingForResponse,
     pendingAudioMessageId,
@@ -159,8 +195,9 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
   useEffect(() => {
     if (isAssessmentComplete || isLeavingPage) {
       stopSpeech();
+      externalStopAudio?.();
     }
-  }, [isAssessmentComplete, isLeavingPage, stopSpeech]);
+  }, [isAssessmentComplete, isLeavingPage, stopSpeech, externalStopAudio]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -190,15 +227,33 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
       lastSpokenMessageId.current = latestInterviewerMessage.id;
       // Hide the message until audio starts playing
       setPendingAudioMessageId(latestInterviewerMessage.id);
-      speak(latestInterviewerMessage.content, {
-        voice,
-        speed: speechSpeed,
-        autoPlay: true,
-      }).catch((err) => {
-        console.error('Failed to speak AI response:', err);
-        // Show the message on error so user can still read it
-        setPendingAudioMessageId(null);
-      });
+
+      // If external player is provided, use it; otherwise use useSpeech's autoPlay
+      if (externalPlayAudio) {
+        // Generate TTS without autoPlay, then play through external player
+        speak(latestInterviewerMessage.content, {
+          voice,
+          speed: speechSpeed,
+          autoPlay: false,
+        })
+          .then((blob) => externalPlayAudio(blob))
+          .catch((err) => {
+            console.error('Failed to speak AI response:', err);
+            // Show the message on error so user can still read it
+            setPendingAudioMessageId(null);
+          });
+      } else {
+        // Use built-in autoPlay
+        speak(latestInterviewerMessage.content, {
+          voice,
+          speed: speechSpeed,
+          autoPlay: true,
+        }).catch((err) => {
+          console.error('Failed to speak AI response:', err);
+          // Show the message on error so user can still read it
+          setPendingAudioMessageId(null);
+        });
+      }
     }
   }, [
     messages,
@@ -209,6 +264,7 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
     speak,
     voice,
     speechSpeed,
+    externalPlayAudio,
   ]);
 
   // Filter out messages that shouldn't be visible yet (streaming or pending audio)
@@ -240,6 +296,8 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
 
   const handleSkipSpeech = () => {
     stopSpeech();
+    // Stop external audio if using external player
+    externalStopAudio?.();
     // Also skip the typewriter animation by clearing the animating state
     setAnimatingMessageId(null);
   };
@@ -248,7 +306,7 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
   const isAiTurn =
     isWaitingForResponse ||
     speechState.isLoading ||
-    speechState.isPlaying ||
+    isAudioPlaying ||
     pendingAudioMessageId !== null;
 
   const isInputDisabled = disabled || isAssessmentComplete || isAiTurn;
@@ -346,14 +404,13 @@ const VoiceConversationLoop: React.FC<VoiceConversationLoopProps> = ({
               key={message.id}
               message={message}
               isSpeaking={
-                speechState.isPlaying &&
-                message.id === lastSpokenMessageId.current
+                isAudioPlaying && message.id === lastSpokenMessageId.current
               }
               onSkipSpeech={handleSkipSpeech}
               animateReveal={message.id === animatingMessageId}
               onAnimationComplete={handleAnimationComplete}
               audioDurationSeconds={
-                message.id === animatingMessageId ? speechState.duration : null
+                message.id === animatingMessageId ? audioDuration : null
               }
               speechSpeed={speechSpeed}
             />

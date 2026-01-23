@@ -26,6 +26,7 @@ import { CameraPreview } from '../../components/CameraPreview';
 import { TabVisibilityWarning } from '../../components/TabVisibilityWarning';
 import { NavigationConfirmDialog } from '../../components/NavigationConfirmDialog';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
+import { useAudioMixer } from '../../hooks/useAudioMixer';
 import { useNavigationGuard } from '../../hooks/useNavigationGuard';
 import { completeAssessment as completeAssessmentApi } from '../../api/sdk.gen';
 
@@ -159,6 +160,25 @@ const AssessmentPage: React.FC = () => {
   const isMockClosure = searchParams.get('mockClosure') === 'true';
   const mockInitializedRef = useRef(false);
 
+  // Media stream state - managed separately so we can initialize audio mixer before recording
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+
+  // Audio level for pre-assessment preview - use ref + direct DOM to avoid re-renders
+  const previewAudioLevelRef = useRef<HTMLDivElement | null>(null);
+  const previewAudioContextRef = useRef<AudioContext | null>(null);
+  const previewAnalyserRef = useRef<AnalyserNode | null>(null);
+  const previewAnimationFrameRef = useRef<number | null>(null);
+
+  // Audio mixer for capturing both mic and TTS in the recording
+  const {
+    state: audioMixerState,
+    initialize: initializeAudioMixer,
+    playAudio: mixerPlayAudio,
+    stopAudio: mixerStopAudio,
+    cleanup: cleanupAudioMixer,
+    mixedStream,
+  } = useAudioMixer();
+
   // Set up mock state if in mock mode - runs once before normal init
   useEffect(() => {
     if (isMockClosure && !mockInitializedRef.current) {
@@ -192,6 +212,7 @@ const AssessmentPage: React.FC = () => {
   );
 
   // Recording session for video/audio capture with progressive upload
+  // Uses external stream and mixed audio when available
   const {
     sessionState,
     stream,
@@ -205,6 +226,8 @@ const AssessmentPage: React.FC = () => {
     pauseOnHidden: true,
     autoStart: false,
     chunkUploadIntervalMs: 10000, // Upload every 10 seconds
+    externalStream: mediaStream,
+    mixedAudioStream: mixedStream,
     onChunkReady: handleChunkReady,
   });
 
@@ -225,12 +248,15 @@ const AssessmentPage: React.FC = () => {
   abandonRef.current = abandonRecording;
   const cancelStreamRef = useRef(api.cancelStream);
   cancelStreamRef.current = api.cancelStream;
+  const cleanupAudioMixerRef = useRef(cleanupAudioMixer);
+  cleanupAudioMixerRef.current = cleanupAudioMixer;
 
-  // Cleanup recording session and API streams on unmount (e.g., navigation away)
+  // Cleanup recording session, audio mixer, and API streams on unmount
   useEffect(() => {
     return () => {
       abandonRef.current();
       cancelStreamRef.current();
+      cleanupAudioMixerRef.current();
     };
   }, []);
 
@@ -266,13 +292,137 @@ const AssessmentPage: React.FC = () => {
     }
   }, [assignmentId, state.phase, actions, isMockClosure]);
 
-  // Handle permission granted - transition to ready state
+  // Track if we're waiting to initialize recording after streams are ready
+  const [pendingRecordingInit, setPendingRecordingInit] = useState(false);
+
+  // Handle permission granted - acquire stream and initialize audio mixer
   const handlePermissionsGranted = useCallback(async () => {
-    // Initialize the recording session (acquires stream but doesn't record)
-    await initializeRecording();
-    // Transition to ready state
-    actions.grantPermissions();
-  }, [initializeRecording, actions]);
+    try {
+      // Step 1: Acquire the media stream directly
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      setMediaStream(stream);
+
+      // Step 2: Initialize the audio mixer with the mic audio from the stream
+      // This creates the mixed stream that includes both mic and TTS audio
+      await initializeAudioMixer(stream);
+
+      // Step 3: Mark that we need to initialize recording once streams are ready
+      // This will be picked up by the effect below
+      setPendingRecordingInit(true);
+    } catch (err) {
+      console.error('Failed to initialize media:', err);
+      actions.setError(
+        'Failed to access camera and microphone. Please try again.'
+      );
+    }
+  }, [initializeAudioMixer, actions]);
+
+  // Effect to initialize recording once streams are ready
+  // This runs after state updates from handlePermissionsGranted are applied
+  useEffect(() => {
+    if (pendingRecordingInit && mediaStream && mixedStream) {
+      setPendingRecordingInit(false);
+      initializeRecording().then(() => {
+        actions.grantPermissions();
+      });
+    }
+  }, [
+    pendingRecordingInit,
+    mediaStream,
+    mixedStream,
+    initializeRecording,
+    actions,
+  ]);
+
+  // Audio level analysis for pre-assessment preview
+  // Uses direct DOM manipulation to avoid React re-renders that cause video flicker
+  useEffect(() => {
+    // Only run in 'ready' phase when we have a stream but haven't started
+    if (state.phase !== 'ready' || !mediaStream) {
+      // Cleanup when not in ready phase
+      if (previewAnimationFrameRef.current) {
+        cancelAnimationFrame(previewAnimationFrameRef.current);
+        previewAnimationFrameRef.current = null;
+      }
+      if (previewAnalyserRef.current) {
+        previewAnalyserRef.current.disconnect();
+        previewAnalyserRef.current = null;
+      }
+      if (previewAudioContextRef.current) {
+        previewAudioContextRef.current.close();
+        previewAudioContextRef.current = null;
+      }
+      return;
+    }
+
+    const audioTracks = mediaStream.getAudioTracks();
+    if (audioTracks.length === 0) return;
+
+    // Create audio context and analyser
+    const audioContext = new AudioContext();
+    previewAudioContextRef.current = audioContext;
+
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+    previewAnalyserRef.current = analyser;
+
+    // Create source from stream audio track
+    const audioOnlyStream = new MediaStream(audioTracks);
+    const source = audioContext.createMediaStreamSource(audioOnlyStream);
+    source.connect(analyser);
+
+    // Buffer for frequency data
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    // Animation loop to update audio level - direct DOM manipulation
+    const updateLevel = () => {
+      if (!previewAnalyserRef.current) return;
+
+      previewAnalyserRef.current.getByteFrequencyData(dataArray);
+
+      // Calculate average level from frequency data
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        sum += dataArray[i];
+      }
+      const average = sum / dataArray.length;
+
+      // Normalize to 0-1 range - use lower divisor (48) since speech
+      // frequencies don't produce high averages across all bins
+      const normalizedLevel = Math.min(average / 48, 1);
+
+      // Direct DOM update - no React state, no re-render
+      if (previewAudioLevelRef.current) {
+        previewAudioLevelRef.current.style.width = `${normalizedLevel * 100}%`;
+      }
+
+      previewAnimationFrameRef.current = requestAnimationFrame(updateLevel);
+    };
+
+    // Start the animation loop
+    previewAnimationFrameRef.current = requestAnimationFrame(updateLevel);
+
+    // Cleanup
+    return () => {
+      if (previewAnimationFrameRef.current) {
+        cancelAnimationFrame(previewAnimationFrameRef.current);
+        previewAnimationFrameRef.current = null;
+      }
+      source.disconnect();
+      if (previewAnalyserRef.current) {
+        previewAnalyserRef.current.disconnect();
+        previewAnalyserRef.current = null;
+      }
+      if (previewAudioContextRef.current) {
+        previewAudioContextRef.current.close();
+        previewAudioContextRef.current = null;
+      }
+    };
+  }, [state.phase, mediaStream]);
 
   // Handle "I'm Ready" button click - start assessment and recording
   const handleStartAssessment = useCallback(async () => {
@@ -343,6 +493,9 @@ const AssessmentPage: React.FC = () => {
   const handleCompleteAssessment = useCallback(async () => {
     if (!state.attemptId) return;
 
+    // Stop any playing audio immediately before switching views
+    mixerStopAudio();
+
     // Track when completion screen first appears
     completionStartTimeRef.current = Date.now();
     setUploadProgress(0);
@@ -395,7 +548,7 @@ const AssessmentPage: React.FC = () => {
           : 'An error occurred while completing your assessment.'
       );
     }
-  }, [state.attemptId, actions, stopRecording, api]);
+  }, [state.attemptId, actions, stopRecording, api, mixerStopAudio]);
 
   // Handle AI-triggered completion - defer showing banner until speech starts
   const handleAICompletion = useCallback(() => {
@@ -408,12 +561,14 @@ const AssessmentPage: React.FC = () => {
 
   // Handle confirmed navigation away - stop speech before proceeding
   const handleConfirmLeave = useCallback(() => {
+    // Stop audio immediately
+    mixerStopAudio();
     setIsLeavingPage(true);
-    // Give a brief moment for speech to stop before navigation
+    // Give a brief moment for cleanup before navigation
     setTimeout(() => {
       proceedNavigation();
     }, 50);
-  }, [proceedNavigation]);
+  }, [proceedNavigation, mixerStopAudio]);
 
   // Handle turn changes from VoiceConversationLoop
   const handleTurnChange = useCallback(
@@ -430,6 +585,9 @@ const AssessmentPage: React.FC = () => {
   // Handle learner choosing to finish from closure_ready state
   const handleFinishAssessment = useCallback(async () => {
     if (state.phase !== 'closure_ready' || !state.attemptId) return;
+
+    // Stop any playing audio immediately before switching views
+    mixerStopAudio();
 
     // Track when completion screen first appears
     completionStartTimeRef.current = Date.now();
@@ -472,7 +630,14 @@ const AssessmentPage: React.FC = () => {
       setCompletionStep('complete');
       actions.completeAssessment();
     }
-  }, [state.phase, state.attemptId, actions, stopRecording, api]);
+  }, [
+    state.phase,
+    state.attemptId,
+    actions,
+    stopRecording,
+    api,
+    mixerStopAudio,
+  ]);
 
   // Set up completion callback when API signals assessment is done
   useEffect(() => {
@@ -644,6 +809,31 @@ const AssessmentPage: React.FC = () => {
                     </div>
                   )}
                 </div>
+                {/* Audio level indicator - uses ref for direct DOM updates to avoid re-renders */}
+                {stream && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4 text-gray-500 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                      />
+                    </svg>
+                    <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        ref={previewAudioLevelRef}
+                        className="h-full bg-green-500 rounded-full"
+                        style={{ width: '0%' }}
+                      />
+                    </div>
+                  </div>
+                )}
                 <p className="text-sm text-gray-500 mt-2">
                   Make sure you're in a well-lit area and your face is visible.
                 </p>
@@ -875,6 +1065,10 @@ const AssessmentPage: React.FC = () => {
           voice="nova"
           speechSpeed={1.1}
           onTurnChange={handleTurnChange}
+          playAudio={audioMixerState.isReady ? mixerPlayAudio : undefined}
+          stopAudio={mixerStopAudio}
+          isExternalAudioPlaying={audioMixerState.isPlaying}
+          externalAudioDuration={audioMixerState.duration}
           inputHeaderContent={
             state.phase === 'closure_ready' ? (
               <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">
@@ -930,6 +1124,7 @@ const AssessmentPage: React.FC = () => {
         position="bottom-right"
         defaultMinimized={false}
         showPlaceholder={isMockClosure}
+        showAudioLevel
       />
 
       {/* Tab visibility warning overlay */}

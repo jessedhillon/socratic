@@ -47,6 +47,9 @@ export type {
   UseSpeechResult,
 } from './useSpeech';
 
+export { useAudioMixer } from './useAudioMixer';
+export type { AudioMixerState, UseAudioMixerResult } from './useAudioMixer';
+
 export { useSSE } from './useSSE';
 
 export { useNavigationGuard } from './useNavigationGuard';

@@ -41,6 +41,17 @@ export interface RecordingSessionOptions {
   maxDuration?: number;
   /** Interval in ms between chunk uploads (default: 10000 for 10 seconds, 0 = disabled) */
   chunkUploadIntervalMs?: number;
+  /**
+   * Optional externally-provided media stream to use instead of calling getUserMedia.
+   * When provided, the hook will use this stream for preview/visualization.
+   */
+  externalStream?: MediaStream | null;
+  /**
+   * Optional mixed audio stream to use for recording instead of the raw mic audio.
+   * When provided, the recording will use audio from this stream (e.g., mic + TTS mixed)
+   * while the original stream remains available for preview/visualization.
+   */
+  mixedAudioStream?: MediaStream | null;
   /** Callback when recording starts */
   onStart?: () => void;
   /** Callback when recording is paused */
@@ -139,6 +150,8 @@ export function useRecordingSession(
     autoStart = false,
     maxDuration = 0,
     chunkUploadIntervalMs = 10000,
+    externalStream = null,
+    mixedAudioStream = null,
     onStart,
     onPause,
     onResume,
@@ -181,6 +194,8 @@ export function useRecordingSession(
   } = useMediaRecorder({
     video: true,
     audio: true,
+    externalStream,
+    audioOverrideStream: mixedAudioStream,
   });
 
   // Keep a ref to chunks to avoid stale closures in interval
