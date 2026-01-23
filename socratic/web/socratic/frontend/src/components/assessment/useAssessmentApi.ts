@@ -33,6 +33,24 @@ export interface SendMessageResult {
 }
 
 /**
+ * Result from uploading a video chunk.
+ */
+export interface UploadChunkResult {
+  sequence: number;
+  size: number;
+  totalChunks: number;
+}
+
+/**
+ * Result from finalizing video upload.
+ */
+export interface FinalizeVideoResult {
+  videoUrl: string;
+  totalSize: number;
+  chunksAssembled: number;
+}
+
+/**
  * Hook for consuming SSE streams from assessment endpoints.
  *
  * The backend uses a separate stream endpoint:
@@ -318,11 +336,97 @@ export function useAssessmentApi() {
     completionCallbackRef.current = callback;
   }, []);
 
+  /**
+   * Upload a video chunk for progressive recording upload.
+   */
+  const uploadVideoChunk = useCallback(
+    async (
+      attemptId: string,
+      sequence: number,
+      chunk: Blob
+    ): Promise<UploadChunkResult> => {
+      const config = client.getConfig();
+      const baseUrl = config.baseUrl || '';
+      const token = getAuthToken();
+
+      const formData = new FormData();
+      formData.append('chunk', chunk, `chunk-${sequence}.webm`);
+
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(
+        `${baseUrl}/api/assessments/${attemptId}/video/chunk?sequence=${sequence}`,
+        {
+          method: 'POST',
+          headers,
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return {
+        sequence: data.sequence,
+        size: data.size,
+        totalChunks: data.total_chunks,
+      };
+    },
+    []
+  );
+
+  /**
+   * Finalize a chunked video upload.
+   */
+  const finalizeVideo = useCallback(
+    async (attemptId: string): Promise<FinalizeVideoResult> => {
+      const config = client.getConfig();
+      const baseUrl = config.baseUrl || '';
+      const token = getAuthToken();
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(
+        `${baseUrl}/api/assessments/${attemptId}/video/finalize`,
+        {
+          method: 'POST',
+          headers,
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return {
+        videoUrl: data.video_url,
+        totalSize: data.total_size,
+        chunksAssembled: data.chunks_assembled,
+      };
+    },
+    []
+  );
+
   return {
     startAssessment,
     sendMessage,
     cancelStream,
     onComplete,
+    uploadVideoChunk,
+    finalizeVideo,
     isStreaming,
     streamedContent,
   };

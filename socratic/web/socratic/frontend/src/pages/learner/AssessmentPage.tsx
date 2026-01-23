@@ -27,10 +27,7 @@ import { TabVisibilityWarning } from '../../components/TabVisibilityWarning';
 import { NavigationConfirmDialog } from '../../components/NavigationConfirmDialog';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
 import { useNavigationGuard } from '../../hooks/useNavigationGuard';
-import {
-  completeAssessment as completeAssessmentApi,
-  uploadAssessmentVideo,
-} from '../../api/sdk.gen';
+import { completeAssessment as completeAssessmentApi } from '../../api/sdk.gen';
 
 /**
  * Assessment page - where learners complete their assessments.
@@ -179,7 +176,22 @@ const AssessmentPage: React.FC = () => {
     }
   }, [isMockClosure, assignmentId, actions]);
 
-  // Recording session for video/audio capture
+  // Chunk upload handler - uploads chunks progressively during recording
+  const handleChunkReady = useCallback(
+    async (chunk: Blob, sequence: number) => {
+      if (!state.attemptId) return;
+
+      try {
+        await api.uploadVideoChunk(state.attemptId, sequence, chunk);
+      } catch (err) {
+        console.error('Failed to upload video chunk:', err);
+        // Continue recording even if chunk upload fails - will try to finalize anyway
+      }
+    },
+    [state.attemptId, api]
+  );
+
+  // Recording session for video/audio capture with progressive upload
   const {
     sessionState,
     stream,
@@ -192,6 +204,8 @@ const AssessmentPage: React.FC = () => {
   } = useRecordingSession({
     pauseOnHidden: true,
     autoStart: false,
+    chunkUploadIntervalMs: 10000, // Upload every 10 seconds
+    onChunkReady: handleChunkReady,
   });
 
   // Navigation guard - block navigation when assessment is active
@@ -337,21 +351,17 @@ const AssessmentPage: React.FC = () => {
     actions.beginCompletion();
 
     try {
-      // Step 1: Stop recording and get the video blob
-      const videoBlob = await stopRecording();
+      // Step 1: Stop recording (this will flush remaining chunks)
+      await stopRecording();
 
-      // Step 2: Upload video if we have a blob
-      if (videoBlob) {
-        setCompletionStep('uploading');
-        const uploadResponse = await uploadAssessmentVideo({
-          path: { attempt_id: state.attemptId },
-          body: { video: videoBlob },
-        });
+      // Step 2: Finalize the chunked video upload
+      setCompletionStep('uploading');
+      try {
+        await api.finalizeVideo(state.attemptId);
         setUploadProgress(100);
-        if (uploadResponse.error) {
-          console.warn('Video upload failed:', uploadResponse.error);
-          // Continue with completion even if video upload fails
-        }
+      } catch (err) {
+        console.warn('Video finalize failed:', err);
+        // Continue with completion even if video upload fails
       }
 
       // Step 3: Complete assessment via API
@@ -385,7 +395,7 @@ const AssessmentPage: React.FC = () => {
           : 'An error occurred while completing your assessment.'
       );
     }
-  }, [state.attemptId, actions, stopRecording]);
+  }, [state.attemptId, actions, stopRecording, api]);
 
   // Handle AI-triggered completion - defer showing banner until speech starts
   const handleAICompletion = useCallback(() => {
@@ -428,21 +438,17 @@ const AssessmentPage: React.FC = () => {
     actions.beginCompletion();
 
     try {
-      // Stop recording and get the video blob
-      const videoBlob = await stopRecording();
+      // Stop recording (this will flush remaining chunks)
+      await stopRecording();
 
-      // Upload video if we have a blob
-      if (videoBlob) {
-        setCompletionStep('uploading');
-        const uploadResponse = await uploadAssessmentVideo({
-          path: { attempt_id: state.attemptId },
-          body: { video: videoBlob },
-        });
+      // Finalize the chunked video upload
+      setCompletionStep('uploading');
+      try {
+        await api.finalizeVideo(state.attemptId);
         setUploadProgress(100);
-        if (uploadResponse.error) {
-          console.warn('Video upload failed:', uploadResponse.error);
-          // Continue with completion even if video upload fails
-        }
+      } catch (err) {
+        console.warn('Video finalize failed:', err);
+        // Continue with completion even if video upload fails
       }
 
       // Show completing step (backend already marked complete, but show for UX)
@@ -466,7 +472,7 @@ const AssessmentPage: React.FC = () => {
       setCompletionStep('complete');
       actions.completeAssessment();
     }
-  }, [state.phase, state.attemptId, actions, stopRecording]);
+  }, [state.phase, state.attemptId, actions, stopRecording, api]);
 
   // Set up completion callback when API signals assessment is done
   useEffect(() => {

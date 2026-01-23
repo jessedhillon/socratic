@@ -105,6 +105,24 @@ class UploadVideoResponse(p.BaseModel):
     size: int
 
 
+class UploadVideoChunkResponse(p.BaseModel):
+    """Response after uploading a video chunk."""
+
+    attempt_id: AttemptID
+    sequence: int
+    size: int
+    total_chunks: int
+
+
+class FinalizeVideoResponse(p.BaseModel):
+    """Response after finalizing chunked video upload."""
+
+    attempt_id: AttemptID
+    video_url: str
+    total_size: int
+    chunks_assembled: int
+
+
 class ErrorResponse(p.BaseModel):
     """Error response for assessment operations."""
 
