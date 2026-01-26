@@ -2,11 +2,11 @@ version: '0.1'
 
 processes:
   postgres:
-    command: 'postgres -p5432 -k ${XDG_STATE_HOME} -c logging_collector=off -c log_destination=stderr -c log_min_messages=INFO -c log_statement=all'
+    command: 'postgres -p5432 -k ${XDG_DATA_HOME} -c logging_collector=off -c log_destination=stderr -c log_min_messages=INFO -c log_statement=all'
     is_daemon: false
     readiness_probe:
       exec:
-        command: 'pg_isready -h ${XDG_STATE_HOME} -p5432'
+        command: 'pg_isready -h ${XDG_DATA_HOME} -p5432'
       initial_delay_seconds: 2
       period_seconds: 30
     environment:
@@ -32,8 +32,8 @@ processes:
 
   redis:
     command: |
-      mkdir -p ${XDG_STATE_HOME}/redis
-      redis-server --unixsocket ${REDIS_SOCKET_PATH} --unixsocketperm 700 --port 0 --daemonize no --dir ${XDG_STATE_HOME}/redis
+      mkdir -p ${XDG_DATA_HOME}/redis
+      redis-server --unixsocket ${REDIS_SOCKET_PATH} --unixsocketperm 700 --port 0 --daemonize no --dir ${XDG_DATA_HOME}/redis
     is_daemon: false
     readiness_probe:
       exec:

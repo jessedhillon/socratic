@@ -60,24 +60,52 @@
 
         env = [
           {
-            name = "CLAUDE_CONFIG_DIR";
-            eval = "$PRJ_ROOT/.claude";
-          }
-          {
             name = "XDG_STATE_HOME";
             eval = "$PRJ_ROOT/.state";
           }
           {
+            name = "XDG_CACHE_HOME";
+            eval = "$PRJ_ROOT/.cache";
+          }
+          {
+            name = "XDG_DATA_HOME";
+            eval = "$PRJ_ROOT/.data";
+          }
+          {
+            name = "ANSIBLE_HOME";
+            eval = "$XDG_CACHE_HOME/ansible";
+          }
+          {
+            name = "ANSIBLE_LOCAL_TMP";
+            eval = "$ANSIBLE_HOME/tmp";
+          }
+          {
+            name = "CHROME_PROFILE_DIR";
+            eval = "$XDG_DATA_HOME/chrome";
+          }
+          {
+            name = "CLAUDE_CONFIG_DIR";
+            eval = "$XDG_STATE_HOME/claude";
+          }
+          {
+            name = "CODEX_HOME";
+            eval = "$XDG_STATE_HOME/codex";
+          }
+          {
+            name = "NPM_CONFIG_CACHE";
+            eval = "$XDG_CACHE_HOME/npm";
+          }
+          {
             name = "PGDATA";
-            eval = "$XDG_STATE_HOME/postgresql";
+            eval = "$XDG_DATA_HOME/postgresql";
           }
           {
             name = "PGHOST";
-            eval = "$XDG_STATE_HOME";
+            eval = "$XDG_DATA_HOME";
           }
           {
             name = "REDIS_SOCKET_PATH";
-            eval = "$XDG_STATE_HOME/redis/redis.sock";
+            eval = "$XDG_DATA_HOME/redis/redis.sock";
           }
           {
             name = "RABBITMQ_NODENAME";
@@ -89,7 +117,7 @@
           }
           {
             name = "RABBITMQ_HOME";
-            eval = "$XDG_STATE_HOME/$RABBITMQ_NODENAME";
+            eval = "$XDG_DATA_HOME/$RABBITMQ_NODENAME";
           }
           {
             name = "RABBITMQ_MNESIA_BASE";
@@ -101,7 +129,7 @@
           }
           {
             name = "RABBITMQ_PID_FILE";
-            eval = "$XDG_STATE_HOME/$RABBITMQ_NODENAME.pid";
+            eval = "$XDG_DATA_HOME/$RABBITMQ_NODENAME.pid";
           }
           {
             name = "PYTHONBREAKPOINT";
@@ -113,12 +141,17 @@
           }
           {
             name = "PRE_COMMIT_HOME";
-            eval = "$PRJ_ROOT/.cache/pre-commit";
+            eval = "$XDG_CACHE_HOME/pre-commit";
           }
         ];
 
         devshell.startup.create-dirs.text = ''
-          mkdir -p "$RABBITMQ_HOME" "$RABBITMQ_MNESIA_BASE" "$(dirname "$RABBITMQ_LOGS")" "$XDG_STATE_HOME/redis" "$XDG_STATE_HOME/remote-profile"
+          mkdir -p \
+            "$RABBITMQ_HOME" \
+            "$RABBITMQ_MNESIA_BASE" \
+            "$(dirname "$RABBITMQ_LOGS")" \
+            "$XDG_STATE_HOME/redis" \
+            "$CHROME_PROFILE_DIR"
         '';
 
         packages = with pkgs; [
@@ -222,7 +255,25 @@
           }
           {
             name = "debug-browser";
-            command = "google-chrome-stable --remote-debugging-port=9222 --user-data-dir=$XDG_STATE_HOME/remote-profile > $XDG_STATE_HOME/chrome.log 2>&1 &";
+            command = ''
+              google-chrome-stable \
+                --remote-debugging-port=9222 \
+                --user-data-dir=$CHROME_PROFILE_DIR \
+                --ozone-platform=wayland \
+                --no-first-run \
+                --disable-features=ChromeWhatsNewUI \
+                --disable-background-networking \
+                --disable-client-side-phishing-detection \
+                --disable-default-apps \
+                --disable-extensions \
+                --disable-hang-monitor \
+                --disable-popup-blocking \
+                --disable-prompt-on-repost \
+                --disable-sync \
+                --metrics-recording-only \
+                --no-default-browser-check \
+                > $XDG_STATE_HOME/chrome.log 2>&1 &
+            '';
             help = "launch an instance of Chrome with remote-debugging enabled on 9222";
           }
           {
