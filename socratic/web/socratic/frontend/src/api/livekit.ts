@@ -1,20 +1,38 @@
 /**
  * LiveKit API functions.
  *
- * These functions interact with the LiveKit-related backend endpoints.
- * Uses fetch directly since these endpoints aren't in the generated OpenAPI client yet.
+ * Re-exports from the generated OpenAPI client with simplified interfaces.
  */
 
-export interface LiveKitRoomTokenResponse {
-  attempt_id: string;
-  room_name: string;
-  token: string;
-  url: string;
-}
+// Re-export the generated functions
+export {
+  getLivekitRoomToken,
+  startLivekitAssessment,
+  startRoomRecording,
+  stopRoomRecording,
+  getRoomRecording,
+  listRoomRecordings,
+} from './sdk.gen';
 
-export interface LiveKitRoomTokenError {
-  detail: string;
-}
+// Re-export the response types for convenience
+export type {
+  LiveKitRoomTokenResponse,
+  StartLiveKitAssessmentResponse,
+  StartRecordingResponse,
+  StopRecordingResponse,
+  EgressRecordingResponse,
+} from './types.gen';
+
+// Convenience wrapper functions with simpler interfaces
+
+import {
+  getLivekitRoomToken as _getLivekitRoomToken,
+  startLivekitAssessment as _startLivekitAssessment,
+} from './sdk.gen';
+import type {
+  LiveKitRoomTokenResponse,
+  StartLiveKitAssessmentResponse,
+} from './types.gen';
 
 /**
  * Get a LiveKit room token for joining an assessment voice session.
@@ -25,36 +43,18 @@ export interface LiveKitRoomTokenError {
 export async function getLiveKitRoomToken(
   attemptId: string
 ): Promise<LiveKitRoomTokenResponse> {
-  const response = await fetch(`/static/api/livekit/rooms/${attemptId}/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
+  const response = await _getLivekitRoomToken({
+    path: { attempt_id: attemptId },
   });
 
-  if (!response.ok) {
-    const error = await response
-      .json()
-      .catch(() => ({ detail: 'Failed to get room token' }));
-    throw new Error(error.detail || 'Failed to get room token');
+  if (response.error) {
+    throw new Error(
+      (response.error as { detail?: string }).detail ||
+        'Failed to get room token'
+    );
   }
 
-  return response.json() as Promise<LiveKitRoomTokenResponse>;
-}
-
-export interface StartLiveKitAssessmentResponse {
-  attempt_id: string;
-  assignment_id: string;
-  objective_id: string;
-  objective_title: string;
-  room_name: string;
-  token: string;
-  url: string;
-}
-
-export interface StartLiveKitAssessmentError {
-  detail: string;
+  return response.data as LiveKitRoomTokenResponse;
 }
 
 /**
@@ -70,23 +70,16 @@ export interface StartLiveKitAssessmentError {
 export async function startLiveKitAssessment(
   assignmentId: string
 ): Promise<StartLiveKitAssessmentResponse> {
-  const response = await fetch(
-    `/static/api/livekit/assessments/${assignmentId}/start`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-    }
-  );
+  const response = await _startLivekitAssessment({
+    path: { assignment_id: assignmentId },
+  });
 
-  if (!response.ok) {
-    const error = await response
-      .json()
-      .catch(() => ({ detail: 'Failed to start assessment' }));
-    throw new Error(error.detail || 'Failed to start LiveKit assessment');
+  if (response.error) {
+    throw new Error(
+      (response.error as { detail?: string }).detail ||
+        'Failed to start LiveKit assessment'
+    );
   }
 
-  return response.json() as Promise<StartLiveKitAssessmentResponse>;
+  return response.data as StartLiveKitAssessmentResponse;
 }
