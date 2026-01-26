@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pydantic as p
 from fastapi import APIRouter, Depends, HTTPException, status
 from livekit import api as livekit_api  # pyright: ignore [reportMissingTypeStubs]
 from sqlalchemy.orm import Session
@@ -28,8 +29,8 @@ def get_room_token(
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
     livekit_config: LiveKitSettings = Depends(di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)]),
-    livekit_api_key: str = Depends(di.Provide["secrets.livekit.api_key"]),
-    livekit_api_secret: str = Depends(di.Provide["secrets.livekit.api_secret"]),
+    livekit_api_key: p.Secret[str] = Depends(di.Provide["secrets.livekit.api_key"]),
+    livekit_api_secret: p.Secret[str] = Depends(di.Provide["secrets.livekit.api_secret"]),
 ) -> LiveKitRoomTokenResponse:
     """Generate a LiveKit room token for a learner to join an assessment room.
 
@@ -59,8 +60,8 @@ def get_room_token(
     token = (
         livekit_api
         .AccessToken(
-            api_key=livekit_api_key,
-            api_secret=livekit_api_secret,
+            api_key=livekit_api_key.get_secret_value(),
+            api_secret=livekit_api_secret.get_secret_value(),
         )
         .with_identity(str(auth.user.user_id))
         .with_name(auth.user.name)
