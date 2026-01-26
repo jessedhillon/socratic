@@ -13,6 +13,7 @@ const phaseColors: Record<AssessmentPhase, string> = {
   initializing: 'bg-yellow-400',
   ready: 'bg-blue-400',
   in_progress: 'bg-green-400',
+  closure_ready: 'bg-blue-600',
   completing: 'bg-purple-400',
   completed: 'bg-green-600',
   error: 'bg-red-500',

@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import LearnerDashboardPage from './pages/learner/DashboardPage';
 import AssignmentDetailPage from './pages/learner/AssignmentDetailPage';
 import LearnerAssessmentPage from './pages/learner/AssessmentPage';
+import LiveKitAssessmentPage from './pages/learner/LiveKitAssessmentPage';
 import HistoryPage from './pages/learner/HistoryPage';
 import AttemptDetailPage from './pages/learner/AttemptDetailPage';
 import NotFoundPage from './pages/learner/NotFoundPage';
@@ -77,6 +78,11 @@ export const router = createBrowserRouter(
         {
           path: '/assessments/:assignmentId',
           element: <LearnerAssessmentPage />,
+        },
+        // LiveKit real-time voice assessments
+        {
+          path: '/assessments/:assignmentId/live',
+          element: <LiveKitAssessmentPage />,
         },
 
         // History

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
+import typing as t
 
 import pydantic as p
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,15 +17,17 @@ from socratic.auth import AuthContext, require_educator, require_learner
 from socratic.core import di
 from socratic.core.config.vendor import LiveKitSettings
 from socratic.livekit import egress as egress_service
+from socratic.livekit import room as room_service
 from socratic.livekit.egress import EgressError
-from socratic.model import AttemptID
+from socratic.livekit.room import RoomError
+from socratic.model import AssignmentID, AttemptID, AttemptStatus
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
 from socratic.storage import objective as objective_storage
 from socratic.storage import rubric as rubric_storage
 
-from ..view.livekit import EgressRecordingResponse, LiveKitRoomTokenResponse, StartRecordingResponse, \
-    StopRecordingResponse
+from ..view.livekit import EgressRecordingResponse, LiveKitRoomTokenResponse, StartLiveKitAssessmentResponse, \
+    StartRecordingResponse, StopRecordingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +147,163 @@ async def get_room_token(
         room_name=room_name,
         token=token,
         url=str(livekit_wss_url.get_secret_value()),
+    )
+
+
+@router.post(
+    "/assessments/{assignment_id}/start",
+    operation_id="start_livekit_assessment",
+    response_model=StartLiveKitAssessmentResponse,
+)
+@di.inject
+async def start_assessment(
+    assignment_id: str,
+    auth: AuthContext = Depends(require_learner),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
+    livekit_api_key: str = di.Provide["secrets.livekit.api_key"],
+    livekit_api_secret: str = di.Provide["secrets.livekit.api_secret"],
+) -> StartLiveKitAssessmentResponse:
+    """Start a new LiveKit-based assessment.
+
+    Creates an assessment attempt and a LiveKit room with assessment context
+    in the metadata. The agent server will automatically join and begin
+    the assessment when the learner connects.
+
+    Returns everything the frontend needs to connect to the room.
+    """
+    aid = AssignmentID(assignment_id)
+
+    with session.begin():
+        # Validate assignment exists and belongs to the learner
+        assignment = assignment_storage.get(aid, session=session)
+        if assignment is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assignment not found",
+            )
+
+        if assignment.assigned_to != auth.user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This assignment is not yours",
+            )
+
+        # Check availability window
+        now = datetime.datetime.now(datetime.UTC)
+        if assignment.available_from and now < assignment.available_from:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Assignment is not yet available",
+            )
+        if assignment.available_until and now > assignment.available_until:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Assignment is no longer available",
+            )
+
+        # Check attempt limits
+        existing_attempts = attempt_storage.find(assignment_id=aid, session=session)
+        if len(existing_attempts) >= assignment.max_attempts:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum attempts reached",
+            )
+
+        # Get objective and rubric data
+        objective = objective_storage.get(assignment.objective_id, session=session)
+        if objective is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Objective not found",
+            )
+
+        rubric_criteria = rubric_storage.find(objective_id=objective.objective_id, session=session)
+        serialized_criteria: list[dict[str, t.Any]] = [
+            {
+                "criterion_id": str(c.criterion_id),
+                "name": c.name,
+                "description": c.description,
+                "proficiency_levels": [
+                    {"grade": pl.grade, "description": pl.description} for pl in c.proficiency_levels
+                ],
+            }
+            for c in rubric_criteria
+        ]
+
+        # Create new attempt record
+        attempt = attempt_storage.create(
+            assignment_id=aid,
+            learner_id=auth.user.user_id,
+            status=AttemptStatus.InProgress,
+            session=session,
+        )
+
+        attempt_id = attempt.attempt_id
+        objective_id = str(objective.objective_id)
+        objective_title = objective.title
+        objective_description = objective.description
+        initial_prompts = list(objective.initial_prompts)
+        scope_boundaries = objective.scope_boundaries
+        time_expectation_minutes = objective.time_expectation_minutes
+        challenge_prompts = list(objective.challenge_prompts) if objective.challenge_prompts else None
+        extension_policy = objective.extension_policy.value
+
+    # Create LiveKit room with assessment metadata
+    room_metadata = room_service.AssessmentRoomMetadata(
+        attempt_id=str(attempt_id),
+        objective_id=objective_id,
+        objective_title=objective_title,
+        objective_description=objective_description,
+        initial_prompts=initial_prompts,
+        rubric_criteria=serialized_criteria,
+        scope_boundaries=scope_boundaries,
+        time_expectation_minutes=time_expectation_minutes,
+        challenge_prompts=challenge_prompts,
+        extension_policy=extension_policy,
+    )
+
+    try:
+        room_info = await room_service.create_assessment_room(attempt_id, room_metadata)
+    except RoomError as e:
+        # Rollback the attempt if room creation fails
+        with session.begin():
+            # Delete the attempt we just created
+            # (In practice, might want to mark it as failed instead)
+            pass  # TODO: Add attempt deletion or status update
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create assessment room: {e}",
+        ) from e
+
+    # Generate access token for the learner
+    token = (
+        livekit_api
+        .AccessToken(
+            api_key=livekit_api_key,
+            api_secret=livekit_api_secret,
+        )
+        .with_identity(str(auth.user.user_id))
+        .with_name(auth.user.name)
+        .with_grants(
+            livekit_api.VideoGrants(
+                room_join=True,
+                room=room_info["name"],
+                can_publish=True,
+                can_subscribe=True,
+            )
+        )
+        .to_jwt()
+    )
+
+    return StartLiveKitAssessmentResponse(
+        attempt_id=attempt_id,
+        assignment_id=assignment_id,
+        objective_id=objective_id,
+        objective_title=objective_title,
+        room_name=room_info["name"],
+        token=token,
+        url=livekit_config.url,
     )
 
 
