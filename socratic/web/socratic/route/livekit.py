@@ -11,16 +11,19 @@ from livekit import api as livekit_api  # pyright: ignore [reportMissingTypeStub
 from livekit.protocol import room as livekit_room  # pyright: ignore [reportMissingTypeStubs]
 from sqlalchemy.orm import Session
 
-from socratic.auth import AuthContext, require_learner
+from socratic.auth import AuthContext, require_educator, require_learner
 from socratic.core import di
 from socratic.core.config.vendor import LiveKitSettings
+from socratic.livekit import egress as egress_service
+from socratic.livekit.egress import EgressError
 from socratic.model import AttemptID
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
 from socratic.storage import objective as objective_storage
 from socratic.storage import rubric as rubric_storage
 
-from ..view.livekit import LiveKitRoomTokenResponse
+from ..view.livekit import EgressRecordingResponse, LiveKitRoomTokenResponse, StartRecordingResponse, \
+    StopRecordingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -141,3 +144,191 @@ async def get_room_token(
         token=token,
         url=str(livekit_wss_url.get_secret_value()),
     )
+
+
+@router.post(
+    "/rooms/{attempt_id}/recording",
+    operation_id="start_room_recording",
+    response_model=StartRecordingResponse,
+)
+@di.inject
+async def start_recording(
+    attempt_id: AttemptID,
+    auth: AuthContext = Depends(require_educator),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
+) -> StartRecordingResponse:
+    """Start recording an assessment room.
+
+    Only instructors can start recordings. The recording will capture
+    all audio and video from the room as a composite.
+    """
+    # Verify the attempt exists
+    with session.begin():
+        attempt = attempt_storage.get(attempt_id=attempt_id, session=session)
+
+    if attempt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assessment attempt not found",
+        )
+
+    # Generate room name from attempt ID
+    room_name = f"{livekit_config.room_prefix}-{attempt_id}"
+
+    try:
+        recording = await egress_service.start_room_recording(room_name)
+        return StartRecordingResponse(
+            egress_id=recording.egress_id,
+            room_name=recording.room_name,
+            status=recording.status,
+        )
+    except EgressError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        ) from e
+
+
+@router.delete(
+    "/rooms/{attempt_id}/recording/{egress_id}",
+    operation_id="stop_room_recording",
+    response_model=StopRecordingResponse,
+)
+@di.inject
+async def stop_recording(
+    attempt_id: AttemptID,
+    egress_id: str,
+    auth: AuthContext = Depends(require_educator),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+) -> StopRecordingResponse:
+    """Stop an active recording.
+
+    Stops the specified egress recording and returns the final status
+    with the file URL once processing is complete.
+    """
+    # Verify the attempt exists
+    with session.begin():
+        attempt = attempt_storage.get(attempt_id=attempt_id, session=session)
+
+    if attempt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assessment attempt not found",
+        )
+
+    try:
+        recording = await egress_service.stop_recording(egress_id)
+
+        # Update the attempt with the recording URL if available
+        if recording.file_url:
+            with session.begin():
+                attempt_storage.update(
+                    attempt_id,
+                    video_url=recording.file_url,
+                    session=session,
+                )
+
+        return StopRecordingResponse(
+            egress_id=recording.egress_id,
+            status=recording.status,
+            file_url=recording.file_url,
+        )
+    except EgressError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        ) from e
+
+
+@router.get(
+    "/rooms/{attempt_id}/recording/{egress_id}",
+    operation_id="get_room_recording",
+    response_model=EgressRecordingResponse,
+)
+@di.inject
+async def get_recording(
+    attempt_id: AttemptID,
+    egress_id: str,
+    auth: AuthContext = Depends(require_educator),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+) -> EgressRecordingResponse:
+    """Get the status of a recording.
+
+    Returns detailed information about the egress recording including
+    its current status, timestamps, and file URL if complete.
+    """
+    # Verify the attempt exists
+    with session.begin():
+        attempt = attempt_storage.get(attempt_id=attempt_id, session=session)
+
+    if attempt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assessment attempt not found",
+        )
+
+    recording = await egress_service.get_recording(egress_id)
+
+    if recording is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recording not found",
+        )
+
+    return EgressRecordingResponse(
+        egress_id=recording.egress_id,
+        room_name=recording.room_name,
+        status=recording.status,
+        started_at=recording.started_at,
+        ended_at=recording.ended_at,
+        file_url=recording.file_url,
+        error=recording.error,
+    )
+
+
+@router.get(
+    "/rooms/{attempt_id}/recordings",
+    operation_id="list_room_recordings",
+    response_model=list[EgressRecordingResponse],
+)
+@di.inject
+async def list_recordings(
+    attempt_id: AttemptID,
+    active_only: bool = False,
+    auth: AuthContext = Depends(require_educator),
+    session: Session = Depends(di.Manage["storage.persistent.session"]),
+    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
+) -> list[EgressRecordingResponse]:
+    """List all recordings for an assessment room.
+
+    Returns a list of all egress recordings associated with the
+    specified assessment attempt.
+    """
+    # Verify the attempt exists
+    with session.begin():
+        attempt = attempt_storage.get(attempt_id=attempt_id, session=session)
+
+    if attempt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assessment attempt not found",
+        )
+
+    # Generate room name from attempt ID
+    room_name = f"{livekit_config.room_prefix}-{attempt_id}"
+
+    recordings = await egress_service.list_recordings(room_name, active_only=active_only)
+
+    return [
+        EgressRecordingResponse(
+            egress_id=r.egress_id,
+            room_name=r.room_name,
+            status=r.status,
+            started_at=r.started_at,
+            ended_at=r.ended_at,
+            file_url=r.file_url,
+            error=r.error,
+        )
+        for r in recordings
+    ]

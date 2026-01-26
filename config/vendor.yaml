@@ -10,3 +10,11 @@ livekit:
   stt_model: 'deepgram/nova-3'
   tts_model: 'openai/tts-1'
   tts_voice: 'alloy'
+  egress:
+    # Local development uses local file storage via LocalObjectStore
+    # In production, configure S3 settings:
+    # s3_bucket: 'your-bucket'
+    # s3_region: 'us-east-1'
+    s3_prefix: 'recordings/'
+    file_type: 'mp4'
+    layout: 'speaker-dark'
