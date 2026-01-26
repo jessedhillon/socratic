@@ -93,6 +93,18 @@ processes:
       signal: 15 # TERM
       timeout_seconds: 10
 
+  socratic-agent:
+    command: 'socratic-cli agent serve'
+    disabled: true
+    depends_on:
+      postgres:
+        condition: process_healthy
+      redis:
+        condition: process_healthy
+    shutdown:
+      signal: 15 # TERM
+      timeout_seconds: 10
+
   socratic-vite:
     command: 'npm run dev --prefix socratic/web/socratic/frontend -- --host 127.0.0.1 --port 9099'
     working_dir: .
