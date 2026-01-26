@@ -27,9 +27,9 @@ def get_room_token(
     attempt_id: AttemptID,
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
-    livekit_api_key: str = di.Provide["secrets.livekit.api_key"],
-    livekit_api_secret: str = di.Provide["secrets.livekit.api_secret"],
+    livekit_config: LiveKitSettings = Depends(di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)]),
+    livekit_api_key: str = Depends(di.Provide["secrets.livekit.api_key"]),
+    livekit_api_secret: str = Depends(di.Provide["secrets.livekit.api_secret"]),
 ) -> LiveKitRoomTokenResponse:
     """Generate a LiveKit room token for a learner to join an assessment room.
 
