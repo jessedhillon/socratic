@@ -39,6 +39,7 @@ class LiveKitSecrets(BaseSecrets):
 
     api_key: p.Secret[str]
     api_secret: p.Secret[str]
+    wss_url: p.Secret[p.WebsocketUrl]
 
 
 class Secrets(BaseSecrets, BaseModel):  # pyright: ignore [reportIncompatibleVariableOverride]
