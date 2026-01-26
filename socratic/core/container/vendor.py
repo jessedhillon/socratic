@@ -83,9 +83,11 @@ class GoogleContainer(DeclarativeContainer):
 
 class LiveKitContainer(DeclarativeContainer):
     @staticmethod
-    def provide_api(url: str, api_key: p.Secret[str], api_secret: p.Secret[str]) -> livekit_api.LiveKitAPI:
+    def provide_api(
+        wss_url: p.Secret[p.WebsocketUrl], api_key: p.Secret[str], api_secret: p.Secret[str]
+    ) -> livekit_api.LiveKitAPI:
         return livekit_api.LiveKitAPI(
-            url=url,
+            url=str(wss_url.get_secret_value()),
             api_key=api_key.get_secret_value(),
             api_secret=api_secret.get_secret_value(),
         )
@@ -102,7 +104,7 @@ class LiveKitContainer(DeclarativeContainer):
 
     api: Provider[livekit_api.LiveKitAPI] = Singleton(
         provide_api,
-        url=config.url,
+        wss_url=secrets.wss_url,
         api_key=secrets.api_key,
         api_secret=secrets.api_secret,
     )

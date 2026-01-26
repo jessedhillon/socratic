@@ -22,5 +22,4 @@ class GoogleSettings(BaseSettings):
 
 
 class LiveKitSettings(BaseSettings):
-    url: str
     room_prefix: str = "assessment"

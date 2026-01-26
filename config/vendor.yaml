@@ -6,5 +6,4 @@ google:
     client_id: '...'
 
 livekit:
-  url: 'ws://localhost:7880'
   room_prefix: 'assessment'

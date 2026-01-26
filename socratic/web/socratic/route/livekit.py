@@ -31,6 +31,7 @@ def get_room_token(
     livekit_config: LiveKitSettings = Depends(di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)]),
     livekit_api_key: p.Secret[str] = Depends(di.Provide["secrets.livekit.api_key"]),
     livekit_api_secret: p.Secret[str] = Depends(di.Provide["secrets.livekit.api_secret"]),
+    livekit_wss_url: p.Secret[p.WebsocketUrl] = Depends(di.Provide["secrets.livekit.wss_url"]),
 ) -> LiveKitRoomTokenResponse:
     """Generate a LiveKit room token for a learner to join an assessment room.
 
@@ -80,5 +81,5 @@ def get_room_token(
         attempt_id=attempt_id,
         room_name=room_name,
         token=token,
-        url=livekit_config.url,
+        url=str(livekit_wss_url.get_secret_value()),
     )
