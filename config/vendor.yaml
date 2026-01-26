@@ -4,3 +4,6 @@ google:
     private_key_id: '...'
     client_email: 'foo@example.com'
     client_id: '...'
+
+livekit:
+  room_prefix: 'assessment'

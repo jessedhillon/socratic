@@ -34,12 +34,21 @@ class GoogleSecrets(BaseSecrets):
     service_account: GoogleServiceAccountSecrets
 
 
+class LiveKitSecrets(BaseSecrets):
+    """LiveKit API secrets."""
+
+    api_key: p.Secret[str]
+    api_secret: p.Secret[str]
+    wss_url: p.Secret[p.WebsocketUrl]
+
+
 class Secrets(BaseSecrets, BaseModel):  # pyright: ignore [reportIncompatibleVariableOverride]
     root: p.AnyUrl
     env: DeploymentEnvironment
 
     auth: AuthSecrets | None = None
     openai: OpenAISecrets | None = None
+    livekit: LiveKitSecrets | None = None
     # google: GoogleSecrets = p.Field(default=..., validate_default=True)
     # postgresql: PostgresqlSecrets = p.Field(default_factory=PostgresqlSecrets, validate_default=True)
 
