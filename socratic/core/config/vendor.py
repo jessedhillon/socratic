@@ -7,6 +7,7 @@ from .base import BaseSettings
 
 class VendorSettings(BaseSettings):
     google: GoogleSettings
+    livekit: LiveKitSettings
 
 
 class GoogleServiceAccountSettings(BaseSettings):
@@ -18,3 +19,8 @@ class GoogleServiceAccountSettings(BaseSettings):
 
 class GoogleSettings(BaseSettings):
     service_account: GoogleServiceAccountSettings
+
+
+class LiveKitSettings(BaseSettings):
+    url: str
+    room_prefix: str = "assessment"

@@ -4,3 +4,7 @@ google:
     private_key_id: '...'
     client_email: 'foo@example.com'
     client_id: '...'
+
+livekit:
+  url: 'ws://localhost:7880'
+  room_prefix: 'assessment'

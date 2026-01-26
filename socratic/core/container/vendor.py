@@ -8,6 +8,7 @@ import googleapiclient.discovery
 import pydantic as p
 from dependency_injector.containers import DeclarativeContainer
 from dependency_injector.providers import Configuration, Container, Provider, Singleton
+from livekit import api as livekit_api  # pyright: ignore [reportMissingTypeStubs]
 
 if t.TYPE_CHECKING:
     from googleapiclient._apis.sheets.v4 import SheetsResource  # pyright: ignore [reportMissingModuleSource]
@@ -80,8 +81,36 @@ class GoogleContainer(DeclarativeContainer):
     )
 
 
+class LiveKitContainer(DeclarativeContainer):
+    @staticmethod
+    def provide_api(url: str, api_key: p.Secret[str], api_secret: p.Secret[str]) -> livekit_api.LiveKitAPI:
+        return livekit_api.LiveKitAPI(
+            url=url,
+            api_key=api_key.get_secret_value(),
+            api_secret=api_secret.get_secret_value(),
+        )
+
+    @staticmethod
+    def provide_access_token(api_key: p.Secret[str], api_secret: p.Secret[str]) -> livekit_api.AccessToken:
+        return livekit_api.AccessToken(
+            api_key=api_key.get_secret_value(),
+            api_secret=api_secret.get_secret_value(),
+        )
+
+    config: Configuration = Configuration(strict=True)
+    secrets: Configuration = Configuration(strict=True)
+
+    api: Provider[livekit_api.LiveKitAPI] = Singleton(
+        provide_api,
+        url=config.url,
+        api_key=secrets.api_key,
+        api_secret=secrets.api_secret,
+    )
+
+
 class VendorContainer(DeclarativeContainer):
     config: Configuration = Configuration()
     secrets: Configuration = Configuration()
 
     google: Provider[GoogleContainer] = Container(GoogleContainer, config=config.google, secrets=secrets.google)
+    livekit: Provider[LiveKitContainer] = Container(LiveKitContainer, config=config.livekit, secrets=secrets.livekit)
