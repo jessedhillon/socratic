@@ -12,8 +12,6 @@ import {
   Track,
   RemoteParticipant,
   RemoteTrackPublication,
-  LocalTrackPublication,
-  TrackPublication,
   Participant,
 } from 'livekit-client';
 
@@ -128,7 +126,7 @@ export function useLiveKitRoom(
   const handleTrackSubscribed = useCallback(
     (
       track: Track,
-      publication: RemoteTrackPublication,
+      _publication: RemoteTrackPublication,
       participant: RemoteParticipant
     ) => {
       if (track.kind === Track.Kind.Audio) {
@@ -151,7 +149,7 @@ export function useLiveKitRoom(
   const handleTrackUnsubscribed = useCallback(
     (
       track: Track,
-      publication: RemoteTrackPublication,
+      _publication: RemoteTrackPublication,
       participant: RemoteParticipant
     ) => {
       if (track.kind === Track.Kind.Audio) {

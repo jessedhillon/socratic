@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { client } from '../../api/client.gen';
 import { getAuthToken } from '../../auth';
 
