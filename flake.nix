@@ -167,6 +167,7 @@
           process-compose
           pyright
           python313
+          python313Packages.numpy
           nodejs
           redis
           ruff

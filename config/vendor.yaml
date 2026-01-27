@@ -7,3 +7,6 @@ google:
 
 livekit:
   room_prefix: 'assessment'
+  stt_model: 'deepgram/nova-3'
+  tts_model: 'openai/tts-1'
+  tts_voice: 'alloy'
