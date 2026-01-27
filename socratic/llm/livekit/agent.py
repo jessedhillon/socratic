@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import typing as t
+import uuid
 from collections.abc import AsyncIterable
 
 import jinja2
@@ -11,6 +12,7 @@ import pydantic as p
 from langchain_core.language_models import BaseChatModel
 from livekit.agents import Agent, llm  # pyright: ignore [reportMissingTypeStubs]
 
+from socratic.core import di
 from socratic.llm.assessment import get_assessment_status, PostgresCheckpointer, run_assessment_turn, start_assessment
 from socratic.llm.assessment.state import InterviewPhase
 from socratic.model import AttemptID
@@ -52,22 +54,16 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
     def __init__(
         self,
         context: AssessmentContext,
-        model: BaseChatModel,
-        env: jinja2.Environment,
     ) -> None:
         """Initialize the assessment agent.
 
         Args:
             context: Assessment configuration including objective, prompts, and rubric.
-            model: LangChain chat model for generating responses.
-            env: Jinja2 environment for rendering prompt templates.
         """
         super().__init__(
             instructions="You are a Socratic assessment proctor conducting a voice-based evaluation.",
         )
         self.context = context
-        self.model = model
-        self.env = env
         self.checkpointer = PostgresCheckpointer()
         self._initialized = False
         self._current_phase: InterviewPhase | None = None
@@ -77,10 +73,22 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         """Get the attempt ID for this assessment."""
         return AttemptID(self.context.attempt_id)
 
-    async def _initialize_assessment(self) -> AsyncIterable[llm.ChatChunk]:  # pyright: ignore [reportUnknownParameterType]
+    @di.inject
+    async def _initialize_assessment(
+        self,
+        model: BaseChatModel = di.Provide["llm.dialogue_model"],  # noqa: B008
+        env: jinja2.Environment = di.Provide["template.llm"],  # noqa: B008
+    ) -> AsyncIterable[llm.ChatChunk]:  # pyright: ignore [reportUnknownParameterType]
         """Initialize the assessment and stream the orientation message."""
         logger.info(f"Starting assessment for attempt {self.attempt_id}")
 
+        # Mark initialized before yielding so that if the user interrupts the
+        # orientation, subsequent llm_node calls process their speech instead of
+        # restarting the welcome message.
+        self._initialized = True
+        self._current_phase = InterviewPhase.Orientation
+
+        chunk_id = str(uuid.uuid4())
         async for token in start_assessment(
             attempt_id=self.attempt_id,
             objective_id=self.context.objective_id,
@@ -89,46 +97,39 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             initial_prompts=self.context.initial_prompts,
             rubric_criteria=self.context.rubric_criteria,
             checkpointer=self.checkpointer,
-            model=self.model,
-            env=self.env,
+            model=model,
+            env=env,
             scope_boundaries=self.context.scope_boundaries,
             time_expectation_minutes=self.context.time_expectation_minutes,
             challenge_prompts=self.context.challenge_prompts,
             extension_policy=self.context.extension_policy,
         ):
-            # NOTE: The exact ChatChunk API may need adjustment based on livekit-agents version
-            # pyright: ignore [reportCallIssue, reportAttributeAccessIssue]
             yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
-                choices=[  # pyright: ignore [reportCallIssue]
-                    llm.Choice(  # pyright: ignore [reportAttributeAccessIssue]
-                        delta=llm.ChoiceDelta(content=token, role="assistant"),  # pyright: ignore [reportAttributeAccessIssue]
-                        index=0,
-                    )
-                ]
+                id=chunk_id,
+                delta=llm.ChoiceDelta(content=token, role="assistant"),  # pyright: ignore [reportCallIssue]
             )
 
-        self._initialized = True
-        self._current_phase = InterviewPhase.Orientation
-
-    async def _process_learner_message(self, message: str) -> AsyncIterable[llm.ChatChunk]:  # pyright: ignore [reportUnknownParameterType]
+    @di.inject
+    async def _process_learner_message(
+        self,
+        message: str,
+        model: BaseChatModel = di.Provide["llm.dialogue_model"],  # noqa: B008
+        env: jinja2.Environment = di.Provide["template.llm"],  # noqa: B008
+    ) -> AsyncIterable[llm.ChatChunk]:  # pyright: ignore [reportUnknownParameterType]
         """Process a learner message and stream the response."""
         logger.info(f"Processing learner message: {message[:100]}...")
 
+        chunk_id = str(uuid.uuid4())
         async for token in run_assessment_turn(
             attempt_id=self.attempt_id,
             learner_message=message,
             checkpointer=self.checkpointer,
-            model=self.model,
-            env=self.env,
+            model=model,
+            env=env,
         ):
-            # NOTE: The exact ChatChunk API may need adjustment based on livekit-agents version
             yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
-                choices=[  # pyright: ignore [reportCallIssue]
-                    llm.Choice(  # pyright: ignore [reportAttributeAccessIssue]
-                        delta=llm.ChoiceDelta(content=token, role="assistant"),  # pyright: ignore [reportAttributeAccessIssue]
-                        index=0,
-                    )
-                ]
+                id=chunk_id,
+                delta=llm.ChoiceDelta(content=token, role="assistant"),  # pyright: ignore [reportCallIssue]
             )
 
         # Update current phase
@@ -165,28 +166,23 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
 
         # Get the last user message from the chat context
         last_user_message: str | None = None
-        for msg in reversed(list(chat_ctx.messages)):  # pyright: ignore [reportUnknownMemberType, reportUnknownVariableType, reportUnknownArgumentType, reportAttributeAccessIssue]
-            if hasattr(msg, "role") and msg.role == "user":  # pyright: ignore [reportUnknownMemberType, reportUnknownArgumentType]
-                last_user_message = str(msg.content)  # pyright: ignore [reportUnknownMemberType, reportUnknownArgumentType]
+        for item in reversed(chat_ctx.items):  # pyright: ignore [reportUnknownMemberType, reportUnknownVariableType]
+            if hasattr(item, "role") and item.role == "user":  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue]
+                last_user_message = item.text_content  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
                 break
 
         if last_user_message is None:
             logger.warning("No user message found in chat context")
-            # NOTE: The exact ChatChunk API may need adjustment based on livekit-agents version
             yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
-                choices=[  # pyright: ignore [reportCallIssue]
-                    llm.Choice(  # pyright: ignore [reportAttributeAccessIssue]
-                        delta=llm.ChoiceDelta(  # pyright: ignore [reportAttributeAccessIssue]
-                            content="I didn't catch that. Could you please repeat?", role="assistant"
-                        ),
-                        index=0,
-                    )
-                ]
+                id=str(uuid.uuid4()),
+                delta=llm.ChoiceDelta(  # pyright: ignore [reportCallIssue]
+                    content="I didn't catch that. Could you please repeat?", role="assistant"
+                ),
             )
             return
 
         # Process the learner message through our assessment agent
-        async for chunk in self._process_learner_message(last_user_message):
+        async for chunk in self._process_learner_message(last_user_message):  # pyright: ignore [reportUnknownArgumentType]
             yield chunk
 
     @property
@@ -197,8 +193,6 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
 
 def create_assessment_agent_from_room_metadata(
     room: "Room",
-    model: BaseChatModel,
-    env: jinja2.Environment,
 ) -> SocraticAssessmentAgent:
     """Create an assessment agent from LiveKit room metadata.
 
@@ -206,8 +200,6 @@ def create_assessment_agent_from_room_metadata(
 
     Args:
         room: LiveKit room with metadata containing assessment context.
-        model: LangChain chat model.
-        env: Jinja2 environment.
 
     Returns:
         Configured SocraticAssessmentAgent.
@@ -225,6 +217,4 @@ def create_assessment_agent_from_room_metadata(
 
     return SocraticAssessmentAgent(
         context=context,
-        model=model,
-        env=env,
     )

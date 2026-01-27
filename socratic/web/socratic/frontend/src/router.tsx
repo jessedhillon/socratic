@@ -25,6 +25,7 @@ import AssignmentsPage from './pages/AssignmentsPage';
 import DevChatTestPage from './pages/dev/DevChatTestPage';
 import DevApiTestPage from './pages/dev/DevApiTestPage';
 import DevAvTestPage from './pages/dev/DevAvTestPage';
+import DevLiveKitTestPage from './pages/dev/DevLiveKitTestPage';
 
 export const router = createBrowserRouter(
   [
@@ -40,6 +41,10 @@ export const router = createBrowserRouter(
     {
       path: '/dev/av-test',
       element: <DevAvTestPage />,
+    },
+    {
+      path: '/dev/livekit-test',
+      element: <DevLiveKitTestPage />,
     },
 
     // Authentication routes

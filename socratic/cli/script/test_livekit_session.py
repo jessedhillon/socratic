@@ -19,10 +19,8 @@ import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import jinja2
 import pydantic as p
 import sqlalchemy as sqla
-from langchain_core.language_models import BaseChatModel
 from sqlalchemy.orm import Session
 
 import socratic.lib.cli as click
@@ -48,8 +46,6 @@ from socratic.storage.table import assignments
 def execute(
     assignment_id: str | None,
     session: Session = di.Manage["storage.persistent.session"],
-    model: BaseChatModel = di.Provide["llm.assessment.model"],
-    template_env: jinja2.Environment = di.Provide["template.assessment.env"],
     deepgram_api_key: p.Secret[str] = di.Provide["secrets.deepgram.api_key"],
     openai_api_key: p.Secret[str] = di.Provide["secrets.openai.secret_key"],
     stt_model: str = di.Provide["config.vendor.livekit.stt_model"],

@@ -10,15 +10,14 @@ import signal
 import typing as t
 from types import FrameType
 
-import jinja2
 import pydantic as p
-from langchain_core.language_models import BaseChatModel
 from livekit import agents  # pyright: ignore [reportMissingTypeStubs]
 from livekit.agents import AgentSession, JobContext  # pyright: ignore [reportMissingTypeStubs]
 from livekit.plugins import deepgram, openai, silero  # pyright: ignore [reportMissingTypeStubs]
 
 from socratic.core import BootConfiguration, di, SocraticContainer
 
+from . import agent as _agent_module
 from .agent import create_assessment_agent_from_room_metadata
 
 logger = logging.getLogger(__name__)
@@ -30,8 +29,6 @@ handled_signals = (signal.SIGINT, signal.SIGTERM)
 async def _handle_session(
     ctx: JobContext,  # pyright: ignore [reportUnknownParameterType]
     *,
-    model: BaseChatModel = di.Provide["llm.assessment.model"],  # noqa: B008
-    template_env: jinja2.Environment = di.Provide["template.assessment.env"],  # noqa: B008
     deepgram_api_key: p.Secret[str] = di.Provide["secrets.deepgram.api_key"],  # noqa: B008
     openai_api_key: p.Secret[str] = di.Provide["secrets.openai.secret_key"],  # noqa: B008
     stt_model: str = di.Provide["config.vendor.livekit.stt_model"],  # noqa: B008
@@ -39,12 +36,13 @@ async def _handle_session(
     tts_voice: str = di.Provide["config.vendor.livekit.tts_voice"],  # noqa: B008
 ) -> None:
     """Handle a LiveKit session with injected dependencies."""
+    # Connect to the room first so metadata is available
+    await ctx.connect()  # pyright: ignore [reportUnknownMemberType]
+
     # Create the Socratic assessment agent from room metadata
     try:
         agent = create_assessment_agent_from_room_metadata(
             room=ctx.room,  # pyright: ignore [reportUnknownMemberType, reportUnknownArgumentType]
-            model=model,
-            env=template_env,
         )
     except ValueError as e:
         logger.error(f"Failed to create agent: {e}")
@@ -68,10 +66,13 @@ async def _handle_session(
         tts_provider = openai.TTS(voice=tts_voice, api_key=oai_key)  # pyright: ignore [reportUnknownMemberType]
 
     # Create the agent session with STT/TTS pipeline
+    # An LLM is required for generate_reply() to pass the null-check;
+    # actual generation is handled by the agent's llm_node() override.
     session = AgentSession(  # pyright: ignore [reportUnknownVariableType]
         stt=stt_provider,
         tts=tts_provider,
         vad=silero.VAD.load(),  # pyright: ignore [reportUnknownMemberType]
+        llm=openai.LLM(api_key=oai_key),  # pyright: ignore [reportUnknownMemberType]
     )
 
     # Start the session with our custom agent
@@ -108,7 +109,7 @@ async def assessment_session(ctx: JobContext) -> None:  # pyright: ignore [repor
     boot_cf = BootConfiguration.model_validate_json(boot_json)
     container = SocraticContainer()
     SocraticContainer.boot(container, **dict(boot_cf))
-    container.wire(modules=[__name__])
+    container.wire(modules=[__name__, _agent_module])
 
     # Delegate to injected handler
     await _handle_session(ctx)

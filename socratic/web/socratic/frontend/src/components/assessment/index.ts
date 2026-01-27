@@ -25,3 +25,7 @@ export {
   type AssessmentSummary,
   type CompletionStep,
 } from './AssessmentCompletionScreen';
+export {
+  default as LiveKitVoiceConversation,
+  type LiveKitVoiceConversationProps,
+} from './LiveKitVoiceConversation';

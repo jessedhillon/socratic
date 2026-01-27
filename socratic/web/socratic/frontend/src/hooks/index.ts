@@ -57,3 +57,10 @@ export type {
   UseNavigationGuardOptions,
   UseNavigationGuardResult,
 } from './useNavigationGuard';
+
+export { useLiveKitRoom } from './useLiveKitRoom';
+export type {
+  LiveKitConnectionState,
+  UseLiveKitRoomOptions,
+  UseLiveKitRoomReturn,
+} from './useLiveKitRoom';
