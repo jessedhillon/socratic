@@ -68,7 +68,7 @@
             eval = "$PRJ_ROOT/.cache";
           }
           {
-            name = "XDG_DATA_HOME";
+            name = "DATA_HOME";
             eval = "$PRJ_ROOT/.data";
           }
           {
@@ -81,7 +81,7 @@
           }
           {
             name = "CHROME_PROFILE_DIR";
-            eval = "$XDG_DATA_HOME/chrome";
+            eval = "$DATA_HOME/chrome";
           }
           {
             name = "CLAUDE_CONFIG_DIR";
@@ -97,15 +97,15 @@
           }
           {
             name = "PGDATA";
-            eval = "$XDG_DATA_HOME/postgresql";
+            eval = "$DATA_HOME/postgresql";
           }
           {
             name = "PGHOST";
-            eval = "$XDG_DATA_HOME";
+            eval = "$DATA_HOME";
           }
           {
             name = "REDIS_SOCKET_PATH";
-            eval = "$XDG_DATA_HOME/redis/redis.sock";
+            eval = "$DATA_HOME/redis/redis.sock";
           }
           {
             name = "RABBITMQ_NODENAME";
@@ -117,7 +117,7 @@
           }
           {
             name = "RABBITMQ_HOME";
-            eval = "$XDG_DATA_HOME/$RABBITMQ_NODENAME";
+            eval = "$DATA_HOME/$RABBITMQ_NODENAME";
           }
           {
             name = "RABBITMQ_MNESIA_BASE";
@@ -129,7 +129,7 @@
           }
           {
             name = "RABBITMQ_PID_FILE";
-            eval = "$XDG_DATA_HOME/$RABBITMQ_NODENAME.pid";
+            eval = "$DATA_HOME/$RABBITMQ_NODENAME.pid";
           }
           {
             name = "PYTHONBREAKPOINT";
