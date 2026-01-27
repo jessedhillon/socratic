@@ -266,6 +266,10 @@ export function useLiveKitRoom(
 
   // Disconnect from the room
   const disconnect = useCallback(() => {
+    if (!roomRef.current && !audioElementRef.current) {
+      return;
+    }
+
     if (roomRef.current) {
       roomRef.current.disconnect();
       roomRef.current = null;
@@ -307,19 +311,21 @@ export function useLiveKitRoom(
     setIsMicrophoneEnabled(false);
   }, [isMicrophoneEnabled]);
 
-  // Auto-connect if enabled
+  // Refs for connect/disconnect so the effect doesn't re-run on callback identity changes
+  const connectRef = useRef(connect);
+  connectRef.current = connect;
+  const disconnectRef = useRef(disconnect);
+  disconnectRef.current = disconnect;
+
+  // Auto-connect and cleanup in a single effect
   useEffect(() => {
     if (autoConnect && token && serverUrl) {
-      connect();
+      connectRef.current();
     }
-  }, [autoConnect, token, serverUrl, connect]);
-
-  // Cleanup on unmount
-  useEffect(() => {
     return () => {
-      disconnect();
+      disconnectRef.current();
     };
-  }, [disconnect]);
+  }, [autoConnect, token, serverUrl]);
 
   return {
     connectionState,
