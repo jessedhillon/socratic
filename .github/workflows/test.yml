@@ -47,7 +47,7 @@ jobs:
           PGPASSWORD: postgres
         run: |
           nix develop --command bash -c '
-            poetry config virtualenvs.options.system-site-packages true
+            poetry config virtualenvs.create false
             poetry install --extras test
-            poetry run pytest -v
+            pytest -v
           '
