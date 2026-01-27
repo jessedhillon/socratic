@@ -137,9 +137,9 @@ class AutoLoader(object):
         class ExtensionFileLoader(importlib.machinery.ExtensionFileLoader): ...
 
         loader_details = [
-            (SourcelessFileLoader, importlib.machinery.BYTECODE_SUFFIXES),
-            (SourceFileLoader, importlib.machinery.SOURCE_SUFFIXES),
             (ExtensionFileLoader, importlib.machinery.EXTENSION_SUFFIXES),
+            (SourceFileLoader, importlib.machinery.SOURCE_SUFFIXES),
+            (SourcelessFileLoader, importlib.machinery.BYTECODE_SUFFIXES),
         ]
 
         self._path_hook = importlib.machinery.FileFinder.path_hook(*loader_details)
