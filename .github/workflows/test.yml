@@ -43,4 +43,4 @@ jobs:
           PGHOST: localhost
           PGUSER: postgres
           PGPASSWORD: postgres
-        run: nix build .#checks.x86_64-linux.pytest --impure -L
+        run: nix develop --command bash -c 'poetry install --extras test && pytest -v'

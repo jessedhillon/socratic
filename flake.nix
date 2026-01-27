@@ -55,23 +55,6 @@
       checks = {
         ${system} = {
           formatting = treefmtEval.config.build.check inputs.self;
-          pytest =
-            pkgs.runCommand "pytest"
-              {
-                buildInputs = with pkgs; [
-                  poetry
-                  python313
-                  python313Packages.numpy
-                ];
-                src = inputs.self;
-              }
-              ''
-                cd $src
-                export HOME=$(mktemp -d)
-                poetry install --extras test --no-interaction
-                pytest -v
-                touch $out
-              '';
         };
       };
 
