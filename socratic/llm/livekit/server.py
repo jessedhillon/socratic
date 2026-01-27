@@ -39,6 +39,9 @@ async def _handle_session(
     tts_voice: str = di.Provide["config.vendor.livekit.tts_voice"],  # noqa: B008
 ) -> None:
     """Handle a LiveKit session with injected dependencies."""
+    # Connect to the room first so metadata is available
+    await ctx.connect()  # pyright: ignore [reportUnknownMemberType]
+
     # Create the Socratic assessment agent from room metadata
     try:
         agent = create_assessment_agent_from_room_metadata(
