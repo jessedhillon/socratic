@@ -3,6 +3,8 @@ name: Test
 on:
   merge_group:
     types: [checks_requested]
+  pull_request:
+    branches: [master]
   # Also run on direct pushes to master to catch any issues
   push:
     branches: [master]
