@@ -46,7 +46,6 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "numpy~=2.2.0",
     "pytest~=8.3.0",
     "sql_formatter~=0.6.0",
 ]

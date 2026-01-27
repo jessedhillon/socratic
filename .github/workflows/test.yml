@@ -45,4 +45,9 @@ jobs:
           PGHOST: localhost
           PGUSER: postgres
           PGPASSWORD: postgres
-        run: nix develop --command bash -c 'poetry install --extras test && poetry run pytest -v'
+        run: |
+          nix develop --command bash -c '
+            poetry config virtualenvs.options.system-site-packages true
+            poetry install --extras test
+            poetry run pytest -v
+          '

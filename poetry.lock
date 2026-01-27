@@ -5165,9 +5165,9 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 
 [extras]
 dev = ["google-api-python-client", "google-api-python-client-stubs", "isort", "jdbpp", "pyright", "rpdb", "ruff", "watchfiles"]
-test = ["numpy", "pytest", "sql_formatter"]
+test = ["pytest", "sql_formatter"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "898ad9e5e0866867309b0df9290a7d5d63d4c764a438b104d212f6c8cc1c6fd4"
+content-hash = "6b146a5c811efbe7d8fa1336ccf3df203ebd2caaf4abbd01e101492a35eaa316"
