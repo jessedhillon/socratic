@@ -4268,7 +4268,7 @@ description = "A SQL formatter"
 optional = true
 python-versions = ">=3.6"
 groups = ["main"]
-markers = "extra == \"dev\""
+markers = "extra == \"test\""
 files = [
     {file = "sql_formatter-0.6.2-py3-none-any.whl", hash = "sha256:5c38651a93031b2ea96c977309d38bba94ad77e8f2dcae7b1b6b71e116423c33"},
     {file = "sql_formatter-0.6.2.tar.gz", hash = "sha256:98b83810e42ba989073c9ea5d53ddda45c36e91004904ca2916fc5fc13373c10"},
@@ -5181,10 +5181,10 @@ files = [
 cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and python_version < \"3.14\"", "cffi (>=2.0.0b) ; platform_python_implementation != \"PyPy\" and python_version >= \"3.14\""]
 
 [extras]
-dev = ["google-api-python-client", "google-api-python-client-stubs", "isort", "jdbpp", "pyright", "rpdb", "ruff", "sql_formatter", "watchfiles"]
-test = ["pytest"]
+dev = ["google-api-python-client", "google-api-python-client-stubs", "isort", "jdbpp", "pyright", "rpdb", "ruff", "watchfiles"]
+test = ["pytest", "sql_formatter"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "2cfe396205e6d916b4eb0b6a38f30e22d4b1760024e74e849f018035efbf6adb"
+content-hash = "6b146a5c811efbe7d8fa1336ccf3df203ebd2caaf4abbd01e101492a35eaa316"
