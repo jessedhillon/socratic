@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 import os
 
 import pydantic as p
 
 import socratic.lib.cli as click
 import socratic.llm.livekit as livekit
-from socratic.core import BootConfiguration, di
-
-logger = logging.getLogger(__name__)
+from socratic.core import BootConfiguration, LoggingProvider, di
 
 
 @click.group()
@@ -26,6 +23,7 @@ def agent() -> None:
 def serve(
     dev: bool,
     boot_cf: BootConfiguration = di.Provide["_boot_config"],  # noqa: B008
+    logging_provider: LoggingProvider = di.Provide["logging"],  # noqa: B008
     livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],  # noqa: B008
     livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],  # noqa: B008
     livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],  # noqa: B008
@@ -36,6 +34,8 @@ def serve(
     Room metadata must contain the assessment context (attempt_id,
     objective info, prompts, rubric) as JSON.
     """
+    logger = logging_provider.get_logger()
+
     # Set boot config for worker processes (includes paths to load secrets)
     os.environ["__Socratic_BOOT"] = boot_cf.model_dump_json()
 
