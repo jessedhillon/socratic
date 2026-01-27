@@ -52,11 +52,7 @@
     in
     {
       formatter.${system} = treefmtEval.config.build.wrapper;
-      checks = {
-        ${system} = {
-          formatting = treefmtEval.config.build.check inputs.self;
-        };
-      };
+      checks.${system}.formatting = treefmtEval.config.build.check inputs.self;
 
       devShells.${system}.default = pkgs.devshell.mkShell {
         name = "socratic";
