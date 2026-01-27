@@ -36,7 +36,7 @@ jobs:
 
       - uses: DeterminateSystems/nix-installer-action@main
         with:
-          flakehub-push-token: ${{ secrets.FLAKEHUB_PUSH_TOKEN }}
+          flakehub-push-token: ${{ secrets.FLAKEHUB_API_TOKEN }}
 
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
