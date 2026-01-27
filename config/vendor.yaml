@@ -13,8 +13,8 @@ livekit:
   egress:
     # Local development uses local file storage via LocalObjectStore
     # In production, configure S3 settings:
-    # s3_bucket: 'your-bucket'
-    # s3_region: 'us-east-1'
+    s3_bucket: 'socratic-dev-recordings'
+    s3_region: 'us-east-1'
     s3_prefix: 'recordings/'
     file_type: 'mp4'
     layout: 'speaker-dark'

@@ -56,11 +56,18 @@ def _egress_info_to_recording(info: t.Any) -> EgressRecording:
     """Convert LiveKit EgressInfo to EgressRecording model."""
     # Extract file URL from file results if available
     file_url: str | None = None
+
+    # Check repeated file_results field first (newer API)
     if hasattr(info, "file_results") and info.file_results:
         for file_result in info.file_results:
             if hasattr(file_result, "location") and file_result.location:
                 file_url = file_result.location
                 break
+
+    # Fall back to singular file field (deprecated but still populated by LiveKit)
+    if file_url is None and hasattr(info, "file") and info.file:
+        if hasattr(info.file, "location") and info.file.location:
+            file_url = info.file.location
 
     # Extract timestamps
     started_at: datetime | None = None
