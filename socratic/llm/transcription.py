@@ -111,6 +111,10 @@ class WhisperTranscriptionService(object):
     def __init__(self, api_key: p.SecretStr) -> None:
         self._client = AsyncOpenAI(api_key=api_key.get_secret_value())
 
+    async def aclose(self) -> None:
+        """Close the underlying HTTP client."""
+        await self._client.close()
+
     @property
     def max_file_size(self) -> int:
         """Maximum file size in bytes (25MB for Whisper)."""

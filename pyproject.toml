@@ -46,7 +46,9 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
+    "numpy~=2.2.0",
     "pytest~=8.3.0",
+    "sql_formatter~=0.6.0",
 ]
 dev = [
     "jdbpp@git+ssh://git@github.com/jessedhillon/jdbpp.git@14ade861a42be37536cc2612d028a2ae2dc589c8",
@@ -56,7 +58,6 @@ dev = [
     "pyright~=1.1.0",
     "rpdb@git+ssh://git@github.com/incognita-labs/rpdb.git@v0.2.1",
     "ruff~=0.11.0",
-    "sql_formatter~=0.6.0",
     "watchfiles~=1.0.0",
 ]
 
