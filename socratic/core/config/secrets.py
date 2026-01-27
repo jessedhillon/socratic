@@ -42,6 +42,12 @@ class LiveKitSecrets(BaseSecrets):
     wss_url: p.Secret[p.WebsocketUrl]
 
 
+class DeepgramSecrets(BaseSecrets):
+    """Deepgram API secrets."""
+
+    api_key: p.Secret[str]
+
+
 class Secrets(BaseSecrets, BaseModel):  # pyright: ignore [reportIncompatibleVariableOverride]
     root: p.AnyUrl
     env: DeploymentEnvironment
@@ -49,6 +55,7 @@ class Secrets(BaseSecrets, BaseModel):  # pyright: ignore [reportIncompatibleVar
     auth: AuthSecrets | None = None
     openai: OpenAISecrets | None = None
     livekit: LiveKitSecrets | None = None
+    deepgram: DeepgramSecrets | None = None
     # google: GoogleSecrets = p.Field(default=..., validate_default=True)
     # postgresql: PostgresqlSecrets = p.Field(default_factory=PostgresqlSecrets, validate_default=True)
 

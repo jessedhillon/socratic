@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import jinja2
-from langchain_core.language_models import BaseChatModel
+import os
+
+import pydantic as p
 
 import socratic.lib.cli as click
-from socratic.core import di
+from socratic.core import BootConfiguration, di
 from socratic.core.config import LoggingSettings
 
 
@@ -17,43 +18,35 @@ def agent() -> None:
 
 
 @agent.command(name="serve")
-@click.option("--stt-model", default="deepgram/nova-3", help="Speech-to-text model")
-@click.option("--tts-model", default="openai/tts-1", help="Text-to-speech model")
-@click.option("--tts-voice", default="alloy", help="TTS voice")
+@click.option("--dev", is_flag=True, default=False, help="Run in development mode")
 @di.inject
 def serve(
-    stt_model: str,
-    tts_model: str,
-    tts_voice: str,
+    dev: bool,
+    boot_cf: BootConfiguration = di.Provide["_boot_config"],  # noqa: B008
     logging_cf: LoggingSettings = di.Provide["config.logging", di.as_(LoggingSettings)],  # noqa: B008
-    model: BaseChatModel = di.Provide["llm.assessment.model"],  # noqa: B008
-    env: jinja2.Environment = di.Provide["template.assessment.env"],  # noqa: B008
+    livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],  # noqa: B008
+    livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],  # noqa: B008
+    livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],  # noqa: B008
 ) -> None:
     """Run the LiveKit voice agent server.
 
     This server handles real-time voice assessments via LiveKit.
     Room metadata must contain the assessment context (attempt_id,
     objective info, prompts, rubric) as JSON.
-
-    Environment variables required:
-    - LIVEKIT_URL: LiveKit server URL
-    - LIVEKIT_API_KEY: LiveKit API key
-    - LIVEKIT_API_SECRET: LiveKit API secret
-    - DEEPGRAM_API_KEY: Deepgram API key (for STT)
-    - OPENAI_API_KEY: OpenAI API key (for TTS)
     """
-    # Configure logging
     import logging.config
 
     from socratic.llm.livekit import run_agent_server
 
     logging.config.dictConfig(logging_cf.model_dump())
 
-    click.echo(f"Starting LiveKit agent server (STT: {stt_model}, TTS: {tts_model})")
+    # Set boot config for worker processes (includes paths to load secrets)
+    os.environ["__Socratic_BOOT"] = boot_cf.model_dump_json()
+
+    click.echo("Starting LiveKit agent server")
     run_agent_server(
-        model=model,
-        env=env,
-        stt_model=stt_model,
-        tts_model=tts_model,
-        tts_voice=tts_voice,
+        livekit_wss_url=str(livekit_wss_url.get_secret_value()),
+        livekit_api_key=livekit_api_key.get_secret_value(),
+        livekit_api_secret=livekit_api_secret.get_secret_value(),
+        devmode=dev,
     )

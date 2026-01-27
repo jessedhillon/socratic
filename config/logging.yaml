@@ -48,6 +48,10 @@ loggers:
     level: INFO
   asyncio:
     propagate: false
+  livekit:
+    level: DEBUG
+  livekit.agents:
+    level: DEBUG
   socratic:
     level: DEBUG
   socratic.cli:

@@ -75,7 +75,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
     @property
     def attempt_id(self) -> AttemptID:
         """Get the attempt ID for this assessment."""
-        return AttemptID(key=self.context["attempt_id"])
+        return AttemptID(self.context["attempt_id"])
 
     async def _initialize_assessment(self) -> AsyncIterable[llm.ChatChunk]:  # pyright: ignore [reportUnknownParameterType]
         """Initialize the assessment and stream the orientation message."""
