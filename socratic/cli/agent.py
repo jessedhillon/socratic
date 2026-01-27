@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 import pydantic as p
 
 import socratic.lib.cli as click
+import socratic.llm.livekit as livekit
 from socratic.core import BootConfiguration, di
-from socratic.core.config import LoggingSettings
+
+logger = logging.getLogger(__name__)
 
 
 @click.group()
@@ -23,7 +26,6 @@ def agent() -> None:
 def serve(
     dev: bool,
     boot_cf: BootConfiguration = di.Provide["_boot_config"],  # noqa: B008
-    logging_cf: LoggingSettings = di.Provide["config.logging", di.as_(LoggingSettings)],  # noqa: B008
     livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],  # noqa: B008
     livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],  # noqa: B008
     livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],  # noqa: B008
@@ -34,17 +36,11 @@ def serve(
     Room metadata must contain the assessment context (attempt_id,
     objective info, prompts, rubric) as JSON.
     """
-    import logging.config
-
-    from socratic.llm.livekit import run_agent_server
-
-    logging.config.dictConfig(logging_cf.model_dump())
-
     # Set boot config for worker processes (includes paths to load secrets)
     os.environ["__Socratic_BOOT"] = boot_cf.model_dump_json()
 
-    click.echo("Starting LiveKit agent server")
-    run_agent_server(
+    logger.info("Starting LiveKit agent server")
+    livekit.run_agent_server(
         livekit_wss_url=str(livekit_wss_url.get_secret_value()),
         livekit_api_key=livekit_api_key.get_secret_value(),
         livekit_api_secret=livekit_api_secret.get_secret_value(),

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import typing as t
 from collections.abc import AsyncIterable
 
 import jinja2
+import pydantic as p
 from langchain_core.language_models import BaseChatModel
 from livekit.agents import Agent, llm  # pyright: ignore [reportMissingTypeStubs]
 
@@ -21,7 +21,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AssessmentContext(t.TypedDict):
+class AssessmentContext(p.BaseModel):
     """Context needed to run an assessment via LiveKit."""
 
     attempt_id: str
@@ -30,10 +30,10 @@ class AssessmentContext(t.TypedDict):
     objective_description: str
     initial_prompts: list[str]
     rubric_criteria: list[dict[str, t.Any]]
-    scope_boundaries: str | None
-    time_expectation_minutes: int | None
-    challenge_prompts: list[str] | None
-    extension_policy: str
+    scope_boundaries: str | None = None
+    time_expectation_minutes: int | None = None
+    challenge_prompts: list[str] | None = None
+    extension_policy: str = "disallowed"
 
 
 class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass]
@@ -75,7 +75,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
     @property
     def attempt_id(self) -> AttemptID:
         """Get the attempt ID for this assessment."""
-        return AttemptID(self.context["attempt_id"])
+        return AttemptID(self.context.attempt_id)
 
     async def _initialize_assessment(self) -> AsyncIterable[llm.ChatChunk]:  # pyright: ignore [reportUnknownParameterType]
         """Initialize the assessment and stream the orientation message."""
@@ -83,18 +83,18 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
 
         async for token in start_assessment(
             attempt_id=self.attempt_id,
-            objective_id=self.context["objective_id"],
-            objective_title=self.context["objective_title"],
-            objective_description=self.context["objective_description"],
-            initial_prompts=self.context["initial_prompts"],
-            rubric_criteria=self.context["rubric_criteria"],
+            objective_id=self.context.objective_id,
+            objective_title=self.context.objective_title,
+            objective_description=self.context.objective_description,
+            initial_prompts=self.context.initial_prompts,
+            rubric_criteria=self.context.rubric_criteria,
             checkpointer=self.checkpointer,
             model=self.model,
             env=self.env,
-            scope_boundaries=self.context.get("scope_boundaries"),
-            time_expectation_minutes=self.context.get("time_expectation_minutes"),
-            challenge_prompts=self.context.get("challenge_prompts"),
-            extension_policy=self.context.get("extension_policy", "disallowed"),
+            scope_boundaries=self.context.scope_boundaries,
+            time_expectation_minutes=self.context.time_expectation_minutes,
+            challenge_prompts=self.context.challenge_prompts,
+            extension_policy=self.context.extension_policy,
         ):
             # NOTE: The exact ChatChunk API may need adjustment based on livekit-agents version
             # pyright: ignore [reportCallIssue, reportAttributeAccessIssue]
@@ -219,25 +219,12 @@ def create_assessment_agent_from_room_metadata(
         raise ValueError("Room metadata is required for assessment context")
 
     try:
-        context = json.loads(room.metadata)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid room metadata JSON: {e}") from e
-
-    # Validate required fields
-    required_fields = [
-        "attempt_id",
-        "objective_id",
-        "objective_title",
-        "objective_description",
-        "initial_prompts",
-        "rubric_criteria",
-    ]
-    missing = [f for f in required_fields if f not in context]
-    if missing:
-        raise ValueError(f"Missing required fields in room metadata: {missing}")
+        context = AssessmentContext.model_validate_json(room.metadata)
+    except p.ValidationError as e:
+        raise ValueError(f"Invalid room metadata: {e}") from e
 
     return SocraticAssessmentAgent(
-        context=t.cast(AssessmentContext, context),
+        context=context,
         model=model,
         env=env,
     )

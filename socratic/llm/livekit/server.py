@@ -23,7 +23,7 @@ from .agent import create_assessment_agent_from_room_metadata
 
 logger = logging.getLogger(__name__)
 
-HANDLED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
+handled_signals = (signal.SIGINT, signal.SIGTERM)
 
 
 @di.inject
@@ -167,7 +167,7 @@ def run_agent_server(
 
     # Set up signal handling
     handler = _create_signal_handler()
-    for sig in HANDLED_SIGNALS:
+    for sig in handled_signals:
         signal.signal(sig, handler)
 
     # Run the event loop

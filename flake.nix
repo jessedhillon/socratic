@@ -143,10 +143,6 @@
             name = "PRE_COMMIT_HOME";
             eval = "$XDG_CACHE_HOME/pre-commit";
           }
-          {
-            name = "PYTHONPATH";
-            value = "${pkgs.python313Packages.numpy}/${pkgs.python313.sitePackages}";
-          }
         ];
 
         devshell.startup.create-dirs.text = ''
@@ -156,15 +152,6 @@
             "$(dirname "$RABBITMQ_LOGS")" \
             "$XDG_STATE_HOME/redis" \
             "$CHROME_PROFILE_DIR"
-        '';
-
-        # Symlink nix numpy into venv so livekit-agents can import it
-        # (pip-installed numpy fails due to missing libstdc++.so.6 in nix)
-        devshell.startup.symlink-numpy.text = ''
-          if [[ -d "$PRJ_ROOT/.venv/lib/python3.13/site-packages" ]]; then
-            ln -sfn "${pkgs.python313Packages.numpy}/${pkgs.python313.sitePackages}/numpy" \
-              "$PRJ_ROOT/.venv/lib/python3.13/site-packages/numpy"
-          fi
         '';
 
         packages = with pkgs; [
