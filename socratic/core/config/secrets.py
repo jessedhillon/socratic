@@ -34,12 +34,20 @@ class GoogleSecrets(BaseSecrets):
     service_account: GoogleServiceAccountSecrets
 
 
+class LiveKitEgressSecrets(BaseSecrets):
+    """LiveKit Egress S3 storage secrets."""
+
+    s3_access_key: p.Secret[str] | None = None
+    s3_secret_key: p.Secret[str] | None = None
+
+
 class LiveKitSecrets(BaseSecrets):
     """LiveKit API secrets."""
 
     api_key: p.Secret[str]
     api_secret: p.Secret[str]
     wss_url: p.Secret[p.WebsocketUrl]
+    egress: LiveKitEgressSecrets = LiveKitEgressSecrets()
 
 
 class DeepgramSecrets(BaseSecrets):

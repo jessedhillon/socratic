@@ -91,10 +91,11 @@ async def start_room_recording(
     room_name: str,
     *,
     livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
-    livekit_api_key: str = di.Provide["secrets.livekit.api_key"],
-    livekit_api_secret: str = di.Provide["secrets.livekit.api_secret"],
-    s3_access_key: str | None = di.Provide["secrets.livekit.egress.s3_access_key"],
-    s3_secret_key: str | None = di.Provide["secrets.livekit.egress.s3_secret_key"],
+    livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],
+    livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],
+    livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],
+    s3_access_key: p.Secret[str] | None = di.Provide["secrets.livekit.egress.s3_access_key"],
+    s3_secret_key: p.Secret[str] | None = di.Provide["secrets.livekit.egress.s3_secret_key"],
 ) -> EgressRecording:
     """Start a room composite recording for an assessment room.
 
@@ -110,12 +111,13 @@ async def start_room_recording(
     egress_config = livekit_config.egress
 
     # Build the LiveKit API URL (convert ws:// to http://)
-    api_url = livekit_config.url.replace("ws://", "http://").replace("wss://", "https://")
+    wss_url = str(livekit_wss_url.get_secret_value())
+    api_url = wss_url.replace("ws://", "http://").replace("wss://", "https://")
 
     lkapi = livekit_api.LiveKitAPI(
         url=api_url,
-        api_key=livekit_api_key,
-        api_secret=livekit_api_secret,
+        api_key=livekit_api_key.get_secret_value(),
+        api_secret=livekit_api_secret.get_secret_value(),
     )
 
     try:
@@ -134,8 +136,8 @@ async def start_room_recording(
         if egress_config.s3_bucket and s3_access_key and s3_secret_key:
             # S3 output
             s3_upload = livekit_api.S3Upload(
-                access_key=s3_access_key,
-                secret=s3_secret_key,
+                access_key=s3_access_key.get_secret_value(),
+                secret=s3_secret_key.get_secret_value(),
                 bucket=egress_config.s3_bucket,
                 region=egress_config.s3_region or "",
                 endpoint=egress_config.s3_endpoint or "",
@@ -175,9 +177,9 @@ async def start_room_recording(
 async def stop_recording(
     egress_id: str,
     *,
-    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
-    livekit_api_key: str = di.Provide["secrets.livekit.api_key"],
-    livekit_api_secret: str = di.Provide["secrets.livekit.api_secret"],
+    livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],
+    livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],
+    livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],
 ) -> EgressRecording:
     """Stop an active egress recording.
 
@@ -190,12 +192,13 @@ async def stop_recording(
     Raises:
         EgressError: If stopping the recording fails.
     """
-    api_url = livekit_config.url.replace("ws://", "http://").replace("wss://", "https://")
+    wss_url = str(livekit_wss_url.get_secret_value())
+    api_url = wss_url.replace("ws://", "http://").replace("wss://", "https://")
 
     lkapi = livekit_api.LiveKitAPI(
         url=api_url,
-        api_key=livekit_api_key,
-        api_secret=livekit_api_secret,
+        api_key=livekit_api_key.get_secret_value(),
+        api_secret=livekit_api_secret.get_secret_value(),
     )
 
     try:
@@ -213,9 +216,9 @@ async def list_recordings(
     room_name: str | None = None,
     *,
     active_only: bool = False,
-    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
-    livekit_api_key: str = di.Provide["secrets.livekit.api_key"],
-    livekit_api_secret: str = di.Provide["secrets.livekit.api_secret"],
+    livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],
+    livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],
+    livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],
 ) -> tuple[EgressRecording, ...]:
     """List egress recordings.
 
@@ -226,12 +229,13 @@ async def list_recordings(
     Returns:
         Tuple of EgressRecording objects.
     """
-    api_url = livekit_config.url.replace("ws://", "http://").replace("wss://", "https://")
+    wss_url = str(livekit_wss_url.get_secret_value())
+    api_url = wss_url.replace("ws://", "http://").replace("wss://", "https://")
 
     lkapi = livekit_api.LiveKitAPI(
         url=api_url,
-        api_key=livekit_api_key,
-        api_secret=livekit_api_secret,
+        api_key=livekit_api_key.get_secret_value(),
+        api_secret=livekit_api_secret.get_secret_value(),
     )
 
     try:
@@ -252,9 +256,9 @@ async def list_recordings(
 async def get_recording(
     egress_id: str,
     *,
-    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
-    livekit_api_key: str = di.Provide["secrets.livekit.api_key"],
-    livekit_api_secret: str = di.Provide["secrets.livekit.api_secret"],
+    livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],
+    livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],
+    livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],
 ) -> EgressRecording | None:
     """Get information about a specific egress recording.
 
@@ -264,12 +268,13 @@ async def get_recording(
     Returns:
         EgressRecording if found, None otherwise.
     """
-    api_url = livekit_config.url.replace("ws://", "http://").replace("wss://", "https://")
+    wss_url = str(livekit_wss_url.get_secret_value())
+    api_url = wss_url.replace("ws://", "http://").replace("wss://", "https://")
 
     lkapi = livekit_api.LiveKitAPI(
         url=api_url,
-        api_key=livekit_api_key,
-        api_secret=livekit_api_secret,
+        api_key=livekit_api_key.get_secret_value(),
+        api_secret=livekit_api_secret.get_secret_value(),
     )
 
     try:
