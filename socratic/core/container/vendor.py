@@ -3,14 +3,14 @@ from __future__ import annotations
 import typing as t
 import urllib.parse
 
-import google.oauth2.service_account
-import googleapiclient.discovery
 import pydantic as p
 from dependency_injector.containers import DeclarativeContainer
 from dependency_injector.providers import Configuration, Container, Provider, Singleton
 from livekit import api as livekit_api  # pyright: ignore [reportMissingTypeStubs]
 
 if t.TYPE_CHECKING:
+    import google.oauth2.service_account
+    import googleapiclient.discovery
     from googleapiclient._apis.sheets.v4 import SheetsResource  # pyright: ignore [reportMissingModuleSource]
 
 
@@ -19,7 +19,7 @@ class GoogleContainer(DeclarativeContainer):
     def provide_creds(
         project_id: str, private_key_id: str, private_key: p.Secret[str], client_email: p.EmailStr, client_id: str
     ) -> google.oauth2.service_account.Credentials:
-        import google.oauth2.service_account  # noqa: F821
+        import google.oauth2.service_account
 
         qe = urllib.parse.quote(client_email)
         client_x509_cert_url = f"https://www.googleapis.com/robot/v1/metadata/x509/{qe}"
@@ -58,6 +58,8 @@ class GoogleContainer(DeclarativeContainer):
         service_name: t.Literal["sheets"] | str,
         service_version: str,
     ) -> googleapiclient.discovery.Resource:
+        import googleapiclient.discovery
+
         service = googleapiclient.discovery.build(service_name, service_version, credentials=credentials)
         match service_name:
             case "sheets":
