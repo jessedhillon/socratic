@@ -143,6 +143,14 @@
             name = "PRE_COMMIT_HOME";
             eval = "$XDG_CACHE_HOME/pre-commit";
           }
+          {
+            name = "LD_LIBRARY_PATH";
+            value = "${pkgs.lib.makeLibraryPath [
+              pkgs.stdenv.cc.cc.lib
+              pkgs.zlib
+              pkgs.libva
+            ]}";
+          }
         ];
 
         devshell.startup.create-dirs.text = ''
@@ -171,6 +179,7 @@
           nodejs
           redis
           ruff
+          stdenv.cc.cc.lib
           uv
           yq
         ];
