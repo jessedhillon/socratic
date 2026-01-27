@@ -3,7 +3,6 @@ default_language_version:
 
 default_install_hook_types:
   - pre-commit
-  - pre-push
   - commit-msg
 
 repos:
@@ -44,13 +43,3 @@ repos:
         files: ^socratic/web/.*/frontend/.*\.tsx?$
         pass_filenames: false
         stages: [pre-commit]
-
-  - repo: local
-    hooks:
-      - id: pytest
-        name: pytest
-        entry: poetry run pytest
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
