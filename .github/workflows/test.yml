@@ -12,6 +12,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
 
     services:
       postgres:
@@ -40,8 +43,4 @@ jobs:
           PGHOST: localhost
           PGUSER: postgres
           PGPASSWORD: postgres
-        run: |
-          nix develop --command bash -c '
-            poetry install --with test
-            poetry run pytest -v
-          '
+        run: nix build .#checks.x86_64-linux.pytest --impure -L
