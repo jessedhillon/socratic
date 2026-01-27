@@ -34,9 +34,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
 
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Install poetry
+        run: pip install poetry
 
       - name: Run tests
         env:
@@ -44,9 +47,5 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
         run: |
-          nix develop --command bash -c '
-            python -m venv .venv
-            source .venv/bin/activate
-            poetry install --extras test
-            pytest -v
-          '
+          poetry install --extras test
+          poetry run pytest -v
