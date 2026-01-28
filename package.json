@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "chrome-devtools-mcp": "^0.12.1"
+    "chrome-devtools-mcp": "^0.12.1",
+    "process-compose-mcp": "^0.1.0"
   }
 }
