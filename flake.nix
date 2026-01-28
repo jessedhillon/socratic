@@ -201,7 +201,7 @@
               --dev /dev \
               --tmpfs /tmp \
               -- \
-              claude --dangerously-skip-permissions'';
+              claude --dangerously-skip-permissions "$@"'';
           }
           {
             name = "install-hooks";
