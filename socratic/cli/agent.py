@@ -30,6 +30,7 @@ def serve(
     livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],  # noqa: B008
     livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],  # noqa: B008
     livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],  # noqa: B008
+    agent_name: str = di.Provide["config.vendor.livekit.agent_name"],  # noqa: B008
 ) -> None:
     """Run the LiveKit voice agent server.
 
@@ -47,6 +48,7 @@ def serve(
         livekit_wss_url=str(livekit_wss_url.get_secret_value()),
         livekit_api_key=livekit_api_key.get_secret_value(),
         livekit_api_secret=livekit_api_secret.get_secret_value(),
+        agent_name=agent_name,
         devmode=dev,
     )
 

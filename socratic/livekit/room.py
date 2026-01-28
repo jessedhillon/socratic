@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import typing as t
 
+import pydantic as p
 from livekit import api as livekit_api  # pyright: ignore [reportMissingTypeStubs]
 
 from socratic.core import di
@@ -51,8 +52,9 @@ async def create_assessment_room(
     metadata: AssessmentRoomMetadata,
     *,
     livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
-    livekit_api_key: str = di.Provide["secrets.livekit.api_key"],
-    livekit_api_secret: str = di.Provide["secrets.livekit.api_secret"],
+    livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],
+    livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],
+    livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],
 ) -> RoomInfo:
     """Create a LiveKit room for an assessment with context metadata.
 
@@ -72,12 +74,13 @@ async def create_assessment_room(
         RoomError: If room creation fails.
     """
     # Build the LiveKit API URL (convert ws:// to http://)
-    api_url = livekit_config.url.replace("ws://", "http://").replace("wss://", "https://")
+    wss_url = str(livekit_wss_url.get_secret_value())
+    api_url = wss_url.replace("ws://", "http://").replace("wss://", "https://")
 
     lkapi = livekit_api.LiveKitAPI(
         url=api_url,
-        api_key=livekit_api_key,
-        api_secret=livekit_api_secret,
+        api_key=livekit_api_key.get_secret_value(),
+        api_secret=livekit_api_secret.get_secret_value(),
     )
 
     try:
@@ -87,13 +90,19 @@ async def create_assessment_room(
         # Serialize metadata as JSON
         metadata_json = json.dumps(metadata)
 
-        # Create the room with metadata
+        # Create the room with metadata and agent dispatch
         room = await lkapi.room.create_room(
             livekit_api.CreateRoomRequest(
                 name=room_name,
                 metadata=metadata_json,
                 # Enable empty timeout so room persists until explicitly deleted
                 empty_timeout=300,  # 5 minutes
+                # Dispatch the assessment agent to this room
+                agents=[
+                    livekit_api.RoomAgentDispatch(
+                        agent_name=livekit_config.agent_name,
+                    ),
+                ],
             )
         )
 
@@ -114,9 +123,9 @@ async def create_assessment_room(
 async def delete_room(
     room_name: str,
     *,
-    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
-    livekit_api_key: str = di.Provide["secrets.livekit.api_key"],
-    livekit_api_secret: str = di.Provide["secrets.livekit.api_secret"],
+    livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],
+    livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],
+    livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],
 ) -> bool:
     """Delete a LiveKit room.
 
@@ -126,12 +135,13 @@ async def delete_room(
     Returns:
         True if deleted, False if room didn't exist.
     """
-    api_url = livekit_config.url.replace("ws://", "http://").replace("wss://", "https://")
+    wss_url = str(livekit_wss_url.get_secret_value())
+    api_url = wss_url.replace("ws://", "http://").replace("wss://", "https://")
 
     lkapi = livekit_api.LiveKitAPI(
         url=api_url,
-        api_key=livekit_api_key,
-        api_secret=livekit_api_secret,
+        api_key=livekit_api_key.get_secret_value(),
+        api_secret=livekit_api_secret.get_secret_value(),
     )
 
     try:
@@ -147,9 +157,9 @@ async def delete_room(
 async def get_room(
     room_name: str,
     *,
-    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
-    livekit_api_key: str = di.Provide["secrets.livekit.api_key"],
-    livekit_api_secret: str = di.Provide["secrets.livekit.api_secret"],
+    livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],
+    livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],
+    livekit_wss_url: p.Secret[p.WebsocketUrl] = di.Provide["secrets.livekit.wss_url"],
 ) -> RoomInfo | None:
     """Get information about a LiveKit room.
 
@@ -159,12 +169,13 @@ async def get_room(
     Returns:
         RoomInfo if found, None otherwise.
     """
-    api_url = livekit_config.url.replace("ws://", "http://").replace("wss://", "https://")
+    wss_url = str(livekit_wss_url.get_secret_value())
+    api_url = wss_url.replace("ws://", "http://").replace("wss://", "https://")
 
     lkapi = livekit_api.LiveKitAPI(
         url=api_url,
-        api_key=livekit_api_key,
-        api_secret=livekit_api_secret,
+        api_key=livekit_api_key.get_secret_value(),
+        api_secret=livekit_api_secret.get_secret_value(),
     )
 
     try:

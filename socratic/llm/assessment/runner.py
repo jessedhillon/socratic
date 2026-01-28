@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from socratic.model import AttemptID
 
 from .checkpointer import PostgresCheckpointer
+from .errors import SessionNotFoundError
 from .graph import create_initial_state
 from .nodes import analyze_completion_node, build_system_prompt, build_template_context, get_content_str, \
     render_template
@@ -45,8 +46,7 @@ async def run_assessment_turn(
     # Load current state
     state = checkpointer.get(attempt_id)
     if state is None:
-        yield "Error: Assessment session not found."
-        return
+        raise SessionNotFoundError(f"No session state for attempt {attempt_id}")
 
     # Add learner message to history
     messages = list(state.get("messages", []))
@@ -206,6 +206,12 @@ async def start_assessment(
         extension_policy=extension_policy,
     )
 
+    # Persist initial state before streaming so that if the orientation is
+    # interrupted (e.g. learner speaks over the greeting), subsequent turns
+    # can still find the session.
+    state["phase"] = InterviewPhase.Orientation
+    checkpointer.put(AttemptID(str(attempt_id)), state)
+
     # Build orientation message
     system_prompt = build_system_prompt(env, state)
     orientation_prompt = render_template(
@@ -228,9 +234,8 @@ async def start_assessment(
             full_response += token
             yield token
 
-    # Save initial state with orientation message
+    # Update state with the full orientation message
     state["messages"] = [AIMessage(content=full_response)]
-    state["phase"] = InterviewPhase.Orientation
     checkpointer.put(AttemptID(str(attempt_id)), state)
 
 
@@ -384,7 +389,7 @@ def get_assessment_status(
     """
     state = checkpointer.get(attempt_id)
     if state is None:
-        return {"error": "Assessment not found"}
+        raise SessionNotFoundError(f"No session state for attempt {attempt_id}")
 
     messages = state.get("messages", [])
     phase = state.get("phase", InterviewPhase.Orientation)

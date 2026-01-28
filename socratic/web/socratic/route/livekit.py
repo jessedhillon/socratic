@@ -160,9 +160,10 @@ async def start_assessment(
     assignment_id: str,
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
-    livekit_api_key: str = di.Provide["secrets.livekit.api_key"],
-    livekit_api_secret: str = di.Provide["secrets.livekit.api_secret"],
+    livekit_config: LiveKitSettings = Depends(di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)]),
+    livekit_api_key: p.Secret[str] = Depends(di.Provide["secrets.livekit.api_key"]),
+    livekit_api_secret: p.Secret[str] = Depends(di.Provide["secrets.livekit.api_secret"]),
+    livekit_wss_url: p.Secret[p.WebsocketUrl] = Depends(di.Provide["secrets.livekit.wss_url"]),
 ) -> StartLiveKitAssessmentResponse:
     """Start a new LiveKit-based assessment.
 
@@ -280,8 +281,8 @@ async def start_assessment(
     token = (
         livekit_api
         .AccessToken(
-            api_key=livekit_api_key,
-            api_secret=livekit_api_secret,
+            api_key=livekit_api_key.get_secret_value(),
+            api_secret=livekit_api_secret.get_secret_value(),
         )
         .with_identity(str(auth.user.user_id))
         .with_name(auth.user.name)
@@ -303,7 +304,7 @@ async def start_assessment(
         objective_title=objective_title,
         room_name=room_info["name"],
         token=token,
-        url=livekit_config.url,
+        url=str(livekit_wss_url.get_secret_value()),
     )
 
 
@@ -317,7 +318,7 @@ async def start_recording(
     attempt_id: AttemptID,
     auth: AuthContext = Depends(require_educator),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
+    livekit_config: LiveKitSettings = Depends(di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)]),
 ) -> StartRecordingResponse:
     """Start recording an assessment room.
 
@@ -459,7 +460,7 @@ async def list_recordings(
     active_only: bool = False,
     auth: AuthContext = Depends(require_educator),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-    livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
+    livekit_config: LiveKitSettings = Depends(di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)]),
 ) -> list[EgressRecordingResponse]:
     """List all recordings for an assessment room.
 

@@ -145,6 +145,7 @@ def run_agent_server(
     livekit_wss_url: str,
     livekit_api_key: str,
     livekit_api_secret: str,
+    agent_name: str = "socratic-assessment",
     devmode: bool = False,
 ) -> None:
     """Run the LiveKit agent server.
@@ -156,6 +157,7 @@ def run_agent_server(
         livekit_wss_url: LiveKit WebSocket URL.
         livekit_api_key: LiveKit API key.
         livekit_api_secret: LiveKit API secret.
+        agent_name: Name to register with LiveKit for dispatch routing.
         devmode: Run in development mode with hot reload.
     """
     # Create server with LiveKit credentials passed directly
@@ -164,7 +166,7 @@ def run_agent_server(
         api_key=livekit_api_key,
         api_secret=livekit_api_secret,
     )
-    server.rtc_session()(assessment_session)  # pyright: ignore [reportUnknownMemberType]
+    server.rtc_session(agent_name=agent_name)(assessment_session)  # pyright: ignore [reportUnknownMemberType]
 
     # Set up signal handling
     handler = _create_signal_handler()
