@@ -25,6 +25,19 @@ export type {
 
 // Convenience wrapper functions with simpler interfaces
 
+function extractErrorDetail(error: unknown, fallback: string): string {
+  const err = error as { detail?: unknown };
+  if (typeof err.detail === 'string') {
+    return err.detail;
+  }
+  if (Array.isArray(err.detail)) {
+    return err.detail
+      .map((e: { msg?: string }) => e.msg ?? String(e))
+      .join('; ');
+  }
+  return fallback;
+}
+
 import {
   getLivekitRoomToken as _getLivekitRoomToken,
   startLivekitAssessment as _startLivekitAssessment,
@@ -49,8 +62,7 @@ export async function getLiveKitRoomToken(
 
   if (response.error) {
     throw new Error(
-      (response.error as { detail?: string }).detail ||
-        'Failed to get room token'
+      extractErrorDetail(response.error, 'Failed to get room token')
     );
   }
 
@@ -76,8 +88,7 @@ export async function startLiveKitAssessment(
 
   if (response.error) {
     throw new Error(
-      (response.error as { detail?: string }).detail ||
-        'Failed to start LiveKit assessment'
+      extractErrorDetail(response.error, 'Failed to start LiveKit assessment')
     );
   }
 

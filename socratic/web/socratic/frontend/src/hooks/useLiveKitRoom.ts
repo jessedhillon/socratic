@@ -13,6 +13,8 @@ import {
   RemoteParticipant,
   RemoteTrackPublication,
   Participant,
+  type TranscriptionSegment,
+  type TrackPublication,
 } from 'livekit-client';
 
 export type LiveKitConnectionState =
@@ -33,11 +35,11 @@ export interface UseLiveKitRoomOptions {
   onConnectionStateChange?: (state: LiveKitConnectionState) => void;
   /** Callback when agent starts speaking */
   onAgentSpeakingChange?: (isSpeaking: boolean) => void;
-  /** Callback when receiving transcription data */
+  /** Callback when receiving transcription segments */
   onTranscription?: (
-    text: string,
-    isFinal: boolean,
-    participantId: string
+    segments: Array<{ id: string; text: string; isFinal: boolean }>,
+    participantIdentity: string,
+    isLocal: boolean
   ) => void;
 }
 
@@ -174,23 +176,31 @@ export function useLiveKitRoom(
     [updateAgentSpeaking]
   );
 
-  // Handle data messages (for transcriptions)
-  const handleDataReceived = useCallback(
-    (payload: Uint8Array, participant?: RemoteParticipant) => {
-      try {
-        const text = new TextDecoder().decode(payload);
-        const data = JSON.parse(text);
+  // Handle transcription events from LiveKit
+  const handleTranscriptionReceived = useCallback(
+    (
+      segments: TranscriptionSegment[],
+      participant?: Participant,
+      _publication?: TrackPublication
+    ) => {
+      if (!participant) return;
 
-        if (data.type === 'transcription') {
-          onTranscription?.(
-            data.text,
-            data.isFinal ?? true,
-            participant?.identity ?? 'unknown'
-          );
-        }
-      } catch (e) {
-        // Not a JSON message or not a transcription, ignore
-      }
+      const isLocal = !(participant instanceof RemoteParticipant);
+      console.log(
+        '[LiveKit transcription]',
+        isLocal ? 'local' : 'remote',
+        participant.identity,
+        segments.map((s) => ({
+          id: s.id,
+          final: s.final,
+          text: s.text.slice(0, 40),
+        }))
+      );
+      onTranscription?.(
+        segments.map((s) => ({ id: s.id, text: s.text, isFinal: s.final })),
+        participant.identity,
+        isLocal
+      );
     },
     [onTranscription]
   );
@@ -201,24 +211,30 @@ export function useLiveKitRoom(
       return;
     }
 
+    let room: Room | null = null;
+
     try {
       setError(null);
       updateConnectionState('connecting');
 
-      const room = new Room({
+      room = new Room({
         adaptiveStream: true,
         dynacast: true,
       });
 
       roomRef.current = room;
 
-      // Set up event listeners
+      // Set up event listeners — guard against stale rooms so that
+      // React StrictMode cleanup of a previous mount doesn't clobber
+      // the state of the current mount's room.
       room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
       room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
       room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakersChanged);
-      room.on(RoomEvent.DataReceived, handleDataReceived);
+      room.on(RoomEvent.TranscriptionReceived, handleTranscriptionReceived);
 
+      const thisRoom = room;
       room.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
+        if (roomRef.current !== thisRoom) return;
         switch (state) {
           case ConnectionState.Connected:
             updateConnectionState('connected');
@@ -233,6 +249,7 @@ export function useLiveKitRoom(
       });
 
       room.on(RoomEvent.Disconnected, () => {
+        if (roomRef.current !== thisRoom) return;
         updateConnectionState('disconnected');
         updateAgentSpeaking(false);
       });
@@ -246,6 +263,13 @@ export function useLiveKitRoom(
 
       updateConnectionState('connected');
     } catch (err) {
+      // Only propagate errors from the current room. When React StrictMode
+      // double-fires effects, the first mount's cleanup disconnects its room
+      // and a new room is created for the second mount. We ignore connection
+      // errors from the stale first room.
+      if (room && roomRef.current !== room) {
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Failed to connect';
       setError(message);
       updateConnectionState('error');
@@ -259,7 +283,7 @@ export function useLiveKitRoom(
     handleTrackSubscribed,
     handleTrackUnsubscribed,
     handleActiveSpeakersChanged,
-    handleDataReceived,
+    handleTranscriptionReceived,
   ]);
 
   // Disconnect from the room

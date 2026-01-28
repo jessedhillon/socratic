@@ -133,11 +133,16 @@ const LiveKitAssessmentPage: React.FC = () => {
   // Keep refs to cleanup functions for unmount
   const abandonRef = useRef(abandonRecording);
   abandonRef.current = abandonRecording;
+  const mediaStreamRef = useRef(mediaStream);
+  mediaStreamRef.current = mediaStream;
 
-  // Cleanup on unmount
+  // Cleanup on unmount — stop all media tracks and abandon recording
   useEffect(() => {
     return () => {
       abandonRef.current();
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
     };
   }, []);
 
@@ -223,6 +228,102 @@ const LiveKitAssessmentPage: React.FC = () => {
     }
   }, [state.assignmentId, isStartingAssessment, startRecording]);
 
+  // Track which segments belong to which message, and per-segment text,
+  // so we can coalesce consecutive same-speaker segments into one bubble
+  // while still handling interim segment updates correctly.
+  const segmentToMessageRef = useRef<Map<string, string>>(new Map());
+  const messageSegmentsRef = useRef<Map<string, Map<string, string>>>(
+    new Map()
+  );
+
+  // Handle transcription segments from LiveKit
+  const handleTranscription = useCallback(
+    (
+      segments: Array<{ id: string; text: string; isFinal: boolean }>,
+      _participantIdentity: string,
+      isLocal: boolean
+    ) => {
+      const utteranceType = isLocal ? 'learner' : 'interviewer';
+      const segToMsg = segmentToMessageRef.current;
+      const msgSegs = messageSegmentsRef.current;
+
+      setState((prev) => {
+        const updatedMessages = [...prev.messages];
+
+        for (const segment of segments) {
+          const existingMessageId = segToMsg.get(segment.id);
+
+          // Guard: only treat as "existing" if the message is actually in
+          // the array.  React StrictMode double-invokes setState updaters,
+          // and the ref mutations from the first invocation would otherwise
+          // trick the second invocation into looking for a message that
+          // doesn't exist in prev.messages yet.
+          const messageIdx =
+            existingMessageId != null
+              ? updatedMessages.findIndex((m) => m.id === existingMessageId)
+              : -1;
+
+          if (existingMessageId && messageIdx >= 0) {
+            // Update an existing segment's text within its message
+            const segs = msgSegs.get(existingMessageId);
+            if (segs) {
+              segs.set(segment.id, segment.text);
+            }
+
+            const allTexts = Array.from(segs?.values() ?? []);
+            updatedMessages[messageIdx] = {
+              ...updatedMessages[messageIdx],
+              content: allTexts.join(' '),
+              isStreaming: !segment.isFinal,
+            };
+          } else {
+            // New segment — coalesce with last message if same speaker
+            const lastMsg =
+              updatedMessages.length > 0
+                ? updatedMessages[updatedMessages.length - 1]
+                : null;
+
+            if (lastMsg && lastMsg.type === utteranceType) {
+              // Append to existing message
+              segToMsg.set(segment.id, lastMsg.id);
+              let segs = msgSegs.get(lastMsg.id);
+              if (!segs) {
+                // Rebuild segment map from existing message content
+                // (can happen after StrictMode double-invoke overwrites)
+                segs = new Map();
+                msgSegs.set(lastMsg.id, segs);
+              }
+              segs.set(segment.id, segment.text);
+
+              const allTexts = Array.from(segs.values());
+              updatedMessages[updatedMessages.length - 1] = {
+                ...lastMsg,
+                content: allTexts.join(' '),
+                isStreaming: !segment.isFinal,
+              };
+            } else {
+              // New speaker turn — create new message
+              const messageId = segment.id;
+              segToMsg.set(segment.id, messageId);
+              msgSegs.set(messageId, new Map([[segment.id, segment.text]]));
+
+              updatedMessages.push({
+                id: messageId,
+                type: utteranceType,
+                content: segment.text,
+                timestamp: new Date().toISOString(),
+                isStreaming: !segment.isFinal,
+              });
+            }
+          }
+        }
+
+        return { ...prev, messages: updatedMessages };
+      });
+    },
+    []
+  );
+
   // Handle LiveKit connection state changes
   const handleConnectionStateChange = useCallback(
     (connectionState: LiveKitConnectionState) => {
@@ -254,6 +355,14 @@ const LiveKitAssessmentPage: React.FC = () => {
     try {
       // Step 1: Stop recording
       await stopRecording();
+
+      // Release camera/microphone tracks immediately so the hardware is freed.
+      // The recording session may hold a different internal stream reference, so
+      // we also explicitly stop the stream we acquired during permission setup.
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+        setMediaStream(null);
+      }
 
       // Step 2: Upload the video (if we have chunks to finalize)
       setCompletionStep('uploading');
@@ -294,15 +403,20 @@ const LiveKitAssessmentPage: React.FC = () => {
           : 'An error occurred while completing your assessment.'
       );
     }
-  }, [state.attemptId, stopRecording]);
+  }, [state.attemptId, stopRecording, mediaStream]);
 
   // Handle confirmed navigation away
   const handleConfirmLeave = useCallback(() => {
+    // Stop media tracks so camera/mic are released before navigation
+    if (mediaStream) {
+      mediaStream.getTracks().forEach((track) => track.stop());
+      setMediaStream(null);
+    }
     setIsLeavingPage(true);
     setTimeout(() => {
       proceedNavigation();
     }, 50);
-  }, [proceedNavigation]);
+  }, [proceedNavigation, mediaStream]);
 
   // Handle retry after error
   const handleRetryCompletion = useCallback(() => {
@@ -710,6 +824,7 @@ const LiveKitAssessmentPage: React.FC = () => {
             isAssessmentComplete={false}
             isLeavingPage={isLeavingPage}
             onConnectionStateChange={handleConnectionStateChange}
+            onTranscription={handleTranscription}
             inputHeaderContent={
               state.phase === 'closure_ready' ? (
                 <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">

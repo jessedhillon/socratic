@@ -25,6 +25,12 @@ export interface LiveKitVoiceConversationProps {
   isLeavingPage?: boolean;
   /** Callback when connection state changes */
   onConnectionStateChange?: (state: LiveKitConnectionState) => void;
+  /** Callback when transcription segments are received */
+  onTranscription?: (
+    segments: Array<{ id: string; text: string; isFinal: boolean }>,
+    participantIdentity: string,
+    isLocal: boolean
+  ) => void;
   /** Content to render above the input area (e.g., closure banner) */
   inputHeaderContent?: React.ReactNode;
 }
@@ -57,10 +63,16 @@ const LiveKitVoiceConversation: React.FC<LiveKitVoiceConversationProps> = ({
   isAssessmentComplete,
   isLeavingPage = false,
   onConnectionStateChange,
+  onTranscription,
   inputHeaderContent,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [hasConnected, setHasConnected] = useState(false);
+  const [showThinkingIndicator, setShowThinkingIndicator] = useState(false);
+  const thinkingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Delay before showing the thinking indicator after learner finishes speaking
+  const THINKING_DELAY_MS = 750;
 
   const {
     connectionState,
@@ -80,6 +92,7 @@ const LiveKitVoiceConversation: React.FC<LiveKitVoiceConversationProps> = ({
         setHasConnected(true);
       }
     },
+    onTranscription,
   });
 
   // Disconnect when assessment completes or user leaves
@@ -88,6 +101,33 @@ const LiveKitVoiceConversation: React.FC<LiveKitVoiceConversationProps> = ({
       disconnect();
     }
   }, [isAssessmentComplete, isLeavingPage, hasConnected, disconnect]);
+
+  // Show thinking indicator after the learner finishes speaking, until the
+  // agent's response arrives.
+  useEffect(() => {
+    const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+    const learnerDone = lastMsg?.type === 'learner' && !lastMsg.isStreaming;
+
+    if (learnerDone) {
+      thinkingTimerRef.current = setTimeout(() => {
+        setShowThinkingIndicator(true);
+      }, THINKING_DELAY_MS);
+    } else {
+      // Either no messages, learner still streaming, or agent responded
+      if (thinkingTimerRef.current) {
+        clearTimeout(thinkingTimerRef.current);
+        thinkingTimerRef.current = null;
+      }
+      setShowThinkingIndicator(false);
+    }
+
+    return () => {
+      if (thinkingTimerRef.current) {
+        clearTimeout(thinkingTimerRef.current);
+        thinkingTimerRef.current = null;
+      }
+    };
+  }, [messages]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -133,25 +173,8 @@ const LiveKitVoiceConversation: React.FC<LiveKitVoiceConversationProps> = ({
           ),
         };
       case 'connected':
-        if (isAgentSpeaking) {
-          return {
-            text: 'Agent is speaking...',
-            className: 'bg-blue-100 text-blue-700',
-            icon: (
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path
-                  d="M15.54 8.46a5 5 0 0 1 0 7.07"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                />
-              </svg>
-            ),
-          };
-        }
         return {
-          text: 'Connected - Speak to respond',
+          text: 'Connected',
           className: 'bg-green-100 text-green-700',
           icon: (
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -292,30 +315,27 @@ const LiveKitVoiceConversation: React.FC<LiveKitVoiceConversationProps> = ({
             />
           ))}
 
-          {/* Agent thinking indicator */}
-          {connectionState === 'connected' &&
-            !isAgentSpeaking &&
-            messages.length > 0 &&
-            messages[messages.length - 1]?.type === 'learner' && (
-              <div className="flex justify-start mb-4">
-                <div className="bg-white text-gray-800 shadow-sm border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-md">
-                  <div className="flex items-center gap-1">
-                    <span
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: '0ms' }}
-                    />
-                    <span
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: '150ms' }}
-                    />
-                    <span
-                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                      style={{ animationDelay: '300ms' }}
-                    />
-                  </div>
+          {/* Agent thinking indicator — shown after learner stops speaking */}
+          {showThinkingIndicator && (
+            <div className="flex justify-start mb-4">
+              <div className="bg-white text-gray-800 shadow-sm border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-md">
+                <div className="flex items-center gap-1">
+                  <span
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: '0ms' }}
+                  />
+                  <span
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: '150ms' }}
+                  />
+                  <span
+                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    style={{ animationDelay: '300ms' }}
+                  />
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
           <div ref={messagesEndRef} />
         </div>
