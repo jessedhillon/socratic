@@ -192,9 +192,14 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             return None
 
         if spoken_text:
-            revised_content = f"{spoken_text} -- [learner interrupted your speech after this point]"
+            revised_content = (
+                f"{spoken_text} <interruption>learner interrupted your speech after this point</interruption>"
+            )
         else:
-            revised_content = "[your response was not delivered — the learner interrupted before hearing any of it]"
+            revised_content = (
+                "<interruption>your response was not delivered — "
+                "the learner interrupted before hearing any of it</interruption>"
+            )
 
         return AIMessage(content=revised_content, id=last_ai_msg.id)
 
