@@ -12,7 +12,7 @@ import typing as t
 
 import jinja2
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 
 from socratic.llm.agent.base import BaseAgent
@@ -33,7 +33,6 @@ class AssessmentAgent(BaseAgent[AssessmentState]):
     explicitly decide the assessment is complete.
     """
 
-    state_schema = AssessmentState
     name: str = "assessment"
 
     def __init__(
@@ -68,24 +67,4 @@ class AssessmentAgent(BaseAgent[AssessmentState]):
 
     def exit(self, state: AssessmentState) -> bool:
         """Check if the agent has ended the assessment."""
-        if state.assessment_complete:
-            return True
-        # Check if the most recent tool call was end_assessment
-        for msg in reversed(state.messages):
-            if isinstance(msg, AIMessage):
-                if any(tc["name"] == "end_assessment" for tc in (msg.tool_calls or [])):
-                    return True
-                break
-        return False
-
-    async def _tool_node(self, state: AssessmentState) -> dict[str, t.Any]:
-        """Execute tools, marking assessment complete if end_assessment was called."""
-        result = await super()._tool_node(state)
-        # Persist the completion signal into state
-        last_ai = next(
-            (m for m in reversed(state.messages) if isinstance(m, AIMessage)),
-            None,
-        )
-        if last_ai and any(tc["name"] == "end_assessment" for tc in (last_ai.tool_calls or [])):
-            result["assessment_complete"] = True
-        return result
+        return state.assessment_complete
