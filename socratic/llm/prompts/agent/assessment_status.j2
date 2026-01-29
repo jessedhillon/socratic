@@ -1,0 +1,25 @@
+## Current Assessment Status
+
+### Rubric Coverage
+{% for cov in criteria_coverage %}
+- **{{ cov.criterion_name }}**: {{ cov.coverage }}
+  {% if cov.evidence %}
+  Evidence: {{ cov.evidence | join("; ") }}
+  {% endif %}
+{% else %}
+No coverage recorded yet.
+{% endfor %}
+
+### Available Prompts
+{% for prompt in available_prompts %}
+{{ loop.index }}. {{ prompt }}
+{% else %}
+All prompts have been used.
+{% endfor %}
+
+### Progress
+- Turn: {{ turn_count }}
+{% if elapsed_minutes is not none %}
+- Elapsed: {{ elapsed_minutes }} min{% if time_budget_minutes %} / {{ time_budget_minutes }} min{% endif %}
+
+{% endif %}
