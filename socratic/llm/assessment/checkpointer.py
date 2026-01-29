@@ -50,16 +50,13 @@ class PostgresCheckpointer:
                 thread_id=thread_id,
                 session=session,
             )
-            session.commit()
 
     def delete(
         self, attempt_id: AttemptID, session: storage.Session = di.Provide["storage.persistent.session"]
     ) -> bool:
         """Delete agent state from database."""
         with session.begin():
-            result = agent_state_storage.delete(attempt_id, session=session)
-            session.commit()
-            return result
+            return agent_state_storage.delete(attempt_id, session=session)
 
     @di.inject
     async def aget(
@@ -89,7 +86,6 @@ class PostgresCheckpointer:
                 thread_id=thread_id,
                 session=session,
             )
-            await session.commit()
 
     def _serialize_state(self, state: AgentState) -> dict[str, t.Any]:
         """Serialize AgentState to JSON-compatible dict."""
