@@ -44,7 +44,7 @@ async def run_assessment_turn(
         Streamed response tokens from the AI
     """
     # Load current state
-    state = checkpointer.get(attempt_id)
+    state = await checkpointer.aget(attempt_id)
     if state is None:
         raise SessionNotFoundError(f"No session state for attempt {attempt_id}")
 
@@ -153,7 +153,7 @@ async def run_assessment_turn(
             state["current_prompt_index"] = current_index + 1
 
     # Save updated state
-    checkpointer.put(attempt_id, state)
+    await checkpointer.aput(attempt_id, state)
 
 
 async def start_assessment(
@@ -210,7 +210,7 @@ async def start_assessment(
     # interrupted (e.g. learner speaks over the greeting), subsequent turns
     # can still find the session.
     state["phase"] = InterviewPhase.Orientation
-    checkpointer.put(AttemptID(str(attempt_id)), state)
+    await checkpointer.aput(AttemptID(str(attempt_id)), state)
 
     # Build orientation message
     system_prompt = build_system_prompt(env, state)
@@ -236,7 +236,7 @@ async def start_assessment(
 
     # Update state with the full orientation message
     state["messages"] = [AIMessage(content=full_response)]
-    checkpointer.put(AttemptID(str(attempt_id)), state)
+    await checkpointer.aput(AttemptID(str(attempt_id)), state)
 
 
 def _check_consent(message: str) -> bool:
@@ -391,6 +391,26 @@ def get_assessment_status(
     if state is None:
         raise SessionNotFoundError(f"No session state for attempt {attempt_id}")
 
+    return _extract_status(state)
+
+
+async def aget_assessment_status(
+    attempt_id: AttemptID,
+    checkpointer: PostgresCheckpointer,
+) -> dict[str, t.Any]:
+    """Get the current status of an assessment (async).
+
+    Returns:
+        Dict with phase, message_count, and progress info
+    """
+    state = await checkpointer.aget(attempt_id)
+    if state is None:
+        raise SessionNotFoundError(f"No session state for attempt {attempt_id}")
+
+    return _extract_status(state)
+
+
+def _extract_status(state: AgentState) -> dict[str, t.Any]:
     messages = state.get("messages", [])
     phase = state.get("phase", InterviewPhase.Orientation)
     initial_prompts = state.get("initial_prompts", [])

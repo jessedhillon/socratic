@@ -3,9 +3,11 @@ import sys
 import types
 import typing as t
 
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, SessionTransaction
 
 __all__ = [
+    "AsyncSession",
     "Session",
     "SessionTransaction",
     # Repository modules

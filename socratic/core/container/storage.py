@@ -11,6 +11,7 @@ import alembic.config
 import psycopg
 import sqlalchemy
 import sqlalchemy.event
+import sqlalchemy.ext.asyncio
 import sqlalchemy.orm
 from dependency_injector.containers import DeclarativeContainer
 from dependency_injector.providers import Configuration, Container, Factory, Object, Provider, Resource, Singleton
@@ -95,6 +96,44 @@ def provide_session(debug: bool, engine: sqlalchemy.Engine) -> sqlalchemy.orm.Se
         return maker(autobegin=False)
 
 
+def provide_async_engine(
+    config: PostgresqlSettings, secrets: PostgresqlSecrets, logging: LoggingProvider
+) -> sqlalchemy.ext.asyncio.AsyncEngine:
+    logger = logging.get_logger()
+
+    dsn = DSN.create(
+        config.driver,
+        database=config.database,
+        username=secrets.username.get_secret_value() if secrets.username else None,
+        password=secrets.password.get_secret_value() if secrets.password else None,
+        port=config.port,
+        host=str(config.host) if config.host else None,
+    )
+
+    engine = sqlalchemy.ext.asyncio.create_async_engine(dsn, json_serializer=json.dumps, json_deserializer=json.loads)
+    sqlalchemy.event.listen(engine.sync_engine, "connect", register_uuid)
+    sqlalchemy.event.listen(engine.sync_engine, "connect", register_path)
+    sqlalchemy.event.listen(engine.sync_engine, "connect", register_timezone)
+    logger.info(
+        "initialized async SQLAlchemy engine",
+        extra={
+            "driver": config.driver,
+            "database": config.database,
+            "host": config.host,
+            "port": config.port,
+        },
+    )
+    return engine
+
+
+def provide_async_session(
+    engine: sqlalchemy.ext.asyncio.AsyncEngine,
+) -> sqlalchemy.ext.asyncio.AsyncSession:
+    """Create a new async session. Caller is responsible for closing it."""
+    maker = sqlalchemy.ext.asyncio.async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    return maker(autobegin=False)
+
+
 def provide_fixtures(root: Path | NotReady) -> types.ModuleType:
     if isinstance(root, NotReady):
         raise RuntimeError("root path is unavailable")
@@ -131,6 +170,14 @@ class PersistentContainer(DeclarativeContainer):
         logging=logging,
     )
     session: Provider[sqlalchemy.orm.Session] = Factory(provide_session, debug=debug, engine=engine)
+
+    async_engine: Provider[sqlalchemy.ext.asyncio.AsyncEngine] = Singleton(
+        provide_async_engine,
+        config=config.postgresql.as_(PostgresqlSettings),
+        secrets=secrets.postgresql.as_(PostgresqlSecrets),
+        logging=logging,
+    )
+    async_session: Provider[sqlalchemy.ext.asyncio.AsyncSession] = Factory(provide_async_session, engine=async_engine)
 
 
 def provide_object_store(config: ObjectSettings, root: Path | NotReady) -> ObjectStore:

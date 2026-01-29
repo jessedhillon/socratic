@@ -11,7 +11,7 @@ from socratic.core import di
 from socratic.model import AttemptID, TranscriptSegment, TranscriptSegmentID, TranscriptSegmentWithTimings, \
     UtteranceType, WordTiming, WordTimingID
 
-from . import Session
+from . import AsyncSession, Session
 from .table import transcript_segments, word_timings
 
 
@@ -84,6 +84,36 @@ def create(
     result = get(segment_id, session=session)
     assert result is not None
     return result
+
+
+async def acreate(
+    *,
+    attempt_id: AttemptID,
+    utterance_type: UtteranceType,
+    content: str,
+    start_time: datetime.datetime,
+    end_time: datetime.datetime | None = None,
+    confidence: decimal.Decimal | None = None,
+    prompt_index: int | None = None,
+    session: AsyncSession,
+) -> TranscriptSegment:
+    """Create a new transcript segment (async)."""
+    segment_id = TranscriptSegmentID()
+    stmt = sqla.insert(transcript_segments).values(
+        segment_id=segment_id,
+        attempt_id=attempt_id,
+        utterance_type=utterance_type.value,
+        content=content,
+        start_time=start_time,
+        end_time=end_time,
+        confidence=confidence,
+        prompt_index=prompt_index,
+    )
+    await session.execute(stmt)
+    await session.flush()
+    select_stmt = sqla.select(transcript_segments.__table__).where(transcript_segments.segment_id == segment_id)
+    row = (await session.execute(select_stmt)).mappings().one()
+    return TranscriptSegment(**row)
 
 
 # Word Timing Functions
