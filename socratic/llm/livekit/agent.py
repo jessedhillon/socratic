@@ -69,6 +69,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         self.context = context
         self.graph = graph
         self._initialized = False
+        self._failed = False
         self._thread_id = str(uuid.uuid4())
 
     @property
@@ -182,10 +183,12 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         First call: initializes the graph with full assessment state.
         Subsequent calls: adds the learner's message and invokes the graph.
         """
+        if self._failed:
+            return
+
         if not self._initialized:
-            self._initialized = True
             logger.info(f"Starting assessment for attempt {self.attempt_id}")
-            input_state = self._build_initial_state()
+            input_state: AssessmentState | dict[str, t.Any] = self._build_initial_state()
         else:
             # Extract the last user message from the chat context
             last_user_message: str | None = None
@@ -217,18 +220,21 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         try:
             async for chunk in self._stream_graph(input_state):
                 yield chunk
-        except Exception as exc:
-            logger.exception(f"Assessment error for attempt {self.attempt_id}: {exc}")
-            await self._publish_error(str(exc))
+            self._initialized = True
+        except Exception:
+            self._failed = True
+            logger.exception(f"Fatal assessment error for attempt {self.attempt_id}")
+            await self._publish_error("An unexpected error occurred during the assessment.")
 
     async def _publish_error(self, message: str) -> None:
-        """Publish an error to the room data channel for the frontend to handle."""
+        """Publish a fatal error to the room data channel for the frontend to handle."""
         try:
             room = self.session.room_io.room  # pyright: ignore [reportUnknownMemberType]
             payload = json.dumps({
                 "type": "assessment.error",
                 "attempt_id": str(self.attempt_id),
                 "message": message,
+                "fatal": True,
             })
             await room.local_participant.publish_data(  # pyright: ignore [reportUnknownMemberType]
                 payload=payload,
