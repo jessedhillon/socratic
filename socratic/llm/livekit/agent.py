@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import json
 import logging
@@ -274,6 +275,10 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             async for chunk in self._stream_graph(input_state):
                 yield chunk
             self._initialized = True
+        except asyncio.CancelledError:
+            # Normal interruption flow — the framework cancelled this
+            # generation because the learner kept speaking.  Not fatal.
+            logger.debug(f"Graph invocation cancelled for attempt {self.attempt_id}")
         except Exception:
             self._failed = True
             logger.exception(f"Fatal assessment error for attempt {self.attempt_id}")
