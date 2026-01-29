@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { useBlocker } from 'react-router';
+import { useBlocker, type Location } from 'react-router';
 
 /**
  * Options for the navigation guard hook.
@@ -61,7 +61,13 @@ export function useNavigationGuard(
   // Use react-router's useBlocker for SPA navigation
   const blocker = useBlocker(
     useCallback(
-      ({ currentLocation, nextLocation }) => {
+      ({
+        currentLocation,
+        nextLocation,
+      }: {
+        currentLocation: Location;
+        nextLocation: Location;
+      }) => {
         // Only block if shouldBlock is true and we're actually navigating away
         return (
           shouldBlock && currentLocation.pathname !== nextLocation.pathname

@@ -158,9 +158,13 @@ const AssignmentDetailPage: React.FC = () => {
     }
   };
 
-  const handleStartAssessment = () => {
+  const handleStartAssessment = (mode: 'text' | 'voice' = 'text') => {
     if (assignmentId) {
-      navigate(`/assessments/${assignmentId}`);
+      if (mode === 'voice') {
+        navigate(`/assessments/${assignmentId}/live`);
+      } else {
+        navigate(`/assessments/${assignmentId}`);
+      }
     }
   };
 
@@ -385,17 +389,41 @@ const AssignmentDetailPage: React.FC = () => {
 
           {/* Action section */}
           <div className="p-6">
-            <button
-              onClick={handleStartAssessment}
-              disabled={!canStart}
-              className={`w-full md:w-auto px-6 py-3 rounded-lg font-medium text-lg transition-colors ${
-                canStart
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              {attempts.length === 0 ? 'Start Assessment' : 'Start New Attempt'}
-            </button>
+            <div className="flex flex-col md:flex-row gap-3">
+              <button
+                onClick={() => handleStartAssessment('text')}
+                disabled={!canStart}
+                className={`w-full md:w-auto px-6 py-3 rounded-lg font-medium text-lg transition-colors ${
+                  canStart
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {attempts.length === 0
+                  ? 'Start Assessment'
+                  : 'Start New Attempt'}
+              </button>
+              <button
+                onClick={() => handleStartAssessment('voice')}
+                disabled={!canStart}
+                className={`w-full md:w-auto px-6 py-3 rounded-lg font-medium text-lg transition-colors flex items-center justify-center gap-2 ${
+                  canStart
+                    ? 'bg-purple-600 text-white hover:bg-purple-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                <svg
+                  className="w-5 h-5"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8h-2a5 5 0 01-10 0H3a7.001 7.001 0 006 6.93V17H6v2h8v-2h-3v-2.07z" />
+                </svg>
+                {attempts.length === 0
+                  ? 'Start Voice Assessment'
+                  : 'New Voice Attempt'}
+              </button>
+            </div>
           </div>
 
           {/* Attempt history */}

@@ -1,22 +1,51 @@
 /**
  * LiveKit API functions.
  *
- * These functions interact with the LiveKit-related backend endpoints.
- * Note: These are manually defined until the API client is regenerated.
+ * Re-exports from the generated OpenAPI client with simplified interfaces.
  */
 
-import { client } from './client.gen';
+// Re-export the generated functions
+export {
+  getLivekitRoomToken,
+  startLivekitAssessment,
+  startRoomRecording,
+  stopRoomRecording,
+  getRoomRecording,
+  listRoomRecordings,
+} from './sdk.gen';
 
-export interface LiveKitRoomTokenResponse {
-  attempt_id: string;
-  room_name: string;
-  token: string;
-  url: string;
+// Re-export the response types for convenience
+export type {
+  LiveKitRoomTokenResponse,
+  StartLiveKitAssessmentResponse,
+  StartRecordingResponse,
+  StopRecordingResponse,
+  EgressRecordingResponse,
+} from './types.gen';
+
+// Convenience wrapper functions with simpler interfaces
+
+function extractErrorDetail(error: unknown, fallback: string): string {
+  const err = error as { detail?: unknown };
+  if (typeof err.detail === 'string') {
+    return err.detail;
+  }
+  if (Array.isArray(err.detail)) {
+    return err.detail
+      .map((e: { msg?: string }) => e.msg ?? String(e))
+      .join('; ');
+  }
+  return fallback;
 }
 
-export interface LiveKitRoomTokenError {
-  detail: string;
-}
+import {
+  getLivekitRoomToken as _getLivekitRoomToken,
+  startLivekitAssessment as _startLivekitAssessment,
+} from './sdk.gen';
+import type {
+  LiveKitRoomTokenResponse,
+  StartLiveKitAssessmentResponse,
+} from './types.gen';
 
 /**
  * Get a LiveKit room token for joining an assessment voice session.
@@ -27,18 +56,41 @@ export interface LiveKitRoomTokenError {
 export async function getLiveKitRoomToken(
   attemptId: string
 ): Promise<LiveKitRoomTokenResponse> {
-  const response = await client.POST('/api/livekit/rooms/{attempt_id}/token', {
-    params: {
-      path: { attempt_id: attemptId },
-    },
+  const response = await _getLivekitRoomToken({
+    path: { attempt_id: attemptId },
   });
 
   if (response.error) {
     throw new Error(
-      (response.error as LiveKitRoomTokenError).detail ||
-        'Failed to get room token'
+      extractErrorDetail(response.error, 'Failed to get room token')
     );
   }
 
   return response.data as LiveKitRoomTokenResponse;
+}
+
+/**
+ * Start a new LiveKit-based assessment.
+ *
+ * Creates an assessment attempt and a LiveKit room with assessment context.
+ * Returns everything the frontend needs to connect and begin the real-time
+ * voice assessment.
+ *
+ * @param assignmentId - The assignment ID to start the assessment for
+ * @returns Assessment start response with attempt details and room credentials
+ */
+export async function startLiveKitAssessment(
+  assignmentId: string
+): Promise<StartLiveKitAssessmentResponse> {
+  const response = await _startLivekitAssessment({
+    path: { assignment_id: assignmentId },
+  });
+
+  if (response.error) {
+    throw new Error(
+      extractErrorDetail(response.error, 'Failed to start LiveKit assessment')
+    );
+  }
+
+  return response.data as StartLiveKitAssessmentResponse;
 }

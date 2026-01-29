@@ -137,6 +137,12 @@ import type {
   UploadAssessmentVideoData,
   UploadAssessmentVideoResponse,
   UploadAssessmentVideoError,
+  UploadVideoChunkData,
+  UploadVideoChunkResponse2,
+  UploadVideoChunkError,
+  FinalizeVideoUploadData,
+  FinalizeVideoUploadResponse,
+  FinalizeVideoUploadError,
   ListPendingReviewsData,
   ListPendingReviewsResponse,
   ListPendingReviewsError,
@@ -160,6 +166,24 @@ import type {
   TranscribeAudioData,
   TranscribeAudioResponse,
   TranscribeAudioError,
+  GetLivekitRoomTokenData,
+  GetLivekitRoomTokenResponse,
+  GetLivekitRoomTokenError,
+  StartLivekitAssessmentData,
+  StartLivekitAssessmentResponse,
+  StartLivekitAssessmentError,
+  StartRoomRecordingData,
+  StartRoomRecordingResponse,
+  StartRoomRecordingError,
+  StopRoomRecordingData,
+  StopRoomRecordingResponse,
+  StopRoomRecordingError,
+  GetRoomRecordingData,
+  GetRoomRecordingResponse,
+  GetRoomRecordingError,
+  ListRoomRecordingsData,
+  ListRoomRecordingsResponse,
+  ListRoomRecordingsError,
 } from './types.gen';
 import { client as _heyApiClient } from './client.gen';
 
@@ -1340,6 +1364,63 @@ export const uploadAssessmentVideo = <ThrowOnError extends boolean = false>(
 };
 
 /**
+ * Upload Video Chunk Route
+ * Upload a video chunk for progressive recording upload.
+ *
+ * Chunks are stored temporarily and assembled when finalize is called.
+ * The sequence parameter indicates the order of chunks (0-indexed).
+ */
+export const uploadVideoChunk = <ThrowOnError extends boolean = false>(
+  options: Options<UploadVideoChunkData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).post<
+    UploadVideoChunkResponse2,
+    UploadVideoChunkError,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/assessments/{attempt_id}/video/chunk',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options?.headers,
+    },
+  });
+};
+
+/**
+ * Finalize Video Route
+ * Finalize a chunked video upload.
+ *
+ * Assembles all uploaded chunks into the final video file and updates
+ * the attempt with the video URL.
+ */
+export const finalizeVideoUpload = <ThrowOnError extends boolean = false>(
+  options: Options<FinalizeVideoUploadData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).post<
+    FinalizeVideoUploadResponse,
+    FinalizeVideoUploadError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/assessments/{attempt_id}/video/finalize',
+    ...options,
+  });
+};
+
+/**
  * List Pending Reviews
  * List all attempts pending educator review.
  */
@@ -1552,6 +1633,181 @@ export const transcribeAudio = <ThrowOnError extends boolean = false>(
     ...options,
     headers: {
       'Content-Type': null,
+      ...options?.headers,
+    },
+  });
+};
+
+/**
+ * Get Room Token
+ * Generate a LiveKit room token for a learner to join an assessment room.
+ *
+ * The room name is derived from the attempt ID with a configured prefix.
+ * Only the learner assigned to the attempt can get a token for that room.
+ */
+export const getLivekitRoomToken = <ThrowOnError extends boolean = false>(
+  options: Options<GetLivekitRoomTokenData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).post<
+    GetLivekitRoomTokenResponse,
+    GetLivekitRoomTokenError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/livekit/rooms/{attempt_id}/token',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+};
+
+/**
+ * Start Assessment
+ * Start a new LiveKit-based assessment.
+ *
+ * Creates an assessment attempt and a LiveKit room with assessment context
+ * in the metadata. The agent server will automatically join and begin
+ * the assessment when the learner connects.
+ *
+ * Returns everything the frontend needs to connect to the room.
+ */
+export const startLivekitAssessment = <ThrowOnError extends boolean = false>(
+  options: Options<StartLivekitAssessmentData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).post<
+    StartLivekitAssessmentResponse,
+    StartLivekitAssessmentError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/livekit/assessments/{assignment_id}/start',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+};
+
+/**
+ * Start Recording
+ * Start recording an assessment room.
+ *
+ * Only instructors can start recordings. The recording will capture
+ * all audio and video from the room as a composite.
+ */
+export const startRoomRecording = <ThrowOnError extends boolean = false>(
+  options: Options<StartRoomRecordingData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).post<
+    StartRoomRecordingResponse,
+    StartRoomRecordingError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/livekit/rooms/{attempt_id}/recording',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+};
+
+/**
+ * Stop Recording
+ * Stop an active recording.
+ *
+ * Stops the specified egress recording and returns the final status
+ * with the file URL once processing is complete.
+ */
+export const stopRoomRecording = <ThrowOnError extends boolean = false>(
+  options: Options<StopRoomRecordingData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).delete<
+    StopRoomRecordingResponse,
+    StopRoomRecordingError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/livekit/rooms/{attempt_id}/recording/{egress_id}',
+    ...options,
+  });
+};
+
+/**
+ * Get Recording
+ * Get the status of a recording.
+ *
+ * Returns detailed information about the egress recording including
+ * its current status, timestamps, and file URL if complete.
+ */
+export const getRoomRecording = <ThrowOnError extends boolean = false>(
+  options: Options<GetRoomRecordingData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).get<
+    GetRoomRecordingResponse,
+    GetRoomRecordingError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/livekit/rooms/{attempt_id}/recording/{egress_id}',
+    ...options,
+  });
+};
+
+/**
+ * List Recordings
+ * List all recordings for an assessment room.
+ *
+ * Returns a list of all egress recordings associated with the
+ * specified assessment attempt.
+ */
+export const listRoomRecordings = <ThrowOnError extends boolean = false>(
+  options: Options<ListRoomRecordingsData, ThrowOnError>
+) => {
+  return (options.client ?? _heyApiClient).get<
+    ListRoomRecordingsResponse,
+    ListRoomRecordingsError,
+    ThrowOnError
+  >({
+    security: [
+      {
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/livekit/rooms/{attempt_id}/recordings',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
       ...options?.headers,
     },
   });

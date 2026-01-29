@@ -37,6 +37,7 @@ class LiveKitEgressSettings(BaseSettings):
 
 
 class LiveKitSettings(BaseSettings):
+    agent_name: str = "socratic-assessment"
     room_prefix: str = "assessment"
     stt_model: str = "deepgram/nova-3"
     tts_model: str = "openai/tts-1"

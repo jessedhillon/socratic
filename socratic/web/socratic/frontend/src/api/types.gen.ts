@@ -141,6 +141,10 @@ export type BodyUploadAssessmentVideo = {
   video: Blob | File;
 };
 
+export type BodyUploadVideoChunk = {
+  chunk: Blob | File;
+};
+
 /**
  * Request to create assignments for multiple learners.
  */
@@ -171,6 +175,19 @@ export type CompleteAssessmentRequest = {
 };
 
 export type DependencyType = 'hard' | 'soft';
+
+/**
+ * Response with egress recording information.
+ */
+export type EgressRecordingResponse = {
+  egress_id: string;
+  room_name: string;
+  status: string;
+  started_at?: string | null;
+  ended_at?: string | null;
+  file_url?: string | null;
+  error?: string | null;
+};
 
 /**
  * Evaluation result for the review.
@@ -205,6 +222,16 @@ export type ExtensionPolicy = 'allowed' | 'disallowed' | 'conditional';
 export type FeedbackRequest = {
   feedback_text: string;
   visible_to_learner?: boolean;
+};
+
+/**
+ * Response after finalizing chunked video upload.
+ */
+export type FinalizeVideoResponse = {
+  attempt_id: string;
+  video_url: string;
+  total_size: number;
+  chunks_assembled: number;
 };
 
 export type Grade = 'S' | 'A' | 'C' | 'F';
@@ -307,6 +334,35 @@ export type LearnerResponse = {
   user_id: string;
   email: string;
   name: string;
+};
+
+/**
+ * Settings for LiveKit egress recording output.
+ */
+export type LiveKitEgressSettings = {
+  s3_bucket?: string | null;
+  s3_region?: string | null;
+  s3_endpoint?: string | null;
+  s3_force_path_style?: boolean;
+  s3_prefix?: string;
+  file_type?: string;
+  layout?: string;
+};
+
+/**
+ * Response with LiveKit room access credentials.
+ */
+export type LiveKitRoomTokenResponse = {
+  attempt_id: string;
+  room_name: string;
+  token: string;
+  url: string;
+};
+
+export type LiveKitSettings = {
+  url: string;
+  room_prefix?: string;
+  egress?: LiveKitEgressSettings;
 };
 
 /**
@@ -619,6 +675,40 @@ export type StartAssessmentOkResponse = {
 };
 
 /**
+ * Response after starting a LiveKit-based assessment.
+ *
+ * Contains everything the frontend needs to connect and begin
+ * the real-time voice assessment.
+ */
+export type StartLiveKitAssessmentResponse = {
+  attempt_id: string;
+  assignment_id: string;
+  objective_id: string;
+  objective_title: string;
+  room_name: string;
+  token: string;
+  url: string;
+};
+
+/**
+ * Response after starting a recording.
+ */
+export type StartRecordingResponse = {
+  egress_id: string;
+  room_name: string;
+  status: string;
+};
+
+/**
+ * Response after stopping a recording.
+ */
+export type StopRecordingResponse = {
+  egress_id: string;
+  status: string;
+  file_url?: string | null;
+};
+
+/**
  * Request to create a new strand.
  */
 export type StrandCreateRequest = {
@@ -751,6 +841,16 @@ export type TranscriptionResponse = {
    * Word-level timing data (only present if include_word_timings=true)
    */
   words?: Array<SocraticWebSocraticViewTranscriptionWordTimingResponse> | null;
+};
+
+/**
+ * Response after uploading a video chunk.
+ */
+export type UploadVideoChunkResponse = {
+  attempt_id: string;
+  sequence: number;
+  size: number;
+  total_chunks: number;
 };
 
 /**
@@ -2279,6 +2379,75 @@ export type UploadAssessmentVideoResponses = {
 export type UploadAssessmentVideoResponse =
   UploadAssessmentVideoResponses[keyof UploadAssessmentVideoResponses];
 
+export type UploadVideoChunkData = {
+  body: BodyUploadVideoChunk;
+  path: {
+    attempt_id: string;
+  };
+  query: {
+    sequence: number;
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/assessments/{attempt_id}/video/chunk';
+};
+
+export type UploadVideoChunkErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UploadVideoChunkError =
+  UploadVideoChunkErrors[keyof UploadVideoChunkErrors];
+
+export type UploadVideoChunkResponses = {
+  /**
+   * Successful Response
+   */
+  200: UploadVideoChunkResponse;
+};
+
+export type UploadVideoChunkResponse2 =
+  UploadVideoChunkResponses[keyof UploadVideoChunkResponses];
+
+export type FinalizeVideoUploadData = {
+  body?: never;
+  path: {
+    attempt_id: string;
+  };
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/assessments/{attempt_id}/video/finalize';
+};
+
+export type FinalizeVideoUploadErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type FinalizeVideoUploadError =
+  FinalizeVideoUploadErrors[keyof FinalizeVideoUploadErrors];
+
+export type FinalizeVideoUploadResponses = {
+  /**
+   * Successful Response
+   */
+  200: FinalizeVideoResponse;
+};
+
+export type FinalizeVideoUploadResponse =
+  FinalizeVideoUploadResponses[keyof FinalizeVideoUploadResponses];
+
 export type ListPendingReviewsData = {
   body?: never;
   path?: never;
@@ -2538,6 +2707,217 @@ export type TranscribeAudioResponses = {
 
 export type TranscribeAudioResponse =
   TranscribeAudioResponses[keyof TranscribeAudioResponses];
+
+export type GetLivekitRoomTokenData = {
+  body?: LiveKitSettings;
+  path: {
+    attempt_id: string;
+  };
+  query?: {
+    livekit_api_key?: string;
+    livekit_api_secret?: string;
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/livekit/rooms/{attempt_id}/token';
+};
+
+export type GetLivekitRoomTokenErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetLivekitRoomTokenError =
+  GetLivekitRoomTokenErrors[keyof GetLivekitRoomTokenErrors];
+
+export type GetLivekitRoomTokenResponses = {
+  /**
+   * Successful Response
+   */
+  200: LiveKitRoomTokenResponse;
+};
+
+export type GetLivekitRoomTokenResponse =
+  GetLivekitRoomTokenResponses[keyof GetLivekitRoomTokenResponses];
+
+export type StartLivekitAssessmentData = {
+  body?: LiveKitSettings;
+  path: {
+    assignment_id: string;
+  };
+  query?: {
+    livekit_api_key?: string;
+    livekit_api_secret?: string;
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/livekit/assessments/{assignment_id}/start';
+};
+
+export type StartLivekitAssessmentErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StartLivekitAssessmentError =
+  StartLivekitAssessmentErrors[keyof StartLivekitAssessmentErrors];
+
+export type StartLivekitAssessmentResponses = {
+  /**
+   * Successful Response
+   */
+  200: StartLiveKitAssessmentResponse;
+};
+
+export type StartLivekitAssessmentResponse =
+  StartLivekitAssessmentResponses[keyof StartLivekitAssessmentResponses];
+
+export type StartRoomRecordingData = {
+  body?: LiveKitSettings;
+  path: {
+    attempt_id: string;
+  };
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/livekit/rooms/{attempt_id}/recording';
+};
+
+export type StartRoomRecordingErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StartRoomRecordingError =
+  StartRoomRecordingErrors[keyof StartRoomRecordingErrors];
+
+export type StartRoomRecordingResponses = {
+  /**
+   * Successful Response
+   */
+  200: StartRecordingResponse;
+};
+
+export type StartRoomRecordingResponse =
+  StartRoomRecordingResponses[keyof StartRoomRecordingResponses];
+
+export type StopRoomRecordingData = {
+  body?: never;
+  path: {
+    attempt_id: string;
+    egress_id: string;
+  };
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/livekit/rooms/{attempt_id}/recording/{egress_id}';
+};
+
+export type StopRoomRecordingErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StopRoomRecordingError =
+  StopRoomRecordingErrors[keyof StopRoomRecordingErrors];
+
+export type StopRoomRecordingResponses = {
+  /**
+   * Successful Response
+   */
+  200: StopRecordingResponse;
+};
+
+export type StopRoomRecordingResponse =
+  StopRoomRecordingResponses[keyof StopRoomRecordingResponses];
+
+export type GetRoomRecordingData = {
+  body?: never;
+  path: {
+    attempt_id: string;
+    egress_id: string;
+  };
+  query?: {
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/livekit/rooms/{attempt_id}/recording/{egress_id}';
+};
+
+export type GetRoomRecordingErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetRoomRecordingError =
+  GetRoomRecordingErrors[keyof GetRoomRecordingErrors];
+
+export type GetRoomRecordingResponses = {
+  /**
+   * Successful Response
+   */
+  200: EgressRecordingResponse;
+};
+
+export type GetRoomRecordingResponse =
+  GetRoomRecordingResponses[keyof GetRoomRecordingResponses];
+
+export type ListRoomRecordingsData = {
+  body?: LiveKitSettings;
+  path: {
+    attempt_id: string;
+  };
+  query?: {
+    active_only?: boolean;
+    /**
+     * JWT token (for EventSource which can't set headers)
+     */
+    token?: string | null;
+  };
+  url: '/api/livekit/rooms/{attempt_id}/recordings';
+};
+
+export type ListRoomRecordingsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListRoomRecordingsError =
+  ListRoomRecordingsErrors[keyof ListRoomRecordingsErrors];
+
+export type ListRoomRecordingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: Array<EgressRecordingResponse>;
+};
+
+export type ListRoomRecordingsResponse =
+  ListRoomRecordingsResponses[keyof ListRoomRecordingsResponses];
 
 export type ClientOptions = {
   baseUrl: 'http://localhost:8089' | (string & {});

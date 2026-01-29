@@ -59,3 +59,19 @@ class StopRecordingResponse(p.BaseModel):
     egress_id: str
     status: str
     file_url: str | None = None
+
+
+class StartLiveKitAssessmentResponse(p.BaseModel):
+    """Response after starting a LiveKit-based assessment.
+
+    Contains everything the frontend needs to connect and begin
+    the real-time voice assessment.
+    """
+
+    attempt_id: AttemptID
+    assignment_id: str
+    objective_id: str
+    objective_title: str
+    room_name: str
+    token: str
+    url: str

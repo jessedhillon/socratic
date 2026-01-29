@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import datetime
+import json
 import logging
 import typing as t
 import uuid
@@ -12,10 +15,13 @@ import pydantic as p
 from langchain_core.language_models import BaseChatModel
 from livekit.agents import Agent, llm  # pyright: ignore [reportMissingTypeStubs]
 
+from socratic import storage
 from socratic.core import di
 from socratic.llm.assessment import get_assessment_status, PostgresCheckpointer, run_assessment_turn, start_assessment
+from socratic.llm.assessment.errors import AssessmentError
 from socratic.llm.assessment.state import InterviewPhase
-from socratic.model import AttemptID
+from socratic.model import AttemptID, UtteranceType
+from socratic.storage import transcript as transcript_storage
 
 if t.TYPE_CHECKING:
     from livekit.rtc import Room  # pyright: ignore [reportMissingTypeStubs]
@@ -74,6 +80,47 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         return AttemptID(self.context.attempt_id)
 
     @di.inject
+    def _record_segment_sync(
+        self,
+        utterance_type: UtteranceType,
+        content: str,
+        start_time: datetime.datetime,
+        end_time: datetime.datetime | None = None,
+        *,
+        session: storage.Session = di.Provide["storage.persistent.session"],  # noqa: B008
+    ) -> None:
+        """Store a transcript segment in the database (synchronous)."""
+        try:
+            with session.begin():
+                transcript_storage.create(
+                    attempt_id=self.attempt_id,
+                    utterance_type=utterance_type,
+                    content=content,
+                    start_time=start_time,
+                    end_time=end_time,
+                    session=session,
+                )
+        except Exception:
+            logger.exception(f"Failed to record {utterance_type.value} transcript segment")
+
+    def _record_segment(
+        self,
+        utterance_type: UtteranceType,
+        content: str,
+        start_time: datetime.datetime,
+        end_time: datetime.datetime | None = None,
+    ) -> None:
+        """Schedule transcript segment storage without blocking the event loop."""
+        asyncio.get_event_loop().run_in_executor(
+            None,
+            self._record_segment_sync,
+            utterance_type,
+            content,
+            start_time,
+            end_time,
+        )
+
+    @di.inject
     async def _initialize_assessment(
         self,
         model: BaseChatModel = di.Provide["llm.dialogue_model"],  # noqa: B008
@@ -89,25 +136,37 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         self._current_phase = InterviewPhase.Orientation
 
         chunk_id = str(uuid.uuid4())
-        async for token in start_assessment(
-            attempt_id=self.attempt_id,
-            objective_id=self.context.objective_id,
-            objective_title=self.context.objective_title,
-            objective_description=self.context.objective_description,
-            initial_prompts=self.context.initial_prompts,
-            rubric_criteria=self.context.rubric_criteria,
-            checkpointer=self.checkpointer,
-            model=model,
-            env=env,
-            scope_boundaries=self.context.scope_boundaries,
-            time_expectation_minutes=self.context.time_expectation_minutes,
-            challenge_prompts=self.context.challenge_prompts,
-            extension_policy=self.context.extension_policy,
-        ):
-            yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
-                id=chunk_id,
-                delta=llm.ChoiceDelta(content=token, role="assistant"),  # pyright: ignore [reportCallIssue]
-            )
+        full_response = ""
+        start_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        try:
+            async for token in start_assessment(
+                attempt_id=self.attempt_id,
+                objective_id=self.context.objective_id,
+                objective_title=self.context.objective_title,
+                objective_description=self.context.objective_description,
+                initial_prompts=self.context.initial_prompts,
+                rubric_criteria=self.context.rubric_criteria,
+                checkpointer=self.checkpointer,
+                model=model,
+                env=env,
+                scope_boundaries=self.context.scope_boundaries,
+                time_expectation_minutes=self.context.time_expectation_minutes,
+                challenge_prompts=self.context.challenge_prompts,
+                extension_policy=self.context.extension_policy,
+            ):
+                full_response += token
+                yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
+                    id=chunk_id,
+                    delta=llm.ChoiceDelta(content=token, role="assistant"),  # pyright: ignore [reportCallIssue]
+                )
+        finally:
+            if full_response:
+                self._record_segment(
+                    utterance_type=UtteranceType.Interviewer,
+                    content=full_response,
+                    start_time=start_time,
+                    end_time=datetime.datetime.now(tz=datetime.timezone.utc),
+                )
 
     @di.inject
     async def _process_learner_message(
@@ -119,24 +178,47 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         """Process a learner message and stream the response."""
         logger.info(f"Processing learner message: {message[:100]}...")
 
-        chunk_id = str(uuid.uuid4())
-        async for token in run_assessment_turn(
-            attempt_id=self.attempt_id,
-            learner_message=message,
-            checkpointer=self.checkpointer,
-            model=model,
-            env=env,
-        ):
-            yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
-                id=chunk_id,
-                delta=llm.ChoiceDelta(content=token, role="assistant"),  # pyright: ignore [reportCallIssue]
-            )
+        # Record learner segment immediately
+        learner_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        self._record_segment(
+            utterance_type=UtteranceType.Learner,
+            content=message,
+            start_time=learner_time,
+        )
 
-        # Update current phase
-        status = get_assessment_status(self.attempt_id, self.checkpointer)
-        if status:
-            self._current_phase = InterviewPhase(status.get("phase", "orientation"))
-            logger.info(f"Assessment phase: {self._current_phase}")
+        chunk_id = str(uuid.uuid4())
+        full_response = ""
+        agent_start_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        try:
+            async for token in run_assessment_turn(
+                attempt_id=self.attempt_id,
+                learner_message=message,
+                checkpointer=self.checkpointer,
+                model=model,
+                env=env,
+            ):
+                full_response += token
+                yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
+                    id=chunk_id,
+                    delta=llm.ChoiceDelta(content=token, role="assistant"),  # pyright: ignore [reportCallIssue]
+                )
+        finally:
+            if full_response:
+                self._record_segment(
+                    utterance_type=UtteranceType.Interviewer,
+                    content=full_response,
+                    start_time=agent_start_time,
+                    end_time=datetime.datetime.now(tz=datetime.timezone.utc),
+                )
+
+        # Update current phase (run in thread to avoid blocking event loop)
+        status = await asyncio.to_thread(
+            get_assessment_status,
+            self.attempt_id,
+            self.checkpointer,
+        )
+        self._current_phase = InterviewPhase(status.get("phase", "orientation"))
+        logger.info(f"Assessment phase: {self._current_phase}")
 
     async def llm_node(  # pyright: ignore [reportIncompatibleMethodOverride]
         self,
@@ -182,8 +264,29 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             return
 
         # Process the learner message through our assessment agent
-        async for chunk in self._process_learner_message(last_user_message):  # pyright: ignore [reportUnknownArgumentType]
-            yield chunk
+        try:
+            async for chunk in self._process_learner_message(last_user_message):  # pyright: ignore [reportUnknownArgumentType]
+                yield chunk
+        except AssessmentError as exc:
+            logger.error(f"Assessment error for attempt {self.attempt_id}: {exc}")
+            await self._publish_error(str(exc))
+
+    async def _publish_error(self, message: str) -> None:
+        """Publish an error to the room data channel for the frontend to handle."""
+        try:
+            room = self.session.room_io.room  # pyright: ignore [reportUnknownMemberType]
+            payload = json.dumps({
+                "type": "assessment.error",
+                "attempt_id": str(self.attempt_id),
+                "message": message,
+            })
+            await room.local_participant.publish_data(  # pyright: ignore [reportUnknownMemberType]
+                payload=payload,
+                topic="assessment.error",
+                reliable=True,
+            )
+        except Exception:
+            logger.exception("Failed to publish error to room data channel")
 
     @property
     def is_complete(self) -> bool:

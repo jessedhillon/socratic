@@ -46,7 +46,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 }) => {
   const isLearner = message.type === 'learner';
   const isSystem = message.type === 'system';
-  const isInterviewer = message.type === 'interviewer';
 
   // Typewriter animation state
   const [revealedLength, setRevealedLength] = useState(
