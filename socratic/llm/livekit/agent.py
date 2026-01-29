@@ -6,20 +6,25 @@ import datetime
 import json
 import logging
 import typing as t
-import uuid
 from collections.abc import AsyncIterable
 
 import jinja2
 import pydantic as p
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables.schema import StreamEvent
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph.state import CompiledStateGraph
 from livekit.agents import Agent, llm  # pyright: ignore [reportMissingTypeStubs]
 
+import socratic.lib.uuid as uuid
 from socratic import storage
 from socratic.core import di
-from socratic.llm.assessment import aget_assessment_status, PostgresCheckpointer, run_assessment_turn, start_assessment
-from socratic.llm.assessment.errors import AssessmentError
-from socratic.llm.assessment.state import InterviewPhase
+from socratic.core.provider import TimestampProvider
+from socratic.llm.agent.assessment import AssessmentAgent
+from socratic.llm.agent.assessment.state import AssessmentState, CriterionCoverage
 from socratic.model import AttemptID, UtteranceType
+from socratic.model.rubric import RubricCriterion
 from socratic.storage import transcript as transcript_storage
 
 if t.TYPE_CHECKING:
@@ -36,7 +41,7 @@ class AssessmentContext(p.BaseModel):
     objective_title: str
     objective_description: str
     initial_prompts: list[str]
-    rubric_criteria: list[dict[str, t.Any]]
+    rubric_criteria: list[RubricCriterion]
     scope_boundaries: str | None = None
     time_expectation_minutes: int | None = None
     challenge_prompts: list[str] | None = None
@@ -44,51 +49,50 @@ class AssessmentContext(p.BaseModel):
 
 
 class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass]
-    """LiveKit agent that wraps the Socratic assessment dialogue system.
-
-    This agent bridges LiveKit's real-time voice interface with the existing
-    LangGraph-based assessment agent. It overrides the llm_node to use our
-    custom assessment logic instead of a standard LLM.
+    """LiveKit agent that bridges voice I/O to the AssessmentAgent graph.
 
     The agent:
     - Receives transcribed speech from the learner via the chat context
-    - Passes it to the assessment agent for processing
-    - Streams the agent's response back for TTS synthesis
+    - Invokes the AssessmentAgent LangGraph to generate a response
+    - Streams response tokens back for TTS synthesis
     """
 
     def __init__(
         self,
         context: AssessmentContext,
+        *,
+        graph: CompiledStateGraph,
     ) -> None:
-        """Initialize the assessment agent.
-
-        Args:
-            context: Assessment configuration including objective, prompts, and rubric.
-        """
         super().__init__(
             instructions="You are a Socratic assessment proctor conducting a voice-based evaluation.",
         )
         self.context = context
-        self.checkpointer = PostgresCheckpointer()
+        self.graph = graph
         self._initialized = False
-        self._current_phase: InterviewPhase | None = None
+        self._thread_id = str(uuid.uuid4())
 
     @property
     def attempt_id(self) -> AttemptID:
-        """Get the attempt ID for this assessment."""
         return AttemptID(self.context.attempt_id)
+
+    @property
+    def _graph_config(self) -> dict[str, t.Any]:
+        return {"configurable": {"thread_id": self._thread_id}}
 
     @di.inject
     async def _record_segment(
         self,
         utterance_type: UtteranceType,
         content: str,
-        start_time: datetime.datetime,
+        start_time: datetime.datetime | None = None,
         end_time: datetime.datetime | None = None,
         *,
+        utcnow: TimestampProvider = di.Provide["utcnow"],  # noqa: B008
         session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],  # noqa: B008
     ) -> None:
         """Store a transcript segment in the database."""
+        if start_time is None:
+            start_time = utcnow()
         try:
             async with session.begin():
                 await transcript_storage.acreate(
@@ -103,39 +107,56 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             logger.exception(f"Failed to record {utterance_type.value} transcript segment")
 
     @di.inject
-    async def _initialize_assessment(
+    def _build_initial_state(
         self,
-        model: BaseChatModel = di.Provide["llm.dialogue_model"],  # noqa: B008
-        env: jinja2.Environment = di.Provide["template.llm"],  # noqa: B008
+        *,
+        utcnow: TimestampProvider = di.Provide["utcnow"],  # noqa: B008
+    ) -> AssessmentState:
+        """Build the initial graph state from the assessment context."""
+        criteria_coverage: dict[str, CriterionCoverage] = {}
+        for criterion in self.context.rubric_criteria:
+            cid = str(criterion.criterion_id)
+            criteria_coverage[cid] = CriterionCoverage(
+                criterion_id=cid,
+                criterion_name=criterion.name,
+            )
+
+        return AssessmentState(
+            attempt_id=self.context.attempt_id,
+            objective_title=self.context.objective_title,
+            objective_description=self.context.objective_description,
+            rubric_criteria=self.context.rubric_criteria,
+            initial_prompts=self.context.initial_prompts,
+            time_budget_minutes=self.context.time_expectation_minutes,
+            start_time=utcnow(),
+            criteria_coverage=criteria_coverage,
+            messages=[],
+        )
+
+    @di.inject
+    async def _stream_graph(
+        self,
+        input_state: AssessmentState | dict[str, t.Any],
+        *,
+        utcnow: TimestampProvider = di.Provide["utcnow"],  # noqa: B008
     ) -> AsyncIterable[llm.ChatChunk]:  # pyright: ignore [reportUnknownParameterType]
-        """Initialize the assessment and stream the orientation message."""
-        logger.info(f"Starting assessment for attempt {self.attempt_id}")
-
-        # Mark initialized before yielding so that if the user interrupts the
-        # orientation, subsequent llm_node calls process their speech instead of
-        # restarting the welcome message.
-        self._initialized = True
-        self._current_phase = InterviewPhase.Orientation
-
+        """Invoke the graph and stream model tokens as ChatChunks."""
         chunk_id = str(uuid.uuid4())
         full_response = ""
-        start_time = datetime.datetime.now(tz=datetime.timezone.utc)
+        start_time = utcnow()
+
         try:
-            async for token in start_assessment(
-                attempt_id=self.attempt_id,
-                objective_id=self.context.objective_id,
-                objective_title=self.context.objective_title,
-                objective_description=self.context.objective_description,
-                initial_prompts=self.context.initial_prompts,
-                rubric_criteria=self.context.rubric_criteria,
-                checkpointer=self.checkpointer,
-                model=model,
-                env=env,
-                scope_boundaries=self.context.scope_boundaries,
-                time_expectation_minutes=self.context.time_expectation_minutes,
-                challenge_prompts=self.context.challenge_prompts,
-                extension_policy=self.context.extension_policy,
+            event: StreamEvent
+            async for event in self.graph.astream_events(
+                input_state,
+                config=self._graph_config,  # pyright: ignore [reportArgumentType]
+                version="v2",
             ):
+                if event["event"] != "on_chat_model_stream":
+                    continue
+                token: str = event["data"]["chunk"].content  # pyright: ignore [reportTypedDictNotRequiredAccess]
+                if not token:
+                    continue
                 full_response += token
                 yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
                     id=chunk_id,
@@ -147,59 +168,8 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
                     utterance_type=UtteranceType.Interviewer,
                     content=full_response,
                     start_time=start_time,
-                    end_time=datetime.datetime.now(tz=datetime.timezone.utc),
+                    end_time=utcnow(),
                 )
-
-    @di.inject
-    async def _process_learner_message(
-        self,
-        message: str,
-        model: BaseChatModel = di.Provide["llm.dialogue_model"],  # noqa: B008
-        env: jinja2.Environment = di.Provide["template.llm"],  # noqa: B008
-    ) -> AsyncIterable[llm.ChatChunk]:  # pyright: ignore [reportUnknownParameterType]
-        """Process a learner message and stream the response."""
-        logger.info(f"Processing learner message: {message[:100]}...")
-
-        # Record learner segment
-        learner_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        await self._record_segment(
-            utterance_type=UtteranceType.Learner,
-            content=message,
-            start_time=learner_time,
-        )
-
-        chunk_id = str(uuid.uuid4())
-        full_response = ""
-        agent_start_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        try:
-            async for token in run_assessment_turn(
-                attempt_id=self.attempt_id,
-                learner_message=message,
-                checkpointer=self.checkpointer,
-                model=model,
-                env=env,
-            ):
-                full_response += token
-                yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
-                    id=chunk_id,
-                    delta=llm.ChoiceDelta(content=token, role="assistant"),  # pyright: ignore [reportCallIssue]
-                )
-        finally:
-            if full_response:
-                await self._record_segment(
-                    utterance_type=UtteranceType.Interviewer,
-                    content=full_response,
-                    start_time=agent_start_time,
-                    end_time=datetime.datetime.now(tz=datetime.timezone.utc),
-                )
-
-        # Update current phase
-        status = await aget_assessment_status(
-            self.attempt_id,
-            self.checkpointer,
-        )
-        self._current_phase = InterviewPhase(status.get("phase", "orientation"))
-        logger.info(f"Assessment phase: {self._current_phase}")
 
     async def llm_node(  # pyright: ignore [reportIncompatibleMethodOverride]
         self,
@@ -207,49 +177,48 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         tools: list[t.Any],  # pyright: ignore [reportUnknownParameterType, reportMissingTypeArgument]
         model_settings: t.Any,
     ) -> AsyncIterable[llm.ChatChunk]:  # pyright: ignore [reportUnknownParameterType]
-        """Override the LLM node to use our Socratic assessment agent.
+        """Override the LLM node to use our AssessmentAgent graph.
 
-        This method is called by the AgentSession when the LLM should generate
-        a response. Instead of calling a standard LLM, we route to our custom
-        assessment agent which uses LangGraph for dialogue management.
-
-        Args:
-            chat_ctx: The current chat context with conversation history.
-            tools: Available function tools (not used for assessment).
-            model_settings: Model configuration (not used for assessment).
-
-        Yields:
-            ChatChunk objects containing the streamed response tokens.
+        First call: initializes the graph with full assessment state.
+        Subsequent calls: adds the learner's message and invokes the graph.
         """
-        # If not initialized, run the orientation first
         if not self._initialized:
-            async for chunk in self._initialize_assessment():
-                yield chunk
-            return
+            self._initialized = True
+            logger.info(f"Starting assessment for attempt {self.attempt_id}")
+            input_state = self._build_initial_state()
+        else:
+            # Extract the last user message from the chat context
+            last_user_message: str | None = None
+            for item in reversed(chat_ctx.items):  # pyright: ignore [reportUnknownMemberType, reportUnknownVariableType]
+                if hasattr(item, "role") and item.role == "user":  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue]
+                    last_user_message = item.text_content  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
+                    break
 
-        # Get the last user message from the chat context
-        last_user_message: str | None = None
-        for item in reversed(chat_ctx.items):  # pyright: ignore [reportUnknownMemberType, reportUnknownVariableType]
-            if hasattr(item, "role") and item.role == "user":  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue]
-                last_user_message = item.text_content  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
-                break
+            if last_user_message is None:
+                logger.warning("No user message found in chat context")
+                yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
+                    id=str(uuid.uuid4()),
+                    delta=llm.ChoiceDelta(  # pyright: ignore [reportCallIssue]
+                        content="I didn't catch that. Could you please repeat?",
+                        role="assistant",
+                    ),
+                )
+                return
 
-        if last_user_message is None:
-            logger.warning("No user message found in chat context")
-            yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
-                id=str(uuid.uuid4()),
-                delta=llm.ChoiceDelta(  # pyright: ignore [reportCallIssue]
-                    content="I didn't catch that. Could you please repeat?", role="assistant"
-                ),
+            # Record learner speech
+            await self._record_segment(
+                utterance_type=UtteranceType.Learner,
+                content=last_user_message,  # pyright: ignore [reportUnknownArgumentType]
             )
-            return
 
-        # Process the learner message through our assessment agent
+            # Pass only the new message — the graph merges via add_messages reducer
+            input_state = {"messages": [HumanMessage(content=last_user_message)]}  # pyright: ignore [reportUnknownArgumentType]
+
         try:
-            async for chunk in self._process_learner_message(last_user_message):  # pyright: ignore [reportUnknownArgumentType]
+            async for chunk in self._stream_graph(input_state):
                 yield chunk
-        except AssessmentError as exc:
-            logger.error(f"Assessment error for attempt {self.attempt_id}: {exc}")
+        except Exception as exc:
+            logger.exception(f"Assessment error for attempt {self.attempt_id}: {exc}")
             await self._publish_error(str(exc))
 
     async def _publish_error(self, message: str) -> None:
@@ -269,27 +238,19 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         except Exception:
             logger.exception("Failed to publish error to room data channel")
 
-    @property
-    def is_complete(self) -> bool:
-        """Check if the assessment has reached the closure phase."""
-        return self._current_phase == InterviewPhase.Closure
 
-
+@di.inject
 def create_assessment_agent_from_room_metadata(
     room: "Room",
+    *,
+    model: BaseChatModel = di.Provide["llm.dialogue_model"],  # noqa: B008
+    env: jinja2.Environment = di.Provide["template.llm"],  # noqa: B008
 ) -> SocraticAssessmentAgent:
     """Create an assessment agent from LiveKit room metadata.
 
-    The room metadata should contain JSON with the AssessmentContext fields.
-
-    Args:
-        room: LiveKit room with metadata containing assessment context.
-
-    Returns:
-        Configured SocraticAssessmentAgent.
-
-    Raises:
-        ValueError: If room metadata is missing or invalid.
+    Parses the room metadata JSON into an AssessmentContext, constructs the
+    AssessmentAgent graph with a MemorySaver checkpointer, and wraps it in
+    the LiveKit agent adapter.
     """
     if not room.metadata:
         raise ValueError("Room metadata is required for assessment context")
@@ -299,6 +260,11 @@ def create_assessment_agent_from_room_metadata(
     except p.ValidationError as e:
         raise ValueError(f"Invalid room metadata: {e}") from e
 
+    # Build the assessment graph with in-memory checkpointing
+    agent = AssessmentAgent(model, env=env)
+    graph = agent.compile(checkpointer=MemorySaver())
+
     return SocraticAssessmentAgent(
         context=context,
+        graph=graph,
     )
