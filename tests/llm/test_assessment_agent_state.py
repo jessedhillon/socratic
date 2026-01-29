@@ -7,16 +7,14 @@ from datetime import datetime, timedelta, timezone
 import jinja2
 from langchain_core.messages import AIMessage, HumanMessage
 
-from socratic.llm.agent.assessment.state import AssessmentState, CoverageLevel, CriterionCoverage
+from socratic.llm.agent.assessment.state import AssessmentCriterion, AssessmentState, CoverageLevel, CriterionCoverage
 from socratic.llm.agent.assessment.status import render_status
-from socratic.model.id import ObjectiveID, RubricCriterionID
-from socratic.model.rubric import ProficiencyLevel, RubricCriterion
+from socratic.model.rubric import ProficiencyLevel
 
 
-def _make_criterion(name: str = "Criterion A") -> RubricCriterion:
-    return RubricCriterion(
-        criterion_id=RubricCriterionID(),
-        objective_id=ObjectiveID(),
+def _make_criterion(name: str = "Criterion A") -> AssessmentCriterion:
+    return AssessmentCriterion(
+        criterion_id=f"rbrc${name.lower().replace(' ', '_')}",
         name=name,
         description=f"Description of {name}",
         proficiency_levels=[

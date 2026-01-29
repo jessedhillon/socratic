@@ -22,9 +22,8 @@ from socratic import storage
 from socratic.core import di
 from socratic.core.provider import TimestampProvider
 from socratic.llm.agent.assessment import AssessmentAgent
-from socratic.llm.agent.assessment.state import AssessmentState, CriterionCoverage
+from socratic.llm.agent.assessment.state import AssessmentCriterion, AssessmentState, CriterionCoverage
 from socratic.model import AttemptID, UtteranceType
-from socratic.model.rubric import RubricCriterion
 from socratic.storage import transcript as transcript_storage
 
 if t.TYPE_CHECKING:
@@ -41,7 +40,7 @@ class AssessmentContext(p.BaseModel):
     objective_title: str
     objective_description: str
     initial_prompts: list[str]
-    rubric_criteria: list[RubricCriterion]
+    rubric_criteria: list[AssessmentCriterion]
     scope_boundaries: str | None = None
     time_expectation_minutes: int | None = None
     challenge_prompts: list[str] | None = None
