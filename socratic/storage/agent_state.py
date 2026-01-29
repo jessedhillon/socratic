@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert
 from socratic.core import di
 from socratic.model import AttemptID
 
-from . import Session
+from . import AsyncSession, Session
 from .table import agent_states
 
 
@@ -80,3 +80,45 @@ def delete(
     stmt = sqla.delete(agent_states).where(agent_states.attempt_id == attempt_id)
     result = session.execute(stmt)
     return bool(result.rowcount)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownArgumentType]
+
+
+# Async variants for use in the LiveKit agent event loop
+
+
+async def aget(
+    attempt_id: AttemptID,
+    *,
+    session: AsyncSession,
+) -> AgentStateRecord | None:
+    """Get agent state for an attempt (async)."""
+    stmt = sqla.select(agent_states.__table__).where(agent_states.attempt_id == attempt_id)
+    row = (await session.execute(stmt)).mappings().one_or_none()
+    return AgentStateRecord(**row) if row else None
+
+
+async def aupsert(
+    attempt_id: AttemptID,
+    *,
+    checkpoint_data: dict[str, t.Any],
+    thread_id: str,
+    session: AsyncSession,
+) -> AgentStateRecord:
+    """Create or update agent state for an attempt (async)."""
+    stmt = insert(agent_states).values(
+        attempt_id=attempt_id,
+        checkpoint_data=checkpoint_data,
+        thread_id=thread_id,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["attempt_id"],
+        set_={
+            "checkpoint_data": stmt.excluded.checkpoint_data,
+            "thread_id": stmt.excluded.thread_id,
+            "update_time": datetime.datetime.now(datetime.UTC),
+        },
+    )
+    await session.execute(stmt)
+    await session.flush()
+    result = await aget(attempt_id, session=session)
+    assert result is not None
+    return result

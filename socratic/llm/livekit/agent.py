@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import datetime
 import json
 import logging
@@ -17,7 +16,7 @@ from livekit.agents import Agent, llm  # pyright: ignore [reportMissingTypeStubs
 
 from socratic import storage
 from socratic.core import di
-from socratic.llm.assessment import get_assessment_status, PostgresCheckpointer, run_assessment_turn, start_assessment
+from socratic.llm.assessment import aget_assessment_status, PostgresCheckpointer, run_assessment_turn, start_assessment
 from socratic.llm.assessment.errors import AssessmentError
 from socratic.llm.assessment.state import InterviewPhase
 from socratic.model import AttemptID, UtteranceType
@@ -80,19 +79,19 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         return AttemptID(self.context.attempt_id)
 
     @di.inject
-    def _record_segment_sync(
+    async def _record_segment(
         self,
         utterance_type: UtteranceType,
         content: str,
         start_time: datetime.datetime,
         end_time: datetime.datetime | None = None,
         *,
-        session: storage.Session = di.Provide["storage.persistent.session"],  # noqa: B008
+        session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],  # noqa: B008
     ) -> None:
-        """Store a transcript segment in the database (synchronous)."""
+        """Store a transcript segment in the database."""
         try:
-            with session.begin():
-                transcript_storage.create(
+            async with session.begin():
+                await transcript_storage.acreate(
                     attempt_id=self.attempt_id,
                     utterance_type=utterance_type,
                     content=content,
@@ -102,23 +101,6 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
                 )
         except Exception:
             logger.exception(f"Failed to record {utterance_type.value} transcript segment")
-
-    def _record_segment(
-        self,
-        utterance_type: UtteranceType,
-        content: str,
-        start_time: datetime.datetime,
-        end_time: datetime.datetime | None = None,
-    ) -> None:
-        """Schedule transcript segment storage without blocking the event loop."""
-        asyncio.get_event_loop().run_in_executor(
-            None,
-            self._record_segment_sync,
-            utterance_type,
-            content,
-            start_time,
-            end_time,
-        )
 
     @di.inject
     async def _initialize_assessment(
@@ -161,7 +143,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
                 )
         finally:
             if full_response:
-                self._record_segment(
+                await self._record_segment(
                     utterance_type=UtteranceType.Interviewer,
                     content=full_response,
                     start_time=start_time,
@@ -178,9 +160,9 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         """Process a learner message and stream the response."""
         logger.info(f"Processing learner message: {message[:100]}...")
 
-        # Record learner segment immediately
+        # Record learner segment
         learner_time = datetime.datetime.now(tz=datetime.timezone.utc)
-        self._record_segment(
+        await self._record_segment(
             utterance_type=UtteranceType.Learner,
             content=message,
             start_time=learner_time,
@@ -204,16 +186,15 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
                 )
         finally:
             if full_response:
-                self._record_segment(
+                await self._record_segment(
                     utterance_type=UtteranceType.Interviewer,
                     content=full_response,
                     start_time=agent_start_time,
                     end_time=datetime.datetime.now(tz=datetime.timezone.utc),
                 )
 
-        # Update current phase (run in thread to avoid blocking event loop)
-        status = await asyncio.to_thread(
-            get_assessment_status,
+        # Update current phase
+        status = await aget_assessment_status(
             self.attempt_id,
             self.checkpointer,
         )

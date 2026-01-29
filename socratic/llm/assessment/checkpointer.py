@@ -61,6 +61,36 @@ class PostgresCheckpointer:
             session.commit()
             return result
 
+    @di.inject
+    async def aget(
+        self, attempt_id: AttemptID, session: storage.AsyncSession = di.Provide["storage.persistent.async_session"]
+    ) -> AgentState | None:
+        """Load agent state from database (async)."""
+        async with session.begin():
+            record = await agent_state_storage.aget(attempt_id, session=session)
+            if record is None:
+                return None
+            return self._deserialize_state(record.checkpoint_data)
+
+    @di.inject
+    async def aput(
+        self,
+        attempt_id: AttemptID,
+        state: AgentState,
+        session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],
+    ) -> None:
+        """Save agent state to database (async)."""
+        async with session.begin():
+            checkpoint_data = self._serialize_state(state)
+            thread_id = state.get("attempt_id", str(uuid.uuid4()))
+            await agent_state_storage.aupsert(
+                attempt_id=attempt_id,
+                checkpoint_data=checkpoint_data,
+                thread_id=thread_id,
+                session=session,
+            )
+            await session.commit()
+
     def _serialize_state(self, state: AgentState) -> dict[str, t.Any]:
         """Serialize AgentState to JSON-compatible dict."""
         data: dict[str, t.Any] = {}
