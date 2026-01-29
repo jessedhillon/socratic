@@ -14,11 +14,12 @@ from __future__ import annotations
 
 import datetime
 import enum
-import typing as t
 
 import pydantic as p
+from langchain_core.messages import HumanMessage
 
 from socratic.llm.agent.state import AgentState
+from socratic.model.rubric import RubricCriterion
 
 
 class CoverageLevel(enum.Enum):
@@ -32,15 +33,10 @@ class CoverageLevel(enum.Enum):
 class CriterionCoverage(p.BaseModel):
     """Agent's recorded observations about a single rubric criterion."""
 
-    model_config = p.ConfigDict(frozen=True)
-
     criterion_id: str
     criterion_name: str
     coverage: CoverageLevel = CoverageLevel.NotStarted
     evidence: list[str] = p.Field(default_factory=list)
-
-    def __hash__(self) -> int:
-        return hash(self.criterion_id)
 
 
 class AssessmentState(AgentState):
@@ -56,7 +52,7 @@ class AssessmentState(AgentState):
     attempt_id: str
     objective_title: str
     objective_description: str
-    rubric_criteria: list[dict[str, t.Any]] = p.Field(default_factory=list)
+    rubric_criteria: list[RubricCriterion] = p.Field(default_factory=list[RubricCriterion])
     initial_prompts: list[str] = p.Field(default_factory=list)
     time_budget_minutes: int | None = None
     start_time: datetime.datetime | None = None
@@ -73,8 +69,6 @@ class AssessmentState(AgentState):
     @property
     def turn_count(self) -> int:
         """Number of human messages in the conversation."""
-        from langchain_core.messages import HumanMessage
-
         return sum(1 for m in self.messages if isinstance(m, HumanMessage))
 
     @property
