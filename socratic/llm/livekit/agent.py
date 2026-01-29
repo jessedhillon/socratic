@@ -11,7 +11,7 @@ from collections.abc import AsyncIterable
 import jinja2
 import pydantic as p
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables.schema import StreamEvent
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
@@ -171,6 +171,32 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
                     end_time=utcnow(),
                 )
 
+    async def _revise_interrupted_message(self, spoken_text: str) -> AIMessage | None:
+        """Build a replacement AIMessage reflecting only what the learner heard.
+
+        Uses the same message ``id`` so the ``add_messages`` reducer replaces
+        the original full-length response in graph state.
+        """
+        state_snapshot = await self.graph.aget_state(self._graph_config)  # pyright: ignore [reportUnknownMemberType, reportArgumentType]
+        graph_messages: list[t.Any] = state_snapshot.values.get("messages", [])  # pyright: ignore [reportUnknownMemberType]
+
+        # Find the last AI message in graph state
+        last_ai_msg: AIMessage | None = None
+        for msg in reversed(graph_messages):  # pyright: ignore [reportUnknownVariableType]
+            if isinstance(msg, AIMessage):
+                last_ai_msg = msg
+                break
+
+        if last_ai_msg is None:
+            return None
+
+        if spoken_text:
+            revised_content = f"{spoken_text} -- [learner interrupted your speech after this point]"
+        else:
+            revised_content = "[your response was not delivered — the learner interrupted before hearing any of it]"
+
+        return AIMessage(content=revised_content, id=last_ai_msg.id)
+
     async def llm_node(  # pyright: ignore [reportIncompatibleMethodOverride]
         self,
         chat_ctx: llm.ChatContext,  # pyright: ignore [reportUnknownParameterType]
@@ -193,12 +219,13 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             # means the learner started speaking before hearing it fully.
             # Scan backwards: the first assistant message before the trailing
             # user message tells us whether TTS was cut off.
-            previous_interrupted = False
+            interrupted_spoken_text: str | None = None
             for item in reversed(chat_ctx.items):  # pyright: ignore [reportUnknownMemberType, reportUnknownVariableType]
                 if not hasattr(item, "role"):  # pyright: ignore [reportUnknownMemberType]
                     continue
                 if item.role == "assistant":  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue]
-                    previous_interrupted = getattr(item, "interrupted", False)  # pyright: ignore [reportUnknownArgumentType]
+                    if getattr(item, "interrupted", False):
+                        interrupted_spoken_text = item.text_content or ""  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
                     break
                 if item.role == "user":  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue]
                     # Haven't found an assistant message yet — no interruption
@@ -228,22 +255,19 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
                 content=last_user_message,  # pyright: ignore [reportUnknownArgumentType]
             )
 
-            # Build messages for the graph — if the agent was interrupted,
-            # prepend a note so it knows the learner didn't hear the response.
-            messages: list[HumanMessage] = []
-            if previous_interrupted:
+            # Build messages for the graph.  If the agent was interrupted,
+            # revise the last AI message in graph state so it reflects only
+            # what the learner actually heard, with a marker at the cut-off.
+            messages: list[AIMessage | HumanMessage] = []
+            if interrupted_spoken_text is not None:
                 logger.info("Previous agent response was interrupted by learner")
-                messages.append(
-                    HumanMessage(
-                        content=(
-                            "[The learner interrupted your previous response before hearing it. "
-                            "They are continuing their answer to your earlier question.]"
-                        ),
-                    )
-                )
+                revised = await self._revise_interrupted_message(interrupted_spoken_text)  # pyright: ignore [reportUnknownArgumentType]
+                if revised is not None:
+                    messages.append(revised)
             messages.append(HumanMessage(content=last_user_message))  # pyright: ignore [reportUnknownArgumentType]
 
-            # Pass messages to the graph — it merges via add_messages reducer
+            # Pass messages to the graph — it merges via add_messages reducer.
+            # A revised AIMessage with the same id replaces the original.
             input_state = {"messages": messages}
 
         try:
