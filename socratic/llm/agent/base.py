@@ -46,7 +46,6 @@ class BaseAgent(t.Generic[TState]):
     fresh snapshot of the current situation on every call.
     """
 
-    state_schema: type[TState]
     name: str
 
     def __init__(
@@ -57,7 +56,16 @@ class BaseAgent(t.Generic[TState]):
     ) -> None:
         self.model = model
         self.tools: dict[str, BaseTool] = {tool.name: tool for tool in (tools or [])}
-        self._graph = StateGraph(self.state_schema)
+
+        for base in getattr(type(self), "__orig_bases__", ()):
+            args = t.get_args(base)
+            if args and not isinstance(args[0], t.TypeVar):
+                state_schema = args[0]
+                break
+        else:
+            raise TypeError(f"{type(self).__name__} must parameterize BaseAgent[TState]")
+
+        self._graph = StateGraph(state_schema)
         self._wire_graph()
 
     def _node_name(self, name: str) -> str:
