@@ -203,8 +203,10 @@ async def start_assessment(
                 detail="Assignment is no longer available",
             )
 
-        # Check attempt limits
-        existing_attempts = attempt_storage.find(assignment_id=aid, session=session)
+        # Check attempt limits (failed attempts don't count)
+        existing_attempts = [
+            a for a in attempt_storage.find(assignment_id=aid, session=session) if a.status != AttemptStatus.Failed
+        ]
         if len(existing_attempts) >= assignment.max_attempts:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -267,11 +269,14 @@ async def start_assessment(
     try:
         room_info = await room_service.create_assessment_room(attempt_id, room_metadata)
     except RoomError as e:
-        # Rollback the attempt if room creation fails
+        # Mark the attempt as failed so it doesn't count against max_attempts
+        # but preserves a record of the aborted attempt
         with session.begin():
-            # Delete the attempt we just created
-            # (In practice, might want to mark it as failed instead)
-            pass  # TODO: Add attempt deletion or status update
+            attempt_storage.update(
+                attempt_id,
+                status=AttemptStatus.Failed,
+                session=session,
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create assessment room: {e}",

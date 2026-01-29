@@ -19,6 +19,7 @@ class AttemptStatus(enum.Enum):
     Completed = "completed"
     Evaluated = "evaluated"
     Reviewed = "reviewed"
+    Failed = "failed"
 
 
 class AssessmentAttempt(BaseModel, WithCtime):
