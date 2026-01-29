@@ -189,6 +189,21 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             logger.info(f"Starting assessment for attempt {self.attempt_id}")
             input_state: AssessmentState | dict[str, t.Any] = self._build_initial_state()
         else:
+            # Check if the agent's previous response was interrupted — this
+            # means the learner started speaking before hearing it fully.
+            # Scan backwards: the first assistant message before the trailing
+            # user message tells us whether TTS was cut off.
+            previous_interrupted = False
+            for item in reversed(chat_ctx.items):  # pyright: ignore [reportUnknownMemberType, reportUnknownVariableType]
+                if not hasattr(item, "role"):  # pyright: ignore [reportUnknownMemberType]
+                    continue
+                if item.role == "assistant":  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue]
+                    previous_interrupted = getattr(item, "interrupted", False)  # pyright: ignore [reportUnknownArgumentType]
+                    break
+                if item.role == "user":  # pyright: ignore [reportUnknownMemberType, reportAttributeAccessIssue]
+                    # Haven't found an assistant message yet — no interruption
+                    break
+
             # Extract the last user message from the chat context
             last_user_message: str | None = None
             for item in reversed(chat_ctx.items):  # pyright: ignore [reportUnknownMemberType, reportUnknownVariableType]
@@ -213,8 +228,23 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
                 content=last_user_message,  # pyright: ignore [reportUnknownArgumentType]
             )
 
-            # Pass only the new message — the graph merges via add_messages reducer
-            input_state = {"messages": [HumanMessage(content=last_user_message)]}  # pyright: ignore [reportUnknownArgumentType]
+            # Build messages for the graph — if the agent was interrupted,
+            # prepend a note so it knows the learner didn't hear the response.
+            messages: list[HumanMessage] = []
+            if previous_interrupted:
+                logger.info("Previous agent response was interrupted by learner")
+                messages.append(
+                    HumanMessage(
+                        content=(
+                            "[The learner interrupted your previous response before hearing it. "
+                            "They are continuing their answer to your earlier question.]"
+                        ),
+                    )
+                )
+            messages.append(HumanMessage(content=last_user_message))  # pyright: ignore [reportUnknownArgumentType]
+
+            # Pass messages to the graph — it merges via add_messages reducer
+            input_state = {"messages": messages}
 
         try:
             async for chunk in self._stream_graph(input_state):

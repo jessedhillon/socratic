@@ -68,11 +68,16 @@ async def _handle_session(
     # Create the agent session with STT/TTS pipeline
     # An LLM is required for generate_reply() to pass the null-check;
     # actual generation is handled by the agent's llm_node() override.
+    #
+    # Endpointing delay is set high because learners pause to think during
+    # assessments — a 0.5s silence is rarely end-of-turn, more often a
+    # breath or thought gap.
     session = AgentSession(  # pyright: ignore [reportUnknownVariableType]
         stt=stt_provider,
         tts=tts_provider,
         vad=silero.VAD.load(),  # pyright: ignore [reportUnknownMemberType]
         llm=openai.LLM(api_key=oai_key),  # pyright: ignore [reportUnknownMemberType]
+        min_endpointing_delay=1.5,
     )
 
     # Start the session with our custom agent
