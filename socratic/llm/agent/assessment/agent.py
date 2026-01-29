@@ -42,7 +42,7 @@ class AssessmentAgent(BaseAgent[AssessmentState]):
         env: jinja2.Environment,
         tools: t.Sequence[BaseTool] | None = None,
     ) -> None:
-        all_tools: list[BaseTool] = [EndAssessmentTool()]
+        all_tools: list[BaseTool] = [EndAssessmentTool]
         if tools:
             all_tools.extend(tools)
         self.env = env
