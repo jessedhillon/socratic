@@ -35,6 +35,15 @@ class AssessmentCriterion(p.BaseModel):
     proficiency_levels: list[ProficiencyLevel] = p.Field(default_factory=list[ProficiencyLevel])
 
 
+class Conviviality(enum.Enum):
+    """How warm and conversational the interviewer should be."""
+
+    Formal = "formal"
+    Professional = "professional"
+    Conversational = "conversational"
+    Collegial = "collegial"
+
+
 class CoverageLevel(enum.Enum):
     """How thoroughly a rubric criterion has been explored."""
 
@@ -67,6 +76,7 @@ class AssessmentState(AgentState):
     objective_description: str
     rubric_criteria: list[AssessmentCriterion] = p.Field(default_factory=list[AssessmentCriterion])
     initial_prompts: list[str] = p.Field(default_factory=list)
+    conviviality: Conviviality = Conviviality.Conversational
     time_budget_minutes: int | None = None
     start_time: datetime.datetime | None = None
 
