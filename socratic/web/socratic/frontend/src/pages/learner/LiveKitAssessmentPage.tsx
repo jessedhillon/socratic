@@ -96,8 +96,17 @@ const LiveKitAssessmentPage: React.FC = () => {
   // Minimum time to show completion screen before transitioning to complete
   const COMPLETION_MIN_DISPLAY_MS = 3000;
 
+  // Failsafe: force closure_ready transition if streaming flag stays stuck
+  // after the backend signals completion.
+  const COMPLETION_FAILSAFE_MS = 10_000;
+
   // Track if user is leaving the page (confirmed navigation)
   const [isLeavingPage, setIsLeavingPage] = useState(false);
+
+  // Deferred completion: the agent signalled completion but the farewell
+  // message may still be streaming.  We wait for it to finish before
+  // transitioning to closure_ready (which disconnects the room).
+  const [pendingCompletion, setPendingCompletion] = useState(false);
 
   // Recording session for video capture (local recording, not LiveKit Egress)
   const {
@@ -337,6 +346,58 @@ const LiveKitAssessmentPage: React.FC = () => {
     },
     []
   );
+
+  // Handle data channel messages from the agent
+  const handleDataReceived = useCallback(
+    (data: Record<string, unknown>, _topic?: string) => {
+      if (data.type === 'assessment.complete') {
+        // Don't transition immediately — the agent's farewell message may
+        // still be streaming.  Set a flag and let the effect below wait
+        // for the last message to finish before disconnecting.
+        setPendingCompletion(true);
+      }
+    },
+    []
+  );
+
+  // Defer the closure_ready transition until the last message finishes
+  // streaming, so the agent's farewell is fully played and displayed
+  // before the room disconnects.  A failsafe timeout forces the
+  // transition if the streaming flag gets stuck.
+  useEffect(() => {
+    if (!pendingCompletion || state.phase !== 'in_progress') return;
+
+    const lastMsg =
+      state.messages.length > 0
+        ? state.messages[state.messages.length - 1]
+        : null;
+    const isStillStreaming = lastMsg?.isStreaming === true;
+
+    if (!isStillStreaming) {
+      setState((prev) => {
+        if (prev.phase === 'in_progress') {
+          return { ...prev, phase: 'closure_ready' };
+        }
+        return prev;
+      });
+      setPendingCompletion(false);
+      return;
+    }
+
+    // Failsafe: force transition if streaming flag stays stuck
+    const failsafe = setTimeout(() => {
+      console.warn('Completion failsafe: forcing closure_ready after timeout');
+      setState((prev) => {
+        if (prev.phase === 'in_progress') {
+          return { ...prev, phase: 'closure_ready' };
+        }
+        return prev;
+      });
+      setPendingCompletion(false);
+    }, COMPLETION_FAILSAFE_MS);
+
+    return () => clearTimeout(failsafe);
+  }, [pendingCompletion, state.phase, state.messages]);
 
   // Handle completing the assessment
   const handleCompleteAssessment = useCallback(async () => {
@@ -782,7 +843,7 @@ const LiveKitAssessmentPage: React.FC = () => {
             </h1>
             <p className="text-sm text-gray-500">
               {state.phase === 'closure_ready'
-                ? 'Interview concluded'
+                ? 'Discussion concluded'
                 : 'Voice assessment in progress'}
               {state.startedAt && (
                 <>
@@ -821,17 +882,18 @@ const LiveKitAssessmentPage: React.FC = () => {
             serverUrl={state.serverUrl}
             token={state.token}
             messages={state.messages}
-            isAssessmentComplete={false}
+            isAssessmentComplete={state.phase === 'closure_ready'}
             isLeavingPage={isLeavingPage}
             onConnectionStateChange={handleConnectionStateChange}
             onTranscription={handleTranscription}
+            onDataReceived={handleDataReceived}
             inputHeaderContent={
               state.phase === 'closure_ready' ? (
                 <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">
                   <div className="max-w-3xl mx-auto space-y-3">
                     <div>
                       <p className="text-sm font-medium text-blue-800">
-                        The interviewer has concluded the assessment.
+                        The discussion has concluded.
                       </p>
                       <p className="text-sm text-blue-600">
                         You can continue speaking or complete when ready.

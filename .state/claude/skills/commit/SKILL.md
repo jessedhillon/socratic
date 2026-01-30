@@ -34,7 +34,7 @@ Combine areas with commas: `feat(api,storage): add user endpoint`
 ## Rules
 
 - Message must be at least 8 characters
-- Use `!` before `:` for breaking changes: `feat(api)!: remove deprecated endpoint`
+- For breaking changes, add exclamation before colon: `feat(api)!: remove deprecated endpoint`
 - Optional `{tag}` for context: `fix(llm): {tests-failing} update prompt`
 - Use lowercase for type, areas, and message start
 - Focus on "why" not "what" in the message

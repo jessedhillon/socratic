@@ -3,7 +3,8 @@
 __all__ = [
     "AssessmentAgent",
     "AssessmentState",
+    "Conviviality",
 ]
 
 from .agent import AssessmentAgent
-from .state import AssessmentState
+from .state import AssessmentState, Conviviality

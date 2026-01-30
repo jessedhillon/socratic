@@ -19,7 +19,29 @@ import pydantic as p
 from langchain_core.messages import HumanMessage
 
 from socratic.llm.agent.state import AgentState
-from socratic.model.rubric import RubricCriterion
+from socratic.model.rubric import ProficiencyLevel
+
+
+class AssessmentCriterion(p.BaseModel):
+    """Rubric criterion as seen by the assessment agent.
+
+    Carries only the fields needed at runtime — ``objective_id`` and other
+    storage-level concerns are stripped before the agent session starts.
+    """
+
+    criterion_id: str
+    name: str
+    description: str
+    proficiency_levels: list[ProficiencyLevel] = p.Field(default_factory=list[ProficiencyLevel])
+
+
+class Conviviality(enum.Enum):
+    """How warm and conversational the interviewer should be."""
+
+    Formal = "formal"
+    Professional = "professional"
+    Conversational = "conversational"
+    Collegial = "collegial"
 
 
 class CoverageLevel(enum.Enum):
@@ -52,8 +74,9 @@ class AssessmentState(AgentState):
     attempt_id: str
     objective_title: str
     objective_description: str
-    rubric_criteria: list[RubricCriterion] = p.Field(default_factory=list[RubricCriterion])
+    rubric_criteria: list[AssessmentCriterion] = p.Field(default_factory=list[AssessmentCriterion])
     initial_prompts: list[str] = p.Field(default_factory=list)
+    conviviality: Conviviality = Conviviality.Conversational
     time_budget_minutes: int | None = None
     start_time: datetime.datetime | None = None
 

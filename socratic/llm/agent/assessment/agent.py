@@ -42,7 +42,7 @@ class AssessmentAgent(BaseAgent[AssessmentState]):
         env: jinja2.Environment,
         tools: t.Sequence[BaseTool] | None = None,
     ) -> None:
-        all_tools: list[BaseTool] = [EndAssessmentTool()]
+        all_tools: list[BaseTool] = [EndAssessmentTool]
         if tools:
             all_tools.extend(tools)
         self.env = env
@@ -56,6 +56,7 @@ class AssessmentAgent(BaseAgent[AssessmentState]):
             objective_description=state.objective_description,
             rubric_criteria=state.rubric_criteria,
             initial_prompts=state.initial_prompts,
+            conviviality=state.conviviality,
             time_budget_minutes=state.time_budget_minutes,
         )
         return SystemMessage(content=content)
