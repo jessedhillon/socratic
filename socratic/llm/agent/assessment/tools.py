@@ -94,7 +94,10 @@ EndAssessmentTool = StructuredTool.from_function(
     name="end_assessment",
     description=(
         "End the assessment. Call this when you have explored all rubric criteria "
-        "sufficiently, or when you need to end the assessment early. You MUST call "
-        "this tool to end the assessment — do not simply stop responding."
+        "sufficiently, or when the learner indicates they want to stop. You MUST call "
+        "this tool to end the assessment — do not simply stop responding. "
+        "IMPORTANT: You must include spoken farewell text in the same message as this "
+        "tool call. A call with no accompanying text will be rejected — the learner "
+        "needs to hear a goodbye."
     ),
 )
