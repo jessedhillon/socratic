@@ -87,7 +87,7 @@ processes:
         host: 127.0.0.1
         port: 8089
         path: /openapi.json
-      period_seconds: 30
+      period_seconds: 5
       initial_delay_seconds: 6
     shutdown:
       signal: 15 # TERM
@@ -95,7 +95,6 @@ processes:
 
   socratic-agent:
     command: 'socratic-cli agent serve'
-    disabled: true
     depends_on:
       postgres:
         condition: process_healthy
