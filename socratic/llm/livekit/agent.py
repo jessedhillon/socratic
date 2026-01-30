@@ -83,7 +83,15 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
 
     @property
     def _graph_config(self) -> dict[str, t.Any]:
-        return {"configurable": {"thread_id": self._thread_id}}
+        return {
+            "configurable": {"thread_id": self._thread_id},
+            "metadata": {
+                "session_id": self._thread_id,
+                "attempt_id": self.context.attempt_id,
+                "objective_id": self.context.objective_id,
+            },
+            "tags": ["assessment", "livekit-voice"],
+        }
 
     @di.inject
     async def _record_segment(
