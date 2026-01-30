@@ -96,6 +96,10 @@ const LiveKitAssessmentPage: React.FC = () => {
   // Minimum time to show completion screen before transitioning to complete
   const COMPLETION_MIN_DISPLAY_MS = 3000;
 
+  // Failsafe: force closure_ready transition if streaming flag stays stuck
+  // after the backend signals completion.
+  const COMPLETION_FAILSAFE_MS = 10_000;
+
   // Track if user is leaving the page (confirmed navigation)
   const [isLeavingPage, setIsLeavingPage] = useState(false);
 
@@ -358,7 +362,8 @@ const LiveKitAssessmentPage: React.FC = () => {
 
   // Defer the closure_ready transition until the last message finishes
   // streaming, so the agent's farewell is fully played and displayed
-  // before the room disconnects.
+  // before the room disconnects.  A failsafe timeout forces the
+  // transition if the streaming flag gets stuck.
   useEffect(() => {
     if (!pendingCompletion || state.phase !== 'in_progress') return;
 
@@ -376,7 +381,22 @@ const LiveKitAssessmentPage: React.FC = () => {
         return prev;
       });
       setPendingCompletion(false);
+      return;
     }
+
+    // Failsafe: force transition if streaming flag stays stuck
+    const failsafe = setTimeout(() => {
+      console.warn('Completion failsafe: forcing closure_ready after timeout');
+      setState((prev) => {
+        if (prev.phase === 'in_progress') {
+          return { ...prev, phase: 'closure_ready' };
+        }
+        return prev;
+      });
+      setPendingCompletion(false);
+    }, COMPLETION_FAILSAFE_MS);
+
+    return () => clearTimeout(failsafe);
   }, [pendingCompletion, state.phase, state.messages]);
 
   // Handle completing the assessment

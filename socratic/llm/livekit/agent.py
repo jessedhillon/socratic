@@ -57,6 +57,10 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
     - Streams response tokens back for TTS synthesis
     """
 
+    # Failsafe: if the agent_state_changed event doesn't fire within this
+    # many seconds of setting _pending_complete, publish completion anyway.
+    _COMPLETION_FAILSAFE_SECONDS = 15.0
+
     def __init__(
         self,
         context: AssessmentContext,
@@ -221,6 +225,21 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             self._pending_complete = False
             asyncio.create_task(self._publish_complete())
 
+    async def _completion_failsafe(self) -> None:
+        """Publish completion after a timeout if the TTS state change was missed.
+
+        This handles edge cases where the ``speaking → listening`` transition
+        never fires (e.g. agent disconnects mid-speech, TTS pipeline error).
+        """
+        await asyncio.sleep(self._COMPLETION_FAILSAFE_SECONDS)
+        if self._pending_complete:
+            logger.warning(
+                f"TTS completion not detected within {self._COMPLETION_FAILSAFE_SECONDS}s "
+                f"for attempt {self.attempt_id}, publishing completion anyway"
+            )
+            self._pending_complete = False
+            await self._publish_complete()
+
     async def llm_node(  # pyright: ignore [reportIncompatibleMethodOverride]
         self,
         chat_ctx: llm.ChatContext,  # pyright: ignore [reportUnknownParameterType]
@@ -309,6 +328,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             if state_snapshot.values.get("assessment_complete", False):  # pyright: ignore [reportUnknownMemberType]
                 logger.info(f"Assessment ending for attempt {self.attempt_id}, waiting for farewell TTS")
                 self._pending_complete = True
+                asyncio.create_task(self._completion_failsafe())
         except asyncio.CancelledError:
             # Normal interruption flow — the framework cancelled this
             # generation because the learner kept speaking.  Not fatal.
