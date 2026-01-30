@@ -70,6 +70,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         self.graph = graph
         self._initialized = False
         self._failed = False
+        self._pending_complete = False
         self._thread_id = str(uuid.uuid4())
 
     @property
@@ -203,6 +204,23 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
 
         return AIMessage(content=revised_content, id=last_ai_msg.id)
 
+    def _on_agent_state_changed(self, event: t.Any) -> None:
+        """Handle agent state transitions to detect farewell TTS completion.
+
+        When ``_pending_complete`` is set (the graph finished with
+        ``assessment_complete=True``), we wait for the agent to finish
+        speaking the farewell before publishing the completion event to
+        the frontend.  This prevents a race where the data-channel event
+        arrives before the farewell is audible.
+        """
+        if (
+            self._pending_complete
+            and getattr(event, "old_state", None) == "speaking"
+            and getattr(event, "new_state", None) == "listening"
+        ):
+            self._pending_complete = False
+            asyncio.create_task(self._publish_complete())
+
     async def llm_node(  # pyright: ignore [reportIncompatibleMethodOverride]
         self,
         chat_ctx: llm.ChatContext,  # pyright: ignore [reportUnknownParameterType]
@@ -219,6 +237,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
 
         if not self._initialized:
             logger.info(f"Starting assessment for attempt {self.attempt_id}")
+            self.session.on("agent_state_changed", self._on_agent_state_changed)  # pyright: ignore [reportUnknownMemberType]
             input_state: AssessmentState | dict[str, t.Any] = self._build_initial_state()
         else:
             # Check if the agent's previous response was interrupted — this
@@ -282,11 +301,14 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             self._initialized = True
 
             # Check if the assessment ended during this turn (e.g. the agent
-            # called end_assessment).  If so, notify the frontend and shut down
-            # the voice session gracefully.
+            # called end_assessment).  If so, defer the completion signal
+            # until after the farewell finishes playing via TTS.  The
+            # _on_agent_state_changed handler publishes the data-channel
+            # event when the agent transitions from speaking → listening.
             state_snapshot = await self.graph.aget_state(self._graph_config)  # pyright: ignore [reportUnknownMemberType, reportArgumentType]
             if state_snapshot.values.get("assessment_complete", False):  # pyright: ignore [reportUnknownMemberType]
-                await self._publish_complete()
+                logger.info(f"Assessment ending for attempt {self.attempt_id}, waiting for farewell TTS")
+                self._pending_complete = True
         except asyncio.CancelledError:
             # Normal interruption flow — the framework cancelled this
             # generation because the learner kept speaking.  Not fatal.
