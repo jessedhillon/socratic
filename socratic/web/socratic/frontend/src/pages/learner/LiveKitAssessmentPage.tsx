@@ -843,7 +843,7 @@ const LiveKitAssessmentPage: React.FC = () => {
             </h1>
             <p className="text-sm text-gray-500">
               {state.phase === 'closure_ready'
-                ? 'Interview concluded'
+                ? 'Discussion concluded'
                 : 'Voice assessment in progress'}
               {state.startedAt && (
                 <>
@@ -893,7 +893,7 @@ const LiveKitAssessmentPage: React.FC = () => {
                   <div className="max-w-3xl mx-auto space-y-3">
                     <div>
                       <p className="text-sm font-medium text-blue-800">
-                        The interviewer has concluded the assessment.
+                        The discussion has concluded.
                       </p>
                       <p className="text-sm text-blue-600">
                         You can continue speaking or complete when ready.
