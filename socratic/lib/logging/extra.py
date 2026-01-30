@@ -75,6 +75,7 @@ class ExtraFormatter(logging.Formatter):
             line, *lines = msg.splitlines()
             body = textwrap.indent("\n".join(lines), prefix=indent)
             record.msg = record.message = f"{line}\n{body}"
+            record.args = None
         message = self.base.format(record)
 
         d = record.__dict__
