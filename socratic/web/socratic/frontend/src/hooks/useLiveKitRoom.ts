@@ -15,6 +15,7 @@ import {
   Participant,
   type TranscriptionSegment,
   type TrackPublication,
+  type DataPacket_Kind,
 } from 'livekit-client';
 
 export type LiveKitConnectionState =
@@ -41,6 +42,8 @@ export interface UseLiveKitRoomOptions {
     participantIdentity: string,
     isLocal: boolean
   ) => void;
+  /** Callback when a data channel message is received */
+  onDataReceived?: (data: Record<string, unknown>, topic?: string) => void;
 }
 
 export interface UseLiveKitRoomReturn {
@@ -95,6 +98,7 @@ export function useLiveKitRoom(
     onConnectionStateChange,
     onAgentSpeakingChange,
     onTranscription,
+    onDataReceived,
   } = options;
 
   const [connectionState, setConnectionState] =
@@ -176,6 +180,29 @@ export function useLiveKitRoom(
     [updateAgentSpeaking]
   );
 
+  // Handle data channel messages from the agent
+  const handleDataReceived = useCallback(
+    (
+      payload: Uint8Array,
+      _participant?: RemoteParticipant,
+      _kind?: DataPacket_Kind,
+      topic?: string
+    ) => {
+      try {
+        const text = new TextDecoder().decode(payload);
+        const data = JSON.parse(text) as Record<string, unknown>;
+        console.log('[LiveKit data]', topic, data);
+        onDataReceived?.(data, topic);
+      } catch (err) {
+        console.warn(
+          '[LiveKit data] Failed to parse data channel message:',
+          err
+        );
+      }
+    },
+    [onDataReceived]
+  );
+
   // Handle transcription events from LiveKit
   const handleTranscriptionReceived = useCallback(
     (
@@ -231,6 +258,7 @@ export function useLiveKitRoom(
       room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
       room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakersChanged);
       room.on(RoomEvent.TranscriptionReceived, handleTranscriptionReceived);
+      room.on(RoomEvent.DataReceived, handleDataReceived);
 
       const thisRoom = room;
       room.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
@@ -284,6 +312,7 @@ export function useLiveKitRoom(
     handleTrackUnsubscribed,
     handleActiveSpeakersChanged,
     handleTranscriptionReceived,
+    handleDataReceived,
   ]);
 
   // Disconnect from the room

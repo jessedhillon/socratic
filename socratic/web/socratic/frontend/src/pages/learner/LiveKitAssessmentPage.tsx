@@ -338,6 +338,21 @@ const LiveKitAssessmentPage: React.FC = () => {
     []
   );
 
+  // Handle data channel messages from the agent
+  const handleDataReceived = useCallback(
+    (data: Record<string, unknown>, _topic?: string) => {
+      if (data.type === 'assessment.complete') {
+        setState((prev) => {
+          if (prev.phase === 'in_progress') {
+            return { ...prev, phase: 'closure_ready' };
+          }
+          return prev;
+        });
+      }
+    },
+    []
+  );
+
   // Handle completing the assessment
   const handleCompleteAssessment = useCallback(async () => {
     if (!state.attemptId) return;
@@ -825,6 +840,7 @@ const LiveKitAssessmentPage: React.FC = () => {
             isLeavingPage={isLeavingPage}
             onConnectionStateChange={handleConnectionStateChange}
             onTranscription={handleTranscription}
+            onDataReceived={handleDataReceived}
             inputHeaderContent={
               state.phase === 'closure_ready' ? (
                 <div className="bg-blue-50 border-b border-blue-200 px-6 py-4">

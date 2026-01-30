@@ -280,6 +280,13 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             async for chunk in self._stream_graph(input_state):
                 yield chunk
             self._initialized = True
+
+            # Check if the assessment ended during this turn (e.g. the agent
+            # called end_assessment).  If so, notify the frontend and shut down
+            # the voice session gracefully.
+            state_snapshot = await self.graph.aget_state(self._graph_config)  # pyright: ignore [reportUnknownMemberType, reportArgumentType]
+            if state_snapshot.values.get("assessment_complete", False):  # pyright: ignore [reportUnknownMemberType]
+                await self._publish_complete()
         except asyncio.CancelledError:
             # Normal interruption flow — the framework cancelled this
             # generation because the learner kept speaking.  Not fatal.
@@ -288,6 +295,28 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             self._failed = True
             logger.exception(f"Fatal assessment error for attempt {self.attempt_id}")
             await self._publish_error("An unexpected error occurred during the assessment.")
+
+    async def _publish_complete(self) -> None:
+        """Publish assessment completion to the room data channel and shut down."""
+        logger.info(f"Assessment complete for attempt {self.attempt_id}")
+        try:
+            room = self.session.room_io.room  # pyright: ignore [reportUnknownMemberType]
+            payload = json.dumps({
+                "type": "assessment.complete",
+                "attempt_id": str(self.attempt_id),
+            })
+            await room.local_participant.publish_data(  # pyright: ignore [reportUnknownMemberType]
+                payload=payload,
+                topic="assessment.complete",
+                reliable=True,
+            )
+        except Exception:
+            logger.exception("Failed to publish assessment completion to room data channel")
+
+        # Gracefully end the session — drain=True waits for pending TTS to
+        # finish before disconnecting, so any farewell text the agent just
+        # yielded will be spoken in full.
+        self.session.shutdown()  # pyright: ignore [reportUnknownMemberType]
 
     async def _publish_error(self, message: str) -> None:
         """Publish a fatal error to the room data channel for the frontend to handle."""

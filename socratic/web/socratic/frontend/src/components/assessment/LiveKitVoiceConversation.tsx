@@ -31,6 +31,8 @@ export interface LiveKitVoiceConversationProps {
     participantIdentity: string,
     isLocal: boolean
   ) => void;
+  /** Callback when a data channel message is received */
+  onDataReceived?: (data: Record<string, unknown>, topic?: string) => void;
   /** Content to render above the input area (e.g., closure banner) */
   inputHeaderContent?: React.ReactNode;
 }
@@ -64,6 +66,7 @@ const LiveKitVoiceConversation: React.FC<LiveKitVoiceConversationProps> = ({
   isLeavingPage = false,
   onConnectionStateChange,
   onTranscription,
+  onDataReceived,
   inputHeaderContent,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -93,6 +96,7 @@ const LiveKitVoiceConversation: React.FC<LiveKitVoiceConversationProps> = ({
       }
     },
     onTranscription,
+    onDataReceived,
   });
 
   // Disconnect when assessment completes or user leaves
@@ -315,8 +319,8 @@ const LiveKitVoiceConversation: React.FC<LiveKitVoiceConversationProps> = ({
             />
           ))}
 
-          {/* Agent thinking indicator — shown after learner stops speaking */}
-          {showThinkingIndicator && (
+          {/* Agent thinking indicator — shown after learner stops speaking, hidden when disconnected */}
+          {showThinkingIndicator && connectionState === 'connected' && (
             <div className="flex justify-start mb-4">
               <div className="bg-white text-gray-800 shadow-sm border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-md">
                 <div className="flex items-center gap-1">
