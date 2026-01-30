@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import json
 import logging
 import typing as t
 from collections.abc import AsyncIterable
@@ -18,12 +17,14 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
 from livekit.agents import Agent, llm  # pyright: ignore [reportMissingTypeStubs]
 
+import socratic.lib.json as json
 import socratic.lib.uuid as uuid
 from socratic import storage
 from socratic.core import di
 from socratic.core.provider import TimestampProvider
 from socratic.llm.agent.assessment import AssessmentAgent
 from socratic.llm.agent.assessment.state import AssessmentCriterion, AssessmentState, CriterionCoverage
+from socratic.llm.livekit.event import AssessmentCompleteEvent, AssessmentErrorEvent
 from socratic.model import AttemptID, UtteranceType
 from socratic.storage import transcript as transcript_storage
 
@@ -56,10 +57,6 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
     - Invokes the AssessmentAgent LangGraph to generate a response
     - Streams response tokens back for TTS synthesis
     """
-
-    # Failsafe: if the agent_state_changed event doesn't fire within this
-    # many seconds of setting _pending_complete, publish completion anyway.
-    _COMPLETION_FAILSAFE_SECONDS = 15.0
 
     def __init__(
         self,
@@ -239,10 +236,11 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         This handles edge cases where the ``speaking → listening`` transition
         never fires (e.g. agent disconnects mid-speech, TTS pipeline error).
         """
-        await asyncio.sleep(self._COMPLETION_FAILSAFE_SECONDS)
+        timeout_seconds = 15.0
+        await asyncio.sleep(timeout_seconds)
         if self._pending_complete:
             logger.warning(
-                f"TTS completion not detected within {self._COMPLETION_FAILSAFE_SECONDS}s "
+                f"TTS completion not detected within {timeout_seconds}s "
                 f"for attempt {self.attempt_id}, publishing completion anyway"
             )
             self._pending_complete = False
@@ -292,20 +290,17 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
 
             if last_user_message is None:
                 logger.warning("No user message found in chat context")
-                yield llm.ChatChunk(  # pyright: ignore [reportCallIssue]
-                    id=str(uuid.uuid4()),
-                    delta=llm.ChoiceDelta(  # pyright: ignore [reportCallIssue]
-                        content="I didn't catch that. Could you please repeat?",
-                        role="assistant",
-                    ),
+                last_user_message = (
+                    "<unintelligible>the learner's speech could not be transcribed — "
+                    "ask them to repeat</unintelligible>"
                 )
-                return
 
-            # Record learner speech
-            await self._record_segment(
-                utterance_type=UtteranceType.Learner,
-                content=last_user_message,  # pyright: ignore [reportUnknownArgumentType]
-            )
+            # Record learner speech (skip for unintelligible input)
+            if "<unintelligible>" not in last_user_message:
+                await self._record_segment(
+                    utterance_type=UtteranceType.Learner,
+                    content=last_user_message,  # pyright: ignore [reportUnknownArgumentType]
+                )
 
             # Build messages for the graph.  If the agent was interrupted,
             # revise the last AI message in graph state so it reflects only
@@ -349,14 +344,11 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
     async def _publish_complete(self) -> None:
         """Publish assessment completion to the room data channel and shut down."""
         logger.info(f"Assessment complete for attempt {self.attempt_id}")
+        event = AssessmentCompleteEvent(attempt_id=self.attempt_id)
         try:
             room = self.session.room_io.room  # pyright: ignore [reportUnknownMemberType]
-            payload = json.dumps({
-                "type": "assessment.complete",
-                "attempt_id": str(self.attempt_id),
-            })
             await room.local_participant.publish_data(  # pyright: ignore [reportUnknownMemberType]
-                payload=payload,
+                payload=json.dumps(event),
                 topic="assessment.complete",
                 reliable=True,
             )
@@ -370,16 +362,11 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
 
     async def _publish_error(self, message: str) -> None:
         """Publish a fatal error to the room data channel for the frontend to handle."""
+        event = AssessmentErrorEvent(attempt_id=self.attempt_id, message=message, fatal=True)
         try:
             room = self.session.room_io.room  # pyright: ignore [reportUnknownMemberType]
-            payload = json.dumps({
-                "type": "assessment.error",
-                "attempt_id": str(self.attempt_id),
-                "message": message,
-                "fatal": True,
-            })
             await room.local_participant.publish_data(  # pyright: ignore [reportUnknownMemberType]
-                payload=payload,
+                payload=json.dumps(event),
                 topic="assessment.error",
                 reliable=True,
             )
