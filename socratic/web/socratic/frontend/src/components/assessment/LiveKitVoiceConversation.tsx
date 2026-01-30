@@ -354,7 +354,7 @@ const LiveKitVoiceConversation: React.FC<LiveKitVoiceConversationProps> = ({
           <div className="max-w-3xl mx-auto">
             {isAssessmentComplete ? (
               <div className="text-center text-gray-500 py-2">
-                Assessment complete. Your responses have been submitted.
+                The interview has concluded.
               </div>
             ) : connectionState === 'connected' ? (
               <div className="text-center text-gray-500 py-2">

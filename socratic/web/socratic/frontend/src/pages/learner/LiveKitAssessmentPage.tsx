@@ -99,6 +99,11 @@ const LiveKitAssessmentPage: React.FC = () => {
   // Track if user is leaving the page (confirmed navigation)
   const [isLeavingPage, setIsLeavingPage] = useState(false);
 
+  // Deferred completion: the agent signalled completion but the farewell
+  // message may still be streaming.  We wait for it to finish before
+  // transitioning to closure_ready (which disconnects the room).
+  const [pendingCompletion, setPendingCompletion] = useState(false);
+
   // Recording session for video capture (local recording, not LiveKit Egress)
   const {
     sessionState,
@@ -342,16 +347,37 @@ const LiveKitAssessmentPage: React.FC = () => {
   const handleDataReceived = useCallback(
     (data: Record<string, unknown>, _topic?: string) => {
       if (data.type === 'assessment.complete') {
-        setState((prev) => {
-          if (prev.phase === 'in_progress') {
-            return { ...prev, phase: 'closure_ready' };
-          }
-          return prev;
-        });
+        // Don't transition immediately — the agent's farewell message may
+        // still be streaming.  Set a flag and let the effect below wait
+        // for the last message to finish before disconnecting.
+        setPendingCompletion(true);
       }
     },
     []
   );
+
+  // Defer the closure_ready transition until the last message finishes
+  // streaming, so the agent's farewell is fully played and displayed
+  // before the room disconnects.
+  useEffect(() => {
+    if (!pendingCompletion || state.phase !== 'in_progress') return;
+
+    const lastMsg =
+      state.messages.length > 0
+        ? state.messages[state.messages.length - 1]
+        : null;
+    const isStillStreaming = lastMsg?.isStreaming === true;
+
+    if (!isStillStreaming) {
+      setState((prev) => {
+        if (prev.phase === 'in_progress') {
+          return { ...prev, phase: 'closure_ready' };
+        }
+        return prev;
+      });
+      setPendingCompletion(false);
+    }
+  }, [pendingCompletion, state.phase, state.messages]);
 
   // Handle completing the assessment
   const handleCompleteAssessment = useCallback(async () => {
@@ -836,7 +862,7 @@ const LiveKitAssessmentPage: React.FC = () => {
             serverUrl={state.serverUrl}
             token={state.token}
             messages={state.messages}
-            isAssessmentComplete={false}
+            isAssessmentComplete={state.phase === 'closure_ready'}
             isLeavingPage={isLeavingPage}
             onConnectionStateChange={handleConnectionStateChange}
             onTranscription={handleTranscription}
