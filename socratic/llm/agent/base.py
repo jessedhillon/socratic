@@ -12,6 +12,7 @@ import typing as t
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
@@ -155,7 +156,7 @@ class BaseAgent(t.Generic[TState]):
     async def _status(self, state: TState) -> dict[str, t.Any]:
         return self.update_status(state)
 
-    async def _call_model(self, state: TState, config: t.Any) -> dict[str, t.Any]:
+    async def _call_model(self, state: TState, config: RunnableConfig) -> dict[str, t.Any]:
         """Call the LLM with system prompt + history + status."""
         sendlist: list[BaseMessage] = [self.system_prompt(state)]
         sendlist.extend(state.messages)
