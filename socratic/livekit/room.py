@@ -13,6 +13,7 @@ from livekit import api as livekit_api  # pyright: ignore [reportMissingTypeStub
 
 from socratic.core import di
 from socratic.core.config.vendor import LiveKitSettings
+from socratic.core.provider import LoggingProvider
 from socratic.model import AttemptID
 
 
@@ -51,6 +52,7 @@ async def create_assessment_room(
     attempt_id: AttemptID,
     metadata: AssessmentRoomMetadata,
     *,
+    logging: LoggingProvider = di.Provide["logging"],
     livekit_config: LiveKitSettings = di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)],
     livekit_api_key: p.Secret[str] = di.Provide["secrets.livekit.api_key"],
     livekit_api_secret: p.Secret[str] = di.Provide["secrets.livekit.api_secret"],
@@ -73,6 +75,8 @@ async def create_assessment_room(
     Raises:
         RoomError: If room creation fails.
     """
+    logger = logging.get_logger()
+
     # Build the LiveKit API URL (convert ws:// to http://)
     wss_url = str(livekit_wss_url.get_secret_value())
     api_url = wss_url.replace("ws://", "http://").replace("wss://", "https://")
@@ -114,7 +118,8 @@ async def create_assessment_room(
         )
 
     except Exception as e:
-        raise RoomError(f"Failed to create room: {e}") from e
+        logger.exception(f"Failed to create LiveKit room for attempt {attempt_id}")
+        raise RoomError("Failed to create assessment room") from e
     finally:
         await lkapi.aclose()
 

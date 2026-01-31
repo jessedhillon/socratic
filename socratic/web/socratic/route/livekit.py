@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime
 import json
-import logging
 import typing as t
 
 import pydantic as p
@@ -16,6 +15,7 @@ from sqlalchemy.orm import Session
 from socratic.auth import AuthContext, require_educator, require_learner
 from socratic.core import di
 from socratic.core.config.vendor import LiveKitSettings
+from socratic.core.provider import LoggingProvider
 from socratic.livekit import egress as egress_service
 from socratic.livekit import room as room_service
 from socratic.livekit.egress import EgressError
@@ -28,8 +28,6 @@ from socratic.storage import rubric as rubric_storage
 
 from ..view.livekit import EgressRecordingResponse, LiveKitRoomTokenResponse, StartLiveKitAssessmentResponse, \
     StartRecordingResponse, StopRecordingResponse
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/livekit", tags=["livekit"])
 
@@ -44,6 +42,7 @@ async def get_room_token(
     attempt_id: AttemptID,
     auth: AuthContext = Depends(require_learner),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
+    logging: LoggingProvider = Depends(di.Provide["logging"]),
     livekit_config: LiveKitSettings = Depends(di.Provide["config.vendor.livekit", di.as_(LiveKitSettings)]),
     livekit_api_key: p.Secret[str] = Depends(di.Provide["secrets.livekit.api_key"]),
     livekit_api_secret: p.Secret[str] = Depends(di.Provide["secrets.livekit.api_secret"]),
@@ -56,6 +55,8 @@ async def get_room_token(
     agent can initialize when it joins. The room name is derived from the attempt ID
     with a configured prefix. Only the learner assigned to the attempt can get a token.
     """
+    logger = logging.get_logger()
+
     # Verify the attempt exists and belongs to this learner
     with session.begin():
         attempt = attempt_storage.get(attempt_id=attempt_id, session=session)
@@ -268,7 +269,7 @@ async def start_assessment(
 
     try:
         room_info = await room_service.create_assessment_room(attempt_id, room_metadata)
-    except RoomError as e:
+    except RoomError:
         # Mark the attempt as failed so it doesn't count against max_attempts
         # but preserves a record of the aborted attempt
         with session.begin():
@@ -278,9 +279,9 @@ async def start_assessment(
                 session=session,
             )
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create assessment room: {e}",
-        ) from e
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Unable to connect to the assessment service. Please try again shortly.",
+        ) from None
 
     # Generate access token for the learner
     token = (

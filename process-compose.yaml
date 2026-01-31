@@ -94,7 +94,7 @@ processes:
       timeout_seconds: 10
 
   socratic-agent:
-    command: 'socratic-cli agent serve'
+    command: 'socratic-cli agent serve --dev'
     depends_on:
       postgres:
         condition: process_healthy
