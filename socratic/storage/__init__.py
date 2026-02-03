@@ -22,10 +22,11 @@ __all__ = [
     "transcript",
     "evaluation",
     "override",
+    "flight",
 ]
 
 if t.TYPE_CHECKING:
-    from . import assignment, attempt, evaluation, example, objective, organization, override, rubric, strand, \
+    from . import assignment, attempt, evaluation, example, flight, objective, organization, override, rubric, strand, \
         transcript, user
 
 
