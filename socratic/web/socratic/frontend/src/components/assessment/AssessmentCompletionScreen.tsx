@@ -119,7 +119,7 @@ export function AssessmentCompletionScreen({
   // Error state
   if (step === 'error') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="h-full overflow-y-auto bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg
@@ -167,7 +167,7 @@ export function AssessmentCompletionScreen({
   // Progress state (stopping, uploading, completing)
   if (step !== 'complete') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="h-full overflow-y-auto bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
           <h2 className="text-xl font-semibold text-gray-900 mb-6 text-center">
             Completing Assessment
@@ -256,7 +256,7 @@ export function AssessmentCompletionScreen({
 
   // Complete state
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="h-full overflow-y-auto bg-gray-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Success header */}
         <div className="bg-white rounded-xl shadow-lg p-8 mb-6 text-center">

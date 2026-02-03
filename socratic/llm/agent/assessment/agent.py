@@ -19,7 +19,7 @@ from socratic.llm.agent.base import BaseAgent
 
 from .state import AssessmentState
 from .status import render_status
-from .tools import EndAssessmentTool
+from .tools import make_end_assessment_tool
 
 
 class AssessmentAgent(BaseAgent[AssessmentState]):
@@ -42,7 +42,7 @@ class AssessmentAgent(BaseAgent[AssessmentState]):
         env: jinja2.Environment,
         tools: t.Sequence[BaseTool] | None = None,
     ) -> None:
-        all_tools: list[BaseTool] = [EndAssessmentTool]
+        all_tools: list[BaseTool] = [make_end_assessment_tool(model)]
         if tools:
             all_tools.extend(tools)
         self.env = env

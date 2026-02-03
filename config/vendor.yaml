@@ -9,7 +9,7 @@ livekit:
   room_prefix: 'assessment'
   stt_model: 'deepgram/nova-3'
   tts_model: 'openai/tts-1'
-  tts_voice: 'alloy'
+  tts_voice: 'shimmer'
   egress:
     # Local development uses local file storage via LocalObjectStore
     # In production, configure S3 settings:
