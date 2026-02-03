@@ -23,7 +23,13 @@ class AuthSecrets(BaseSecrets):
 class OpenAISecrets(BaseSecrets):
     """OpenAI API secrets."""
 
-    secret_key: p.Secret[str] | None = None
+    secret_key: p.Secret[str]
+
+
+class AnthropicSecrets(BaseSecrets):
+    """Anthropic API secrets."""
+
+    api_key: p.Secret[str]
 
 
 class GoogleServiceAccountSecrets(BaseSecrets):
@@ -62,15 +68,22 @@ class ElevenLabsSecrets(BaseSecrets):
     api_key: p.Secret[str]
 
 
+class LLMSecrets(BaseSecrets):
+    """LLM vendor API secrets."""
+
+    openai: OpenAISecrets | None = None
+    anthropic: AnthropicSecrets | None = None
+    deepgram: DeepgramSecrets | None = None
+    elevenlabs: ElevenLabsSecrets | None = None
+
+
 class Secrets(BaseSecrets, BaseModel):  # pyright: ignore [reportIncompatibleVariableOverride]
     root: p.AnyUrl
     env: DeploymentEnvironment
 
     auth: AuthSecrets | None = None
-    openai: OpenAISecrets | None = None
+    llm: LLMSecrets | None = None
     livekit: LiveKitSecrets | None = None
-    deepgram: DeepgramSecrets | None = None
-    elevenlabs: ElevenLabsSecrets | None = None
     # google: GoogleSecrets = p.Field(default=..., validate_default=True)
     # postgresql: PostgresqlSecrets = p.Field(default_factory=PostgresqlSecrets, validate_default=True)
 

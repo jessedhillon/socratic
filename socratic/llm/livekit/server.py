@@ -29,9 +29,9 @@ handled_signals = (signal.SIGINT, signal.SIGTERM)
 async def _handle_session(
     ctx: JobContext,  # pyright: ignore [reportUnknownParameterType]
     *,
-    deepgram_api_key: p.Secret[str] = di.Provide["secrets.deepgram.api_key"],  # noqa: B008
-    elevenlabs_api_key: p.Secret[str] = di.Provide["secrets.elevenlabs.api_key"],  # noqa: B008
-    openai_api_key: p.Secret[str] = di.Provide["secrets.openai.secret_key"],  # noqa: B008
+    deepgram_api_key: p.Secret[str] = di.Provide["secrets.llm.deepgram.api_key"],  # noqa: B008
+    elevenlabs_api_key: p.Secret[str] = di.Provide["secrets.llm.elevenlabs.api_key"],  # noqa: B008
+    openai_api_key: p.Secret[str] = di.Provide["secrets.llm.openai.secret_key"],  # noqa: B008
     stt_model: str = di.Provide["config.vendor.livekit.stt_model"],  # noqa: B008
     tts_model: str = di.Provide["config.vendor.livekit.tts_model"],  # noqa: B008
     tts_voice: str = di.Provide["config.vendor.livekit.tts_voice"],  # noqa: B008
@@ -116,13 +116,21 @@ async def assessment_session(ctx: JobContext) -> None:  # pyright: ignore [repor
         await ctx.room.disconnect()  # pyright: ignore [reportUnknownMemberType]
         return
 
-    boot_cf = BootConfiguration.model_validate_json(boot_json)
-    container = SocraticContainer()
-    SocraticContainer.boot(container, **dict(boot_cf))
-    container.wire(modules=[__name__, _agent_module])
+    try:
+        boot_cf = BootConfiguration.model_validate_json(boot_json)
+        container = SocraticContainer()
+        SocraticContainer.boot(container, **dict(boot_cf))
+        container.wire(modules=[__name__, _agent_module])
+    except Exception:
+        logger.exception("Failed to bootstrap DI container in worker subprocess")
+        await ctx.room.disconnect()  # pyright: ignore [reportUnknownMemberType]
+        return
 
-    # Delegate to injected handler
-    await _handle_session(ctx)
+    try:
+        await _handle_session(ctx)
+    except Exception:
+        logger.exception("Unhandled error in assessment session")
+        await ctx.room.disconnect()  # pyright: ignore [reportUnknownMemberType]
 
 
 class _ExitServer(Exception):

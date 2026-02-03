@@ -17,7 +17,6 @@ from socratic.core import di
 from socratic.llm.assessment import get_assessment_status, PostgresCheckpointer, run_assessment_turn, start_assessment
 from socratic.llm.assessment.state import InterviewPhase
 from socratic.llm.evaluation import EvaluationPipeline
-from socratic.llm.factory import ModelFactory
 from socratic.model import AssignmentID, AttemptID, AttemptStatus, UtteranceType
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
@@ -641,11 +640,10 @@ async def trigger_evaluation_route(
         # Get transcript
         transcript = list(transcript_storage.find(attempt_id=aid, session=session))
 
-    # Get model factory from DI
-    model_factory: ModelFactory = di.Provide["llm.model_factory"]()
-
     # Run evaluation pipeline (outside transaction)
-    pipeline = EvaluationPipeline(model_factory=model_factory, env=env)
+    eval_model: BaseChatModel = di.Provide["llm.evaluation_model"]()
+    feedback_model: BaseChatModel = di.Provide["llm.feedback_model"]()
+    pipeline = EvaluationPipeline(eval_model=eval_model, feedback_model=feedback_model, env=env)
     result = await pipeline.evaluate(
         attempt_id=aid,
         transcript=transcript,

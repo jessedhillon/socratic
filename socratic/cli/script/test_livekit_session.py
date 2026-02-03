@@ -46,8 +46,8 @@ from socratic.storage.table import assignments
 def execute(
     assignment_id: str | None,
     session: Session = di.Manage["storage.persistent.session"],
-    deepgram_api_key: p.Secret[str] = di.Provide["secrets.deepgram.api_key"],
-    openai_api_key: p.Secret[str] = di.Provide["secrets.openai.secret_key"],
+    deepgram_api_key: p.Secret[str] = di.Provide["secrets.llm.deepgram.api_key"],
+    openai_api_key: p.Secret[str] = di.Provide["secrets.llm.openai.secret_key"],
     stt_model: str = di.Provide["config.vendor.livekit.stt_model"],
     tts_model: str = di.Provide["config.vendor.livekit.tts_model"],
     tts_voice: str = di.Provide["config.vendor.livekit.tts_voice"],

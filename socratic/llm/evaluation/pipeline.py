@@ -6,8 +6,8 @@ import decimal
 import typing as t
 
 import jinja2
+from langchain_core.language_models import BaseChatModel
 
-from socratic.llm.factory import ModelFactory
 from socratic.model import AssessmentFlag, AttemptID, EvidenceMapping, Grade, Objective, RubricCriterion, \
     RubricCriterionID, TranscriptSegment
 
@@ -44,16 +44,12 @@ class EvaluationPipeline:
 
     def __init__(
         self,
-        model_factory: ModelFactory,
+        eval_model: BaseChatModel,
+        feedback_model: BaseChatModel,
         env: jinja2.Environment,
     ) -> None:
-        """Initialize the pipeline.
-
-        Args:
-            model_factory: Factory for creating LLM instances
-            env: Jinja2 environment for prompt templates
-        """
-        self._model_factory = model_factory
+        self._eval_model = eval_model
+        self._feedback_model = feedback_model
         self._env = env
 
     async def evaluate(
@@ -74,9 +70,8 @@ class EvaluationPipeline:
         Returns:
             EvaluationOutput with all evaluation results
         """
-        # Get the appropriate models
-        eval_model = self._model_factory.create_evaluation_model()
-        feedback_model = self._model_factory.create_feedback_model()
+        eval_model = self._eval_model
+        feedback_model = self._feedback_model
 
         # Step 1: Extract evidence for each criterion
         evidence_results = await extract_evidence(

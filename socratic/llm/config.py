@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pydantic as p
 import pydantic_settings as ps
 
 from .provider import ProviderType
@@ -77,10 +76,3 @@ class LLMSettings(ps.BaseSettings):
 
     # Cost management
     cost: CostSettings = CostSettings()
-
-
-class LLMSecrets(ps.BaseSettings):
-    """LLM API secrets."""
-
-    openai_api_key: p.Secret[str] | None = None
-    anthropic_api_key: p.Secret[str] | None = None
