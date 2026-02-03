@@ -13,7 +13,7 @@ from types import FrameType
 import pydantic as p
 from livekit import agents  # pyright: ignore [reportMissingTypeStubs]
 from livekit.agents import AgentSession, JobContext  # pyright: ignore [reportMissingTypeStubs]
-from livekit.plugins import deepgram, openai, silero  # pyright: ignore [reportMissingTypeStubs]
+from livekit.plugins import deepgram, elevenlabs, openai, silero  # pyright: ignore [reportMissingTypeStubs]
 
 from socratic.core import BootConfiguration, di, SocraticContainer
 
@@ -30,6 +30,7 @@ async def _handle_session(
     ctx: JobContext,  # pyright: ignore [reportUnknownParameterType]
     *,
     deepgram_api_key: p.Secret[str] = di.Provide["secrets.deepgram.api_key"],  # noqa: B008
+    elevenlabs_api_key: p.Secret[str] = di.Provide["secrets.elevenlabs.api_key"],  # noqa: B008
     openai_api_key: p.Secret[str] = di.Provide["secrets.openai.secret_key"],  # noqa: B008
     stt_model: str = di.Provide["config.vendor.livekit.stt_model"],  # noqa: B008
     tts_model: str = di.Provide["config.vendor.livekit.tts_model"],  # noqa: B008
@@ -60,6 +61,10 @@ async def _handle_session(
     oai_key = openai_api_key.get_secret_value()
     if tts_model.startswith("openai/"):
         tts_provider = openai.TTS(model=tts_model.split("/", 1)[1], voice=tts_voice, api_key=oai_key)  # pyright: ignore [reportUnknownMemberType]
+    elif tts_model.startswith("elevenlabs/"):
+        tts_provider = elevenlabs.TTS(
+            model=tts_model.split("/", 1)[1], voice_id=tts_voice, api_key=elevenlabs_api_key.get_secret_value()
+        )  # pyright: ignore [reportUnknownMemberType]
     elif tts_model.startswith("deepgram/"):
         tts_provider = deepgram.TTS(model=tts_model.split("/", 1)[1], api_key=dg_key)  # pyright: ignore [reportUnknownMemberType]
     else:

@@ -8,8 +8,9 @@ google:
 livekit:
   room_prefix: 'assessment'
   stt_model: 'deepgram/nova-3'
-  tts_model: 'openai/tts-1'
-  tts_voice: 'shimmer'
+  tts_model: 'elevenlabs/eleven_turbo_v2_5'
+  # https://elevenlabs.io/app/voice-library?voiceId=Hh0rE70WfnSFN80K8uJC
+  tts_voice: 'Hh0rE70WfnSFN80K8uJC'
   egress:
     # Local development uses local file storage via LocalObjectStore
     # In production, configure S3 settings:
