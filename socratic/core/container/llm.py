@@ -7,15 +7,15 @@ from dependency_injector.containers import DeclarativeContainer
 from dependency_injector.providers import Configuration, Provider, Singleton
 from langchain_core.language_models import BaseChatModel
 
-from socratic.llm import LLMSecrets, ModelSettings, OpenAISpeechService, ProviderType, SpeechService, \
-    TranscriptionService, WhisperTranscriptionService
+from socratic.core.config.secrets import AnthropicSecrets, OpenAISecrets
+from socratic.llm import ModelSettings, OpenAISpeechService, ProviderType, SpeechService, TranscriptionService, \
+    WhisperTranscriptionService
 
 
 def create_chat_model(
     config: ModelSettings,
-    *,
-    openai_api_key: p.Secret[str] | None = None,
-    anthropic_api_key: p.Secret[str] | None = None,
+    openai_secrets: OpenAISecrets | None,
+    anthropic_secrets: AnthropicSecrets | None,
 ) -> BaseChatModel:
     """Create a LangChain chat model from configuration.
 
@@ -30,7 +30,7 @@ def create_chat_model(
     if config.provider == ProviderType.OpenAI:
         from langchain_openai import ChatOpenAI
 
-        if openai_api_key is None:
+        if openai_secrets is None:
             raise ValueError("OpenAI API key required for OpenAI provider")
 
         return ChatOpenAI(
@@ -39,12 +39,12 @@ def create_chat_model(
             max_completion_tokens=config.max_tokens,
             timeout=config.timeout_seconds,
             max_retries=config.max_retries,
-            api_key=p.SecretStr(openai_api_key.get_secret_value()),
+            api_key=p.SecretStr(openai_secrets.secret_key.get_secret_value()),
         )
     elif config.provider == ProviderType.Anthropic:
         from langchain_anthropic import ChatAnthropic
 
-        if anthropic_api_key is None:
+        if anthropic_secrets is None:
             raise ValueError("Anthropic API key required for Anthropic provider")
 
         return ChatAnthropic(
@@ -53,53 +53,48 @@ def create_chat_model(
             max_tokens_to_sample=config.max_tokens,
             timeout=config.timeout_seconds,
             max_retries=config.max_retries,
-            api_key=p.SecretStr(anthropic_api_key.get_secret_value()),
+            api_key=p.SecretStr(anthropic_secrets.api_key.get_secret_value()),
             stop=None,
         )
     else:
         raise ValueError(f"Unsupported provider: {config.provider}")
 
 
-def create_model(settings: ModelSettings, secrets: LLMSecrets) -> BaseChatModel:
-    """Create a chat model from settings."""
-    return create_chat_model(
-        settings,
-        openai_api_key=secrets.openai_api_key,
-        anthropic_api_key=secrets.anthropic_api_key,
-    )
-
-
 class LLMContainer(DeclarativeContainer):
     """Container for LLM services."""
 
     config: Configuration = Configuration()
-    openai_secrets: Configuration = Configuration()
-    anthropic_secrets: Configuration = Configuration()
-
-    llm_secrets: Provider[LLMSecrets] = Singleton(
-        LLMSecrets,
-        openai_api_key=openai_secrets.secret_key,
-        anthropic_api_key=anthropic_secrets.api_key,
-    )
+    secrets: Configuration = Configuration()
 
     dialogue_model: Provider[BaseChatModel] = Singleton(
-        create_model, settings=config.models.dialogue.as_(ModelSettings), secrets=llm_secrets
+        create_chat_model,
+        config=config.models.dialogue.as_(ModelSettings),
+        openai_secrets=secrets.openai.as_(OpenAISecrets),
+        anthropic_secrets=secrets.anthropic.as_(AnthropicSecrets),
     )
 
     evaluation_model: Provider[BaseChatModel] = Singleton(
-        create_model, settings=config.models.evaluation.as_(ModelSettings), secrets=llm_secrets
+        create_chat_model,
+        config=config.models.evaluation.as_(ModelSettings),
+        openai_secrets=secrets.openai.as_(OpenAISecrets),
+        anthropic_secrets=secrets.anthropic.as_(AnthropicSecrets),
     )
 
     feedback_model: Provider[BaseChatModel] = Singleton(
-        create_model, settings=config.models.feedback.as_(ModelSettings), secrets=llm_secrets
+        create_chat_model,
+        config=config.models.feedback.as_(ModelSettings),
+        openai_secrets=secrets.openai.as_(OpenAISecrets),
+        anthropic_secrets=secrets.anthropic.as_(AnthropicSecrets),
     )
 
     transcription: Provider[TranscriptionService] = Singleton(
         WhisperTranscriptionService,
-        api_key=openai_secrets.secret_key,
+        openai_secrets=secrets.openai.as_(OpenAISecrets),
+        anthropic_secrets=secrets.anthropic.as_(AnthropicSecrets),
     )
 
     speech: Provider[SpeechService] = Singleton(
         OpenAISpeechService,
-        api_key=openai_secrets.secret_key,
+        openai_secrets=secrets.openai.as_(OpenAISecrets),
+        anthropic_secrets=secrets.anthropic.as_(AnthropicSecrets),
     )

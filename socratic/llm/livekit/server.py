@@ -29,9 +29,9 @@ handled_signals = (signal.SIGINT, signal.SIGTERM)
 async def _handle_session(
     ctx: JobContext,  # pyright: ignore [reportUnknownParameterType]
     *,
-    deepgram_api_key: p.Secret[str] = di.Provide["secrets.deepgram.api_key"],  # noqa: B008
-    elevenlabs_api_key: p.Secret[str] = di.Provide["secrets.elevenlabs.api_key"],  # noqa: B008
-    openai_api_key: p.Secret[str] = di.Provide["secrets.openai.secret_key"],  # noqa: B008
+    deepgram_api_key: p.Secret[str] = di.Provide["secrets.llm.deepgram.api_key"],  # noqa: B008
+    elevenlabs_api_key: p.Secret[str] = di.Provide["secrets.llm.elevenlabs.api_key"],  # noqa: B008
+    openai_api_key: p.Secret[str] = di.Provide["secrets.llm.openai.secret_key"],  # noqa: B008
     stt_model: str = di.Provide["config.vendor.livekit.stt_model"],  # noqa: B008
     tts_model: str = di.Provide["config.vendor.livekit.tts_model"],  # noqa: B008
     tts_voice: str = di.Provide["config.vendor.livekit.tts_voice"],  # noqa: B008

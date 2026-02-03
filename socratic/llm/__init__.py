@@ -5,7 +5,6 @@ __all__ = [
     "ProviderType",
     # Configuration
     "LLMSettings",
-    "LLMSecrets",
     "ModelSettings",
     "AssessmentModels",
     # Transcription
@@ -23,7 +22,7 @@ __all__ = [
     "OpenAISpeechService",
 ]
 
-from .config import AssessmentModels, LLMSecrets, LLMSettings, ModelSettings
+from .config import AssessmentModels, LLMSettings, ModelSettings
 from .provider import ProviderType
 from .speech import OpenAISpeechService, OpenAIVoice, SpeechError, SpeechFormat, SpeechResult, SpeechService
 from .transcription import TranscriptionError, TranscriptionResult, TranscriptionService, WhisperTranscriptionService, \

@@ -80,8 +80,7 @@ class SocraticContainer(DeclarativeContainer):
     llm: Provider[LLMContainer] = Container(
         LLMContainer,
         config=config.llm,
-        openai_secrets=secrets.openai,
-        anthropic_secrets=secrets.anthropic,
+        secrets=secrets.llm,
     )
 
     utcnow: Provider[TimestampProvider] = Object(lambda: datetime.datetime.now(datetime.UTC))
