@@ -11,6 +11,7 @@ from .base import BaseSettings
 class WebSettings(BaseSettings):
     example: ExampleWebSettings
     socratic: SocraticWebSettings | None = None
+    flights: FlightsWebSettings | None = None
 
 
 class ServeSettings(BaseSettings):
@@ -36,3 +37,10 @@ class SocraticWebSettings(BaseSettings):
     backend: ServeSettings
     frontend: ServeSettings | None = None
     auth: AuthSettings = AuthSettings()
+
+
+class FlightsWebSettings(BaseSettings):
+    """Settings for the flights prompt experimentation service."""
+
+    backend: ServeSettings
+    frontend: ServeSettings | None = None
