@@ -70,7 +70,7 @@ class Secrets(BaseSecrets, BaseModel):  # pyright: ignore [reportIncompatibleVar
     openai: OpenAISecrets | None = None
     livekit: LiveKitSecrets | None = None
     deepgram: DeepgramSecrets | None = None
-    elevenlabs: ElevenLabsSecrets
+    elevenlabs: ElevenLabsSecrets | None = None
     # google: GoogleSecrets = p.Field(default=..., validate_default=True)
     # postgresql: PostgresqlSecrets = p.Field(default_factory=PostgresqlSecrets, validate_default=True)
 
