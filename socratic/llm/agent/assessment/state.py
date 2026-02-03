@@ -19,6 +19,7 @@ import pydantic as p
 from langchain_core.messages import HumanMessage
 
 from socratic.llm.agent.state import AgentState
+from socratic.model import FlightID
 from socratic.model.rubric import ProficiencyLevel
 
 
@@ -72,6 +73,7 @@ class AssessmentState(AgentState):
     # -- Context (set once at start) ----------------------------------------
 
     attempt_id: str
+    flight_id: FlightID | None = None
     objective_title: str
     objective_description: str
     rubric_criteria: list[AssessmentCriterion] = p.Field(default_factory=list[AssessmentCriterion])
