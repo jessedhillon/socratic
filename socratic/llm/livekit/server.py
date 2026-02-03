@@ -116,13 +116,21 @@ async def assessment_session(ctx: JobContext) -> None:  # pyright: ignore [repor
         await ctx.room.disconnect()  # pyright: ignore [reportUnknownMemberType]
         return
 
-    boot_cf = BootConfiguration.model_validate_json(boot_json)
-    container = SocraticContainer()
-    SocraticContainer.boot(container, **dict(boot_cf))
-    container.wire(modules=[__name__, _agent_module])
+    try:
+        boot_cf = BootConfiguration.model_validate_json(boot_json)
+        container = SocraticContainer()
+        SocraticContainer.boot(container, **dict(boot_cf))
+        container.wire(modules=[__name__, _agent_module])
+    except Exception:
+        logger.exception("Failed to bootstrap DI container in worker subprocess")
+        await ctx.room.disconnect()  # pyright: ignore [reportUnknownMemberType]
+        return
 
-    # Delegate to injected handler
-    await _handle_session(ctx)
+    try:
+        await _handle_session(ctx)
+    except Exception:
+        logger.exception("Unhandled error in assessment session")
+        await ctx.room.disconnect()  # pyright: ignore [reportUnknownMemberType]
 
 
 class _ExitServer(Exception):

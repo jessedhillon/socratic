@@ -26,6 +26,12 @@ class OpenAISecrets(BaseSecrets):
     secret_key: p.Secret[str] | None = None
 
 
+class AnthropicSecrets(BaseSecrets):
+    """Anthropic API secrets."""
+
+    api_key: p.Secret[str] | None = None
+
+
 class GoogleServiceAccountSecrets(BaseSecrets):
     private_key: p.Secret[str]
 
@@ -68,6 +74,7 @@ class Secrets(BaseSecrets, BaseModel):  # pyright: ignore [reportIncompatibleVar
 
     auth: AuthSecrets | None = None
     openai: OpenAISecrets | None = None
+    anthropic: AnthropicSecrets | None = None
     livekit: LiveKitSecrets | None = None
     deepgram: DeepgramSecrets | None = None
     elevenlabs: ElevenLabsSecrets | None = None

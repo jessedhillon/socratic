@@ -6,8 +6,8 @@ default_provider: openai
 models:
   # Model for conducting the Socratic dialogue
   dialogue:
-    provider: openai
-    model: gpt-4o
+    provider: anthropic
+    model: claude-sonnet-4-20250514
     max_tokens: 2048
     temperature: 0.7
     max_retries: 3
