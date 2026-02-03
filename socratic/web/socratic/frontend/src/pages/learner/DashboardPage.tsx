@@ -23,24 +23,23 @@ interface StatusInfo {
 
 /**
  * Calculate detailed assignment status for display.
+ * Uses backend's is_available flag as the source of truth for availability.
  */
 const getAssignmentStatus = (
   assignment: LearnerAssignmentSummary
 ): StatusInfo => {
   const now = new Date();
-  const availableFrom = assignment.available_from
-    ? new Date(assignment.available_from)
-    : null;
   const availableUntil = assignment.available_until
     ? new Date(assignment.available_until)
     : null;
 
-  // Completed takes precedence
-  if (assignment.status === 'completed') {
+  // Check if locked (prerequisites not met)
+  if (assignment.is_locked) {
     return {
-      status: 'completed',
-      label: 'Completed',
-      badgeClass: 'bg-blue-100 text-blue-700',
+      status: 'locked',
+      label: 'Locked',
+      badgeClass: 'bg-gray-200 text-gray-600',
+      dateHint: 'Prerequisites not met',
     };
   }
 
@@ -54,7 +53,35 @@ const getAssignmentStatus = (
     };
   }
 
-  // Check if not yet available (before available_from)
+  // Use backend's is_available flag (accounts for retake policy, attempts, dates)
+  if (assignment.is_available) {
+    // Show "Completed" badge but still allow retakes if available
+    if (assignment.status === 'completed') {
+      return {
+        status: 'available',
+        label: 'Completed',
+        badgeClass: 'bg-blue-100 text-blue-700',
+      };
+    }
+    return {
+      status: 'available',
+      label: 'Available',
+      badgeClass: 'bg-green-100 text-green-700',
+    };
+  }
+
+  // Not available - determine why
+  if (assignment.status === 'completed') {
+    return {
+      status: 'completed',
+      label: 'Completed',
+      badgeClass: 'bg-blue-100 text-blue-700',
+    };
+  }
+
+  const availableFrom = assignment.available_from
+    ? new Date(assignment.available_from)
+    : null;
   if (availableFrom && now < availableFrom) {
     return {
       status: 'not_yet_available',
@@ -64,30 +91,11 @@ const getAssignmentStatus = (
     };
   }
 
-  // Check if locked (prerequisites not met or retake policy)
-  if (assignment.is_locked) {
-    return {
-      status: 'locked',
-      label: 'Locked',
-      badgeClass: 'bg-gray-200 text-gray-600',
-      dateHint: 'Prerequisites not met',
-    };
-  }
-
-  // Check if no attempts remaining
-  if (assignment.attempts_remaining <= 0) {
-    return {
-      status: 'completed',
-      label: 'Max Attempts Reached',
-      badgeClass: 'bg-blue-100 text-blue-700',
-    };
-  }
-
-  // Available
+  // Fallback - not available for some other reason
   return {
-    status: 'available',
-    label: 'Available',
-    badgeClass: 'bg-green-100 text-green-700',
+    status: 'completed',
+    label: 'Max Attempts Reached',
+    badgeClass: 'bg-blue-100 text-blue-700',
   };
 };
 
