@@ -5901,4 +5901,4 @@ test = ["numpy", "pytest", "sql_formatter"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<3.14"
-content-hash = "7046aa6f2b11bda01c14033d4aef0e3aff70ef200e479d4c911fcf89c6fa832f"
+content-hash = "bac8987c36cf2a8cfa432366c7ad3b70af46eacbe4541e481e4ef995dd547848"
