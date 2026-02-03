@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from socratic.auth import AuthContext, require_educator, require_learner
 from socratic.core import di, TimestampProvider
-from socratic.model import Assignment, AssignmentID, AttemptStatus, Objective, ObjectiveID, UserID, UserRole
+from socratic.model import Assignment, AssignmentID, AttemptStatus, Objective, ObjectiveID, RetakePolicy, UserID, \
+    UserRole
 from socratic.storage import assignment as assignment_storage
 from socratic.storage import attempt as attempt_storage
 from socratic.storage import evaluation as evaluation_storage
@@ -110,8 +111,11 @@ def list_my_assignments(
                 is_available = False
             if assignment.available_until and now > assignment.available_until:
                 is_available = False
+            # Check attempt limits based on retake policy
             if attempts_remaining <= 0 and current_status != AttemptStatus.Completed:
-                is_available = False
+                # 'immediate' policy allows unlimited retakes after completion
+                if assignment.retake_policy != RetakePolicy.Immediate:
+                    is_available = False
 
             is_locked = False
             dependencies = strand_storage.get_dependencies(assignment.objective_id, session=session)
@@ -316,8 +320,11 @@ def get_learner_dashboard(
                 is_available = False
             if assignment.available_until and now > assignment.available_until:
                 is_available = False
+            # Check attempt limits based on retake policy
             if attempts_remaining <= 0 and current_status != AttemptStatus.Completed:
-                is_available = False
+                # 'immediate' policy allows unlimited retakes after completion
+                if assignment.retake_policy != RetakePolicy.Immediate:
+                    is_available = False
 
             # Check prerequisites (simplified - just check if dependency objectives are completed)
             is_locked = False
@@ -426,8 +433,11 @@ def get_my_assignment(
             is_available = False
         if assignment.available_until and now > assignment.available_until:
             is_available = False
+        # Check attempt limits based on retake policy
         if attempts_remaining <= 0:
-            is_available = False
+            # 'immediate' policy allows unlimited retakes after completion
+            if assignment.retake_policy != RetakePolicy.Immediate:
+                is_available = False
 
         # Check prerequisites
         is_locked = False
