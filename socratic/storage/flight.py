@@ -606,6 +606,27 @@ async def acomplete_flight(
     await session.flush()
 
 
+async def acomplete_flight(
+    flight_id: FlightID,
+    *,
+    outcome_metadata: dict[str, t.Any] | None = None,
+    session: AsyncSession,
+) -> None:
+    """Mark a flight as completed (async)."""
+    values: dict[str, t.Any] = {
+        "status": FlightStatus.Completed.value,
+        "completed_at": datetime.datetime.now(datetime.UTC),
+    }
+    if outcome_metadata is not None:
+        values["outcome_metadata"] = outcome_metadata
+
+    stmt = sqla.update(flights).where(flights.flight_id == flight_id).values(**values)
+    result = await session.execute(stmt)
+    if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue]
+        raise KeyError(f"Flight {flight_id} not found")
+    await session.flush()
+
+
 # =============================================================================
 # Flight Surveys
 # =============================================================================
