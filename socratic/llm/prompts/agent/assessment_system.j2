@@ -118,3 +118,17 @@ Do not try to continue the conversation or ask additional questions.
 {% if time_budget_minutes %}
 - Aim to complete the conversation within approximately {{ time_budget_minutes }} minutes
 {% endif %}
+{% if include_examples %}
+
+## Examples
+
+The following examples illustrate these principles in practice.
+
+{% include 'agent/assessment_example_anti_validation.j2' %}
+
+{% include 'agent/assessment_example_depth.j2' %}
+
+{% include 'agent/assessment_example_probing.j2' %}
+
+{% include 'agent/assessment_example_transitions.j2' %}
+{% endif %}

@@ -58,6 +58,7 @@ class AssessmentAgent(BaseAgent[AssessmentState]):
             initial_prompts=state.initial_prompts,
             conviviality=state.conviviality,
             time_budget_minutes=state.time_budget_minutes,
+            include_examples=state.include_examples,
         )
         return SystemMessage(content=content)
 

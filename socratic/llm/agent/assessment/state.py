@@ -79,6 +79,7 @@ class AssessmentState(AgentState):
     conviviality: Conviviality = Conviviality.Conversational
     time_budget_minutes: int | None = None
     start_time: datetime.datetime | None = None
+    include_examples: bool = True
 
     # -- Dynamic (updated by tools during execution) ------------------------
 
