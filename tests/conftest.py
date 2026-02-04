@@ -27,7 +27,8 @@ from sqlalchemy.orm import Session
 
 import socratic
 from socratic.core import di, SocraticContainer, TimestampProvider
-from socratic.model import DeploymentEnvironment, Organization, OrganizationID, User, UserRole
+from socratic.model import DeploymentEnvironment, Organization, OrganizationID, PromptTemplate, User, UserRole
+from socratic.storage import flight as flight_storage
 from socratic.storage import organization as organization_storage
 from socratic.storage import user as user_storage
 
@@ -261,6 +262,34 @@ def test_user(
         organization_id=test_org.organization_id,
         role=UserRole.Learner,
     )
+
+
+@pytest.fixture
+def template_factory(db_session: Session) -> t.Callable[..., PromptTemplate]:
+    """Factory fixture for creating test prompt templates.
+
+    Returns a callable that creates templates with sensible defaults.
+    Must be called inside an active transaction (e.g., ``db_session.begin()``).
+
+    Usage:
+        def test_something(db_session, template_factory):
+            with db_session.begin():
+                tpl = template_factory(name="my_tpl", content="Hello {{ name }}!")
+    """
+
+    def create_template(
+        name: str = "test_template",
+        content: str = "Hello {{ name }}!",
+        description: str | None = None,
+    ) -> PromptTemplate:
+        return flight_storage.create_template(
+            name=name,
+            content=content,
+            description=description,
+            session=db_session,
+        )
+
+    return create_template
 
 
 @di.inject

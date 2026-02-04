@@ -18,9 +18,14 @@ from ..view import FlightCreateRequest, FlightListResponse, FlightResponse, Flig
 router = APIRouter(prefix="/api/flights", tags=["flights"])
 
 
-def _render_template(content: str, context: dict[str, t.Any]) -> str:
+@di.inject
+def _render_template(
+    content: str,
+    context: dict[str, t.Any],
+    *,
+    env: jinja2.Environment = di.Provide["template.llm"],
+) -> str:
     """Render a Jinja2 template with the given context."""
-    env = jinja2.Environment(autoescape=False)
     template = env.from_string(content)
     return template.render(**context)
 
