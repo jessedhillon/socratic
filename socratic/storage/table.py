@@ -8,8 +8,9 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, MappedAsDataclass
 from sqlalchemy.types import DateTime, Numeric, String
 
-from socratic.model import AssignmentID, AttemptID, EvaluationResultID, ExampleID, ObjectiveID, OrganizationID, \
-    OverrideID, RubricCriterionID, StrandID, TranscriptSegmentID, UserID, WordTimingID
+from socratic.model import AssignmentID, AttemptID, EvaluationResultID, ExampleID, FlightID, ObjectiveID, \
+    OrganizationID, OverrideID, PromptTemplateID, RubricCriterionID, StrandID, SurveyID, SurveySchemaID, \
+    TranscriptSegmentID, UserID, WordTimingID
 
 from .type import ShortUUIDKeyType, ValueEnumMapper
 
@@ -30,6 +31,10 @@ class base(MappedAsDataclass, DeclarativeBase):
         WordTimingID: ShortUUIDKeyType(WordTimingID),
         EvaluationResultID: ShortUUIDKeyType(EvaluationResultID),
         OverrideID: ShortUUIDKeyType(OverrideID),
+        PromptTemplateID: ShortUUIDKeyType(PromptTemplateID),
+        FlightID: ShortUUIDKeyType(FlightID),
+        SurveySchemaID: ShortUUIDKeyType(SurveySchemaID),
+        SurveyID: ShortUUIDKeyType(SurveyID),
         datetime.datetime: DateTime(timezone=True),
         list[str]: ARRAY(String),
         enum.Enum: ValueEnumMapper,
@@ -281,3 +286,77 @@ class agent_states(base):
     thread_id: Mapped[str]
 
     update_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now(), onupdate=func.now())
+
+
+# Flights (Prompt Experimentation)
+
+
+class prompt_templates(base):
+    """Versioned Jinja2 templates for prompt rendering."""
+
+    __tablename__ = "prompt_templates"
+
+    template_id: Mapped[PromptTemplateID] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    content: Mapped[str]
+    version: Mapped[int] = mapped_column(default=1)
+    description: Mapped[str | None] = mapped_column(default=None)
+    is_active: Mapped[bool] = mapped_column(default=True)
+
+    create_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now())
+    update_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now(), onupdate=func.now())
+
+
+class survey_schemas(base):
+    """Schemas defining survey dimensions for flight feedback."""
+
+    __tablename__ = "survey_schemas"
+
+    schema_id: Mapped[SurveySchemaID] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(unique=True)
+    dimensions: Mapped[list[dict[str, t.Any]]] = mapped_column(JSONB, default_factory=list)
+    is_default: Mapped[bool] = mapped_column(default=False)
+
+    create_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now())
+
+
+class flights(base):
+    """A rendered template instance with tracking metadata."""
+
+    __tablename__ = "flights"
+
+    flight_id: Mapped[FlightID] = mapped_column(primary_key=True)
+    template_id: Mapped[PromptTemplateID] = mapped_column(ForeignKey("prompt_templates.template_id"))
+    created_by: Mapped[str]
+    rendered_content: Mapped[str]
+    model_provider: Mapped[str]
+    model_name: Mapped[str]
+    started_at: Mapped[datetime.datetime]
+
+    feature_flags: Mapped[dict[str, t.Any]] = mapped_column(JSONB, default_factory=dict)
+    context: Mapped[dict[str, t.Any]] = mapped_column(JSONB, default_factory=dict)
+    model_config_data: Mapped[dict[str, t.Any]] = mapped_column(JSONB, default_factory=dict)
+    status: Mapped[str] = mapped_column(default="active")
+    completed_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
+    attempt_id: Mapped[AttemptID | None] = mapped_column(ForeignKey("assessment_attempts.attempt_id"), default=None)
+    outcome_metadata: Mapped[dict[str, t.Any] | None] = mapped_column(JSONB, default=None)
+
+    create_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now())
+    update_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now(), onupdate=func.now())
+
+
+class flight_surveys(base):
+    """Submitted survey feedback for a flight."""
+
+    __tablename__ = "flight_surveys"
+
+    survey_id: Mapped[SurveyID] = mapped_column(primary_key=True)
+    flight_id: Mapped[FlightID] = mapped_column(ForeignKey("flights.flight_id"))
+    submitted_by: Mapped[str]
+
+    schema_id: Mapped[SurveySchemaID | None] = mapped_column(ForeignKey("survey_schemas.schema_id"), default=None)
+    ratings: Mapped[dict[str, t.Any]] = mapped_column(JSONB, default_factory=dict)
+    notes: Mapped[str | None] = mapped_column(default=None)
+    tags: Mapped[list[str]] = mapped_column(default_factory=list)
+
+    create_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now())

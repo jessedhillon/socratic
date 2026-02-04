@@ -19,6 +19,10 @@ __all__ = [
     "WordTimingID",
     "EvaluationResultID",
     "OverrideID",
+    "PromptTemplateID",
+    "FlightID",
+    "SurveySchemaID",
+    "SurveyID",
     # Example
     "Example",
     # Organization & User
@@ -57,6 +61,29 @@ __all__ = [
     "AssessmentFlag",
     # Override
     "EducatorOverride",
+    # Flights
+    "FlightStatus",
+    "SurveyDimensionKind",
+    "ChoiceOption",
+    "RatingUISpec",
+    "BaseSpec",
+    "RatingSpec",
+    "NumberSpec",
+    "ChoiceSpec",
+    "MultiChoiceSpec",
+    "BooleanSpec",
+    "TextSpec",
+    "LongTextSpec",
+    "DateSpec",
+    "DateTimeSpec",
+    "DimensionSpec",
+    "SurveyDimension",
+    "PromptTemplate",
+    "SurveySchema",
+    "ModelMetadata",
+    "Flight",
+    "FlightWithTemplate",
+    "FlightSurvey",
 ]
 
 from .assignment import Assignment, RetakePolicy
@@ -65,8 +92,12 @@ from .base import BaseModel, WithCtime, WithMtime, WithTimestamps
 from .enum import DeploymentEnvironment
 from .evaluation import AssessmentFlag, EvaluationResult, EvidenceMapping
 from .example import Example
-from .id import AssignmentID, AttemptID, EvaluationResultID, ExampleID, ObjectiveID, OrganizationID, OverrideID, \
-    RubricCriterionID, StrandID, TranscriptSegmentID, UserID, WordTimingID
+from .flight import BaseSpec, BooleanSpec, ChoiceOption, ChoiceSpec, DateSpec, DateTimeSpec, DimensionSpec, Flight, \
+    FlightStatus, FlightSurvey, FlightWithTemplate, LongTextSpec, ModelMetadata, MultiChoiceSpec, NumberSpec, \
+    PromptTemplate, RatingSpec, RatingUISpec, SurveyDimension, SurveyDimensionKind, SurveySchema, TextSpec
+from .id import AssignmentID, AttemptID, EvaluationResultID, ExampleID, FlightID, ObjectiveID, OrganizationID, \
+    OverrideID, PromptTemplateID, RubricCriterionID, StrandID, SurveyID, SurveySchemaID, TranscriptSegmentID, UserID, \
+    WordTimingID
 from .objective import ExtensionPolicy, Objective, ObjectiveStatus
 from .organization import Organization
 from .override import EducatorOverride
