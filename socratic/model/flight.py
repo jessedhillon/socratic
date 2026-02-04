@@ -168,6 +168,7 @@ class PromptTemplate(BaseModel, WithTimestamps):
     name: str
     version: int = 1
     content: str
+    content_hash: str
     description: str | None = None
     is_active: bool = True
 

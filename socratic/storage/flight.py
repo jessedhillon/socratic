@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import typing as t
 
+import jinja2
 import sqlalchemy as sqla
 
 from socratic.core import di
@@ -14,6 +16,24 @@ from socratic.model import AttemptID, Flight, FlightID, FlightStatus, FlightSurv
 
 from . import Session
 from .table import flight_surveys, flights, prompt_templates, survey_schemas
+
+_jinja_env = jinja2.Environment(autoescape=False)
+
+
+def _hash_content(content: str) -> str:
+    """Compute SHA-256 hash of template content using the Jinja2 AST.
+
+    Parsing to AST normalizes syntax-only differences (e.g., ``{{ name }}`` vs
+    ``{{name}}``) while preserving semantically meaningful differences.  Falls
+    back to hashing the stripped raw content if the template fails to parse.
+    """
+    try:
+        ast = _jinja_env.parse(content.strip())
+        canonical = repr(ast.body)
+    except jinja2.TemplateSyntaxError:
+        canonical = content.strip()
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
 
 # =============================================================================
 # Prompt Templates
@@ -117,11 +137,13 @@ def create_template(
     version = (existing.version + 1) if existing else 1
 
     template_id = PromptTemplateID()
+    content_hash = _hash_content(content)
     stmt = sqla.insert(prompt_templates).values(
         template_id=template_id,
         name=name,
         version=version,
         content=content,
+        content_hash=content_hash,
         description=description,
     )
     session.execute(stmt)
@@ -130,6 +152,69 @@ def create_template(
     template = get_template(template_id, session=session)
     assert template is not None
     return template
+
+
+@t.overload
+def resolve_template(
+    *,
+    name: str,
+    session: Session = ...,
+) -> PromptTemplate: ...
+
+
+@t.overload
+def resolve_template(
+    *,
+    name: str,
+    content: str,
+    description: str | None = ...,
+    session: Session = ...,
+) -> PromptTemplate: ...
+
+
+def resolve_template(
+    *,
+    name: str,
+    content: str | None = None,
+    description: str | None = None,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> PromptTemplate:
+    """Resolve a template by name, optionally with content for auto-versioning.
+
+    Mode 1 (name only): Returns the latest active version.
+    Mode 2 (name + content): Hashes content, finds matching version by (name, hash),
+        or creates a new version if the content has changed.
+
+    Raises:
+        KeyError: If name-only mode and no active template exists with that name.
+    """
+    if content is None:
+        template = get_template(name=name, session=session)
+        if template is None:
+            raise KeyError(f"Template '{name}' not found")
+        return template
+
+    content_hash = _hash_content(content)
+
+    # Look for an existing version with this exact content
+    stmt = (
+        sqla
+        .select(prompt_templates.__table__)
+        .where(
+            sqla.and_(
+                prompt_templates.name == name,
+                prompt_templates.content_hash == content_hash,
+            )
+        )
+        .order_by(prompt_templates.version.desc())
+        .limit(1)
+    )
+    row = session.execute(stmt).mappings().one_or_none()
+    if row is not None:
+        return PromptTemplate(**row)
+
+    # Content doesn't match any version — create new version
+    return create_template(name=name, content=content, description=description, session=session)
 
 
 def update_template(

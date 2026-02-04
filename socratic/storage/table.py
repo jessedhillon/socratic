@@ -299,6 +299,7 @@ class prompt_templates(base):
     template_id: Mapped[PromptTemplateID] = mapped_column(primary_key=True)
     name: Mapped[str]
     content: Mapped[str]
+    content_hash: Mapped[str]
     version: Mapped[int] = mapped_column(default=1)
     description: Mapped[str | None] = mapped_column(default=None)
     is_active: Mapped[bool] = mapped_column(default=True)

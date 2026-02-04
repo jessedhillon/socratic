@@ -9,9 +9,16 @@ from socratic.model import AttemptID, BaseModel, FlightID, FlightStatus, PromptT
 
 
 class FlightCreateRequest(BaseModel):
-    """Request to create a flight."""
+    """Request to create a flight.
 
-    template: str  # Template name (will use latest active version)
+    Template resolution modes:
+    - template only: uses the latest active version of the named template
+    - template + template_content: content-addressed lookup — reuses an existing
+      version if the content matches, otherwise creates a new version
+    """
+
+    template: str
+    template_content: str | None = None
     created_by: str
     feature_flags: dict[str, t.Any] = {}
     context: dict[str, t.Any] = {}

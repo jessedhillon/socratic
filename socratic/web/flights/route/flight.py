@@ -120,17 +120,28 @@ def create_flight(
 ) -> FlightResponse:
     """Create a new flight.
 
-    Looks up the template by name (latest active version), renders it with the
-    provided context and feature flags, and returns the flight with the rendered content.
+    Resolves the template by name (with optional content for auto-versioning),
+    renders it with the provided context and feature flags, and returns the flight.
     """
     with session.begin():
-        # Get the template
-        template = flight_storage.get_template(name=request.template, session=session)
-        if template is None:
+        # Resolve the template
+        try:
+            if request.template_content is not None:
+                template = flight_storage.resolve_template(
+                    name=request.template,
+                    content=request.template_content,
+                    session=session,
+                )
+            else:
+                template = flight_storage.resolve_template(
+                    name=request.template,
+                    session=session,
+                )
+        except KeyError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Template '{request.template}' not found",
-            )
+            ) from None
 
         # Combine feature flags and context for rendering
         render_context = {**request.feature_flags, **request.context}
