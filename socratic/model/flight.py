@@ -134,7 +134,7 @@ class DateTimeSpec(BaseSpec):
     max_datetime: datetime.datetime | None = None
 
 
-Spec = t.Annotated[
+DimensionSpec = t.Annotated[
     RatingSpec
     | NumberSpec
     | ChoiceSpec
@@ -153,7 +153,7 @@ class SurveyDimension(BaseModel):
 
     name: str
     label: str
-    spec: Spec
+    spec: DimensionSpec
     required: bool = True
     help: str | None = None
     tags: list[str] = []

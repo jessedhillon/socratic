@@ -76,7 +76,7 @@ __all__ = [
     "LongTextSpec",
     "DateSpec",
     "DateTimeSpec",
-    "Spec",
+    "DimensionSpec",
     "SurveyDimension",
     "PromptTemplate",
     "SurveySchema",
@@ -92,9 +92,9 @@ from .base import BaseModel, WithCtime, WithMtime, WithTimestamps
 from .enum import DeploymentEnvironment
 from .evaluation import AssessmentFlag, EvaluationResult, EvidenceMapping
 from .example import Example
-from .flight import BaseSpec, BooleanSpec, ChoiceOption, ChoiceSpec, DateSpec, DateTimeSpec, Flight, FlightStatus, \
-    FlightSurvey, FlightWithTemplate, LongTextSpec, ModelMetadata, MultiChoiceSpec, NumberSpec, PromptTemplate, \
-    RatingSpec, RatingUISpec, Spec, SurveyDimension, SurveyDimensionKind, SurveySchema, TextSpec
+from .flight import BaseSpec, BooleanSpec, ChoiceOption, ChoiceSpec, DateSpec, DateTimeSpec, DimensionSpec, Flight, \
+    FlightStatus, FlightSurvey, FlightWithTemplate, LongTextSpec, ModelMetadata, MultiChoiceSpec, NumberSpec, \
+    PromptTemplate, RatingSpec, RatingUISpec, SurveyDimension, SurveyDimensionKind, SurveySchema, TextSpec
 from .id import AssignmentID, AttemptID, EvaluationResultID, ExampleID, FlightID, ObjectiveID, OrganizationID, \
     OverrideID, PromptTemplateID, RubricCriterionID, StrandID, SurveyID, SurveySchemaID, TranscriptSegmentID, UserID, \
     WordTimingID
