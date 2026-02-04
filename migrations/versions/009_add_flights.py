@@ -103,7 +103,7 @@ def upgrade() -> None:
             nullable=False,
             server_default="{}",
         ),
-        sa.Column("status", sa.String(), nullable=False, server_default="'active'"),
+        sa.Column("status", sa.String(), nullable=False, server_default="active"),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("attempt_id", sa.String(length=27), nullable=True),
