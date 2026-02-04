@@ -6,6 +6,8 @@ import datetime
 import enum
 import typing as t
 
+import pydantic as p
+
 from .base import BaseModel, WithCtime, WithTimestamps
 from .id import AttemptID, FlightID, PromptTemplateID, SurveyID, SurveySchemaID
 
@@ -32,18 +34,131 @@ class SurveyDimensionKind(enum.Enum):
     DateTime = "datetime"
 
 
+class ChoiceOption(BaseModel):
+    """An option for choice/multi-choice dimensions."""
+
+    value: str
+    label: str
+
+
+class RatingUISpec(BaseModel):
+    """UI configuration for rating dimensions."""
+
+    control: t.Literal["slider", "radio", "stars"] = "slider"
+    show_value: bool = True
+
+
+class BaseSpec(BaseModel):
+    """Base class for dimension specs."""
+
+    ...
+
+
+class RatingSpec(BaseSpec):
+    """Spec for rating dimensions (e.g., 1-5 scale)."""
+
+    kind: t.Literal["rating"] = "rating"
+    min: int = 0
+    max: int = 5
+    step: int = 1
+    anchors: dict[str, str] = {}
+    ui: RatingUISpec = RatingUISpec()
+
+
+class NumberSpec(BaseSpec):
+    """Spec for numeric input dimensions."""
+
+    kind: t.Literal["number"] = "number"
+    min: float | None = None
+    max: float | None = None
+    integer: bool = False
+    unit: str | None = None
+
+
+class ChoiceSpec(BaseSpec):
+    """Spec for single-choice dimensions."""
+
+    kind: t.Literal["choice"] = "choice"
+    options: list[ChoiceOption]
+    randomize: bool = False
+
+
+class MultiChoiceSpec(BaseSpec):
+    """Spec for multi-choice dimensions."""
+
+    kind: t.Literal["multi_choice"] = "multi_choice"
+    options: list[ChoiceOption]
+    min_selected: int = 0
+    max_selected: int | None = None
+
+
+class BooleanSpec(BaseSpec):
+    """Spec for boolean dimensions."""
+
+    kind: t.Literal["boolean"] = "boolean"
+    true_label: str = "Yes"
+    false_label: str = "No"
+
+
+class TextSpec(BaseSpec):
+    """Spec for short text input dimensions."""
+
+    kind: t.Literal["text"] = "text"
+    min_length: int = 0
+    max_length: int = 280
+    placeholder: str | None = None
+
+
+class LongTextSpec(BaseSpec):
+    """Spec for long text input dimensions."""
+
+    kind: t.Literal["long_text"] = "long_text"
+    min_length: int = 0
+    max_length: int = 5000
+    placeholder: str | None = None
+
+
+class DateSpec(BaseSpec):
+    """Spec for date input dimensions."""
+
+    kind: t.Literal["date"] = "date"
+    min_date: datetime.date | None = None
+    max_date: datetime.date | None = None
+
+
+class DateTimeSpec(BaseSpec):
+    """Spec for datetime input dimensions."""
+
+    kind: t.Literal["datetime"] = "datetime"
+    min_datetime: datetime.datetime | None = None
+    max_datetime: datetime.datetime | None = None
+
+
+Spec = t.Annotated[
+    RatingSpec
+    | NumberSpec
+    | ChoiceSpec
+    | MultiChoiceSpec
+    | BooleanSpec
+    | TextSpec
+    | LongTextSpec
+    | DateSpec
+    | DateTimeSpec,
+    p.Field(discriminator="kind"),
+]
+
+
 class SurveyDimension(BaseModel):
     """A single dimension in a survey schema."""
 
     name: str
     label: str
-    kind: SurveyDimensionKind
+    spec: Spec
     required: bool = True
     help: str | None = None
     tags: list[str] = []
     weight: float = 1.0
     reverse_scored: bool = False
-    spec: dict[str, t.Any] = {}
 
 
 class PromptTemplate(BaseModel, WithTimestamps):

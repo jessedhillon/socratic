@@ -11,9 +11,11 @@ This migration adds tables for tracking prompt experiments:
 - flight_surveys: Collected feedback for flights
 """
 
-import sqlalchemy as sa
 from alembic import op
-from sqlalchemy.dialects import postgresql
+from sqlalchemy import func as f
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.schema import Column, ForeignKey, UniqueConstraint
+from sqlalchemy.types import Boolean, DateTime, Integer, String, Text
 
 # revision identifiers, used by Alembic.
 revision = "009_flights"
@@ -26,25 +28,14 @@ def upgrade() -> None:
     # Create prompt_templates table
     op.create_table(
         "prompt_templates",
-        sa.Column("template_id", sa.String(length=27), nullable=False),
-        sa.Column("name", sa.String(), nullable=False),
-        sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
-        sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column(
-            "create_time",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.Column(
-            "update_time",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.PrimaryKeyConstraint("template_id"),
+        Column("template_id", String(27), primary_key=True),
+        Column("name", String, nullable=False),
+        Column("version", Integer, nullable=False, server_default="1"),
+        Column("content", Text, nullable=False),
+        Column("description", Text, nullable=True),
+        Column("is_active", Boolean, nullable=False, server_default="true"),
+        Column("create_time", DateTime(timezone=True), nullable=False, server_default=f.now()),
+        Column("update_time", DateTime(timezone=True), nullable=False, server_default=f.now()),
     )
 
     # Add unique constraint on (name, version) for prompt_templates
@@ -57,84 +48,33 @@ def upgrade() -> None:
     # Create survey_schemas table
     op.create_table(
         "survey_schemas",
-        sa.Column("schema_id", sa.String(length=27), nullable=False),
-        sa.Column("name", sa.String(), nullable=False),
-        sa.Column(
-            "dimensions",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=False,
-            server_default="[]",
-        ),
-        sa.Column("is_default", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column(
-            "create_time",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.PrimaryKeyConstraint("schema_id"),
-        sa.UniqueConstraint("name", name="uq_survey_schemas_name"),
+        Column("schema_id", String(27), primary_key=True),
+        Column("name", String, nullable=False),
+        Column("dimensions", JSONB(astext_type=Text()), nullable=False, server_default="[]"),
+        Column("is_default", Boolean, nullable=False, server_default="false"),
+        Column("create_time", DateTime(timezone=True), nullable=False, server_default=f.now()),
+        UniqueConstraint("name", name="uq_survey_schemas_name"),
     )
 
     # Create flights table
     op.create_table(
         "flights",
-        sa.Column("flight_id", sa.String(length=27), nullable=False),
-        sa.Column("template_id", sa.String(length=27), nullable=False),
-        sa.Column("created_by", sa.String(), nullable=False),
-        sa.Column(
-            "feature_flags",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=False,
-            server_default="{}",
-        ),
-        sa.Column(
-            "context",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=False,
-            server_default="{}",
-        ),
-        sa.Column("rendered_content", sa.Text(), nullable=False),
-        sa.Column("model_provider", sa.String(), nullable=False),
-        sa.Column("model_name", sa.String(), nullable=False),
-        sa.Column(
-            "model_config_data",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=False,
-            server_default="{}",
-        ),
-        sa.Column("status", sa.String(), nullable=False, server_default="active"),
-        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("attempt_id", sa.String(length=27), nullable=True),
-        sa.Column(
-            "outcome_metadata",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=True,
-        ),
-        sa.Column(
-            "create_time",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.Column(
-            "update_time",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.ForeignKeyConstraint(
-            ["template_id"],
-            ["prompt_templates.template_id"],
-            name="fk_flights_template_id",
-        ),
-        sa.ForeignKeyConstraint(
-            ["attempt_id"],
-            ["assessment_attempts.attempt_id"],
-            name="fk_flights_attempt_id",
-        ),
-        sa.PrimaryKeyConstraint("flight_id"),
+        Column("flight_id", String(27), primary_key=True),
+        Column("template_id", String(27), ForeignKey("prompt_templates.template_id"), nullable=False),
+        Column("created_by", String, nullable=False),
+        Column("feature_flags", JSONB(astext_type=Text()), nullable=False, server_default="{}"),
+        Column("context", JSONB(astext_type=Text()), nullable=False, server_default="{}"),
+        Column("rendered_content", Text, nullable=False),
+        Column("model_provider", String, nullable=False),
+        Column("model_name", String, nullable=False),
+        Column("model_config_data", JSONB(astext_type=Text()), nullable=False, server_default="{}"),
+        Column("status", String, nullable=False, server_default="active"),
+        Column("started_at", DateTime(timezone=True), nullable=False),
+        Column("completed_at", DateTime(timezone=True), nullable=True),
+        Column("attempt_id", String(27), ForeignKey("assessment_attempts.attempt_id"), nullable=True),
+        Column("outcome_metadata", JSONB(astext_type=Text()), nullable=True),
+        Column("create_time", DateTime(timezone=True), nullable=False, server_default=f.now()),
+        Column("update_time", DateTime(timezone=True), nullable=False, server_default=f.now()),
     )
 
     # Create indexes for flights
@@ -146,40 +86,14 @@ def upgrade() -> None:
     # Create flight_surveys table
     op.create_table(
         "flight_surveys",
-        sa.Column("survey_id", sa.String(length=27), nullable=False),
-        sa.Column("flight_id", sa.String(length=27), nullable=False),
-        sa.Column("schema_id", sa.String(length=27), nullable=True),
-        sa.Column("submitted_by", sa.String(), nullable=False),
-        sa.Column(
-            "ratings",
-            postgresql.JSONB(astext_type=sa.Text()),
-            nullable=False,
-            server_default="{}",
-        ),
-        sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column(
-            "tags",
-            postgresql.ARRAY(sa.String()),
-            nullable=False,
-            server_default="{}",
-        ),
-        sa.Column(
-            "create_time",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.ForeignKeyConstraint(
-            ["flight_id"],
-            ["flights.flight_id"],
-            name="fk_flight_surveys_flight_id",
-        ),
-        sa.ForeignKeyConstraint(
-            ["schema_id"],
-            ["survey_schemas.schema_id"],
-            name="fk_flight_surveys_schema_id",
-        ),
-        sa.PrimaryKeyConstraint("survey_id"),
+        Column("survey_id", String(27), primary_key=True),
+        Column("flight_id", String(27), ForeignKey("flights.flight_id"), nullable=False),
+        Column("schema_id", String(27), ForeignKey("survey_schemas.schema_id"), nullable=True),
+        Column("submitted_by", String, nullable=False),
+        Column("ratings", JSONB(astext_type=Text()), nullable=False, server_default="{}"),
+        Column("notes", Text, nullable=True),
+        Column("tags", ARRAY(String), nullable=False, server_default="{}"),
+        Column("create_time", DateTime(timezone=True), nullable=False, server_default=f.now()),
     )
 
     # Create indexes for flight_surveys
