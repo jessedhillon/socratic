@@ -132,9 +132,10 @@ def create_template(
 
     If a template with this name exists, creates a new version.
     """
-    # Check for existing template to determine version
-    existing = get_template(name=name, session=session)
-    version = (existing.version + 1) if existing else 1
+    # Determine next version from the highest existing version (active or not)
+    max_version_stmt = sqla.select(sqla.func.max(prompt_templates.version)).where(prompt_templates.name == name)
+    max_version = session.execute(max_version_stmt).scalar()
+    version = (max_version + 1) if max_version is not None else 1
 
     template_id = PromptTemplateID()
     content_hash = _hash_content(content)
