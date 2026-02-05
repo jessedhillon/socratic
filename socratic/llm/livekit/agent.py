@@ -15,7 +15,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables.schema import StreamEvent
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
-from livekit.agents import Agent, llm  # pyright: ignore [reportMissingTypeStubs]
+from livekit.agents import Agent, CloseEvent, CloseReason, llm  # pyright: ignore [reportMissingTypeStubs]
 
 import socratic.lib.json as json
 import socratic.lib.uuid as uuid
@@ -78,6 +78,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         self._initialized = False
         self._failed = False
         self._pending_complete = False
+        self._flight_completed = False
         self._thread_id = str(uuid.uuid4())
         self._flight_id: FlightID | None = None
 
@@ -193,7 +194,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
                                 "temperature": self.model_settings.temperature,
                                 "max_tokens": self.model_settings.max_tokens,
                             },
-                            attempt_id=self.attempt_id,
+                            labels={"attempt_id": str(self.attempt_id)},
                             session=session,
                         )
                         flight_id = flight.flight_id
@@ -335,6 +336,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         if not self._initialized:
             logger.info(f"Starting assessment for attempt {self.attempt_id}")
             self.session.on("agent_state_changed", self._on_agent_state_changed)  # pyright: ignore [reportUnknownMemberType]
+            self.session.on("close", self._on_session_close)  # pyright: ignore [reportUnknownMemberType]
             input_state: AssessmentState | dict[str, t.Any] = await self._build_initial_state()
         else:
             # Check if the agent's previous response was interrupted — this
@@ -414,40 +416,87 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             await self._publish_error("An unexpected error occurred during the assessment.")
 
     @di.inject
-    async def _publish_complete(
+    async def _complete_flight(
         self,
         *,
+        completion_reason: str,
+        abandon: bool = False,
         session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],  # noqa: B008
     ) -> None:
-        """Publish assessment completion to the room data channel and shut down."""
-        logger.info(f"Assessment complete for attempt {self.attempt_id}")
+        """Mark the tracked flight as completed or abandoned with outcome metadata.
 
-        # Mark the flight as completed if one was created
-        if self._flight_id is not None:
-            try:
-                async with session.begin():
-                    # Get final state to extract outcome metadata
+        Includes ``completion_reason`` in the outcome metadata so we can
+        distinguish agent-initiated completion from user disconnect, etc.
+        Guarded by ``_flight_completed`` to prevent double-completion.
+        """
+        if self._flight_completed or self._flight_id is None:
+            return
+
+        self._flight_completed = True
+
+        try:
+            async with session.begin():
+                outcome_metadata: dict[str, t.Any] = {
+                    "completion_reason": completion_reason,
+                }
+
+                # Try to capture criteria coverage from graph state
+                try:
                     state_snapshot = await self.graph.aget_state(self._graph_config)  # pyright: ignore [reportUnknownMemberType, reportArgumentType]
                     criteria_coverage = state_snapshot.values.get("criteria_coverage", {})  # pyright: ignore [reportUnknownMemberType]
-
-                    outcome_metadata: dict[str, t.Any] = {
-                        "criteria_coverage": {
-                            cid: {
-                                "coverage": cov.get("coverage", "unknown") if isinstance(cov, dict) else "unknown",
-                                "evidence_count": len(cov.get("evidence", [])) if isinstance(cov, dict) else 0,  # pyright: ignore [reportUnknownArgumentType]
-                            }
-                            for cid, cov in criteria_coverage.items()  # pyright: ignore [reportUnknownVariableType]
-                        },
+                    outcome_metadata["criteria_coverage"] = {
+                        cid: {
+                            "coverage": cov.get("coverage", "unknown") if isinstance(cov, dict) else "unknown",
+                            "evidence_count": len(cov.get("evidence", [])) if isinstance(cov, dict) else 0,  # pyright: ignore [reportUnknownArgumentType]
+                        }
+                        for cid, cov in criteria_coverage.items()  # pyright: ignore [reportUnknownVariableType]
                     }
+                except Exception:
+                    logger.warning(f"Could not retrieve graph state for flight {self._flight_id} outcome metadata")
 
+                if abandon:
+                    await flight_storage.aabandon_flight(
+                        self._flight_id,
+                        outcome_metadata=outcome_metadata,
+                        session=session,
+                    )
+                    logger.info(f"Marked flight {self._flight_id} as abandoned (reason: {completion_reason})")
+                else:
                     await flight_storage.acomplete_flight(
                         self._flight_id,
                         outcome_metadata=outcome_metadata,
                         session=session,
                     )
-                    logger.info(f"Marked flight {self._flight_id} as completed")
-            except Exception:
-                logger.exception(f"Failed to complete flight {self._flight_id}")
+                    logger.info(f"Marked flight {self._flight_id} as completed (reason: {completion_reason})")
+        except Exception:
+            logger.exception(f"Failed to update flight {self._flight_id} (reason: {completion_reason})")
+
+    def _on_session_close(self, event: CloseEvent) -> None:
+        """Handle session close to ensure the flight is marked complete or abandoned.
+
+        Maps the LiveKit ``CloseReason`` to a flight completion reason:
+
+        - ``PARTICIPANT_DISCONNECTED``: user left — abandon the flight
+        - ``ERROR``: something went wrong — abandon the flight
+        - ``JOB_SHUTDOWN``: server-side shutdown — abandon the flight
+        - ``USER_INITIATED`` / ``TASK_COMPLETED``: triggered by our own
+          ``session.shutdown()`` call in ``_publish_complete`` — the flight
+          is already completed, so the ``_flight_completed`` guard prevents
+          double-writes.
+        """
+        reason = event.reason
+        if reason == CloseReason.PARTICIPANT_DISCONNECTED:
+            asyncio.create_task(self._complete_flight(completion_reason="participant_disconnected", abandon=True))
+        elif reason == CloseReason.ERROR:
+            asyncio.create_task(self._complete_flight(completion_reason="error", abandon=True))
+        elif reason == CloseReason.JOB_SHUTDOWN:
+            asyncio.create_task(self._complete_flight(completion_reason="job_shutdown", abandon=True))
+
+    async def _publish_complete(self) -> None:
+        """Publish assessment completion to the room data channel and shut down."""
+        logger.info(f"Assessment complete for attempt {self.attempt_id}")
+
+        await self._complete_flight(completion_reason="agent")
 
         event = AssessmentCompleteEvent(attempt_id=self.attempt_id)
         try:
