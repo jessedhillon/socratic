@@ -5,7 +5,12 @@ import pydantic as p
 from .base import BaseSettings
 
 
+class FlightsSettings(BaseSettings):
+    base_url: str
+
+
 class VendorSettings(BaseSettings):
+    flights: FlightsSettings
     google: GoogleSettings
     livekit: LiveKitSettings
 
