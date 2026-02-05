@@ -152,7 +152,6 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         flight_id: FlightID | None = None
         conviviality = Conviviality.Conversational
 
-<<<<<<< HEAD
         try:
             template_source = env.loader.get_source(env, "agent/assessment_system.j2")[0]  # pyright: ignore[reportOptionalMemberAccess]
             result = await flights.create_flight(
@@ -185,64 +184,6 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         except Exception:
             # Flight tracking is optional — don't fail the assessment if it errors
             logger.exception("Failed to create flight for assessment tracking")
-||||||| parent of 7893ce1 (feat(livekit): integrate flights tracking with assessment agent)
-=======
-        # Try to create a flight if we have template tracking enabled
-        if self.env is not None and self.model_settings is not None:
-            try:
-                async with session.begin():
-                    # Look up the assessment system template
-                    template = await flight_storage.aget_template(
-                        name="assessment_system",
-                        session=session,
-                    )
-                    if template is not None:
-                        # Render the template (same as AssessmentAgent.system_prompt does)
-                        # Use default conviviality — could be enhanced to accept via context
-                        conviviality = Conviviality.Conversational
-                        jinja_template = self.env.get_template("agent/assessment_system.j2")
-                        rendered_content = jinja_template.render(
-                            objective_title=self.context.objective_title,
-                            objective_description=self.context.objective_description,
-                            rubric_criteria=self.context.rubric_criteria,
-                            initial_prompts=self.context.initial_prompts,
-                            conviviality=conviviality,
-                            time_budget_minutes=self.context.time_expectation_minutes,
-                        )
-
-                        # Create the flight
-                        flight = await flight_storage.acreate_flight(
-                            template_id=template.template_id,
-                            created_by="system",  # Could be enhanced to track user
-                            rendered_content=rendered_content,
-                            model_provider=self.model_settings.provider.value,
-                            model_name=self.model_settings.model,
-                            started_at=start_time,
-                            feature_flags={
-                                "conviviality": conviviality.value,
-                                "extension_policy": self.context.extension_policy,
-                            },
-                            context={
-                                "objective_id": self.context.objective_id,
-                                "objective_title": self.context.objective_title,
-                                "rubric_criteria_count": len(self.context.rubric_criteria),
-                                "initial_prompts_count": len(self.context.initial_prompts),
-                                "time_expectation_minutes": self.context.time_expectation_minutes,
-                            },
-                            model_config={
-                                "temperature": self.model_settings.temperature,
-                                "max_tokens": self.model_settings.max_tokens,
-                            },
-                            attempt_id=self.attempt_id,
-                            session=session,
-                        )
-                        flight_id = flight.flight_id
-                        self._flight_id = flight_id
-                        logger.info(f"Created flight {flight_id} for attempt {self.attempt_id}")
-            except Exception:
-                # Flight tracking is optional — don't fail the assessment if it errors
-                logger.exception("Failed to create flight for assessment tracking")
->>>>>>> 7893ce1 (feat(livekit): integrate flights tracking with assessment agent)
 
         return AssessmentState(
             attempt_id=self.context.attempt_id,
@@ -376,12 +317,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         if not self._initialized:
             logger.info(f"Starting assessment for attempt {self.attempt_id}")
             self.session.on("agent_state_changed", self._on_agent_state_changed)  # pyright: ignore [reportUnknownMemberType]
-<<<<<<< HEAD
             self.session.on("close", self._on_session_close)  # pyright: ignore [reportUnknownMemberType]
-||||||| parent of 7893ce1 (feat(livekit): integrate flights tracking with assessment agent)
-            input_state: AssessmentState | dict[str, t.Any] = self._build_initial_state()
-=======
->>>>>>> 7893ce1 (feat(livekit): integrate flights tracking with assessment agent)
             input_state: AssessmentState | dict[str, t.Any] = await self._build_initial_state()
         else:
             # Check if the agent's previous response was interrupted — this
@@ -461,7 +397,6 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             await self._publish_error("An unexpected error occurred during the assessment.")
 
     @di.inject
-<<<<<<< HEAD
     async def _complete_flight(
         self,
         *,
@@ -531,49 +466,10 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             asyncio.create_task(self._complete_flight(completion_reason="job_shutdown", status=abandoned))
 
     async def _publish_complete(self) -> None:
-||||||| parent of 7893ce1 (feat(livekit): integrate flights tracking with assessment agent)
-    async def _publish_complete(self) -> None:
-=======
-    async def _publish_complete(
-        self,
-        *,
-        session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],  # noqa: B008
-    ) -> None:
->>>>>>> 7893ce1 (feat(livekit): integrate flights tracking with assessment agent)
         """Publish assessment completion to the room data channel and shut down."""
         logger.info(f"Assessment complete for attempt {self.attempt_id}")
 
-<<<<<<< HEAD
         await self._complete_flight(completion_reason="agent")
-||||||| parent of 7893ce1 (feat(livekit): integrate flights tracking with assessment agent)
-=======
-        # Mark the flight as completed if one was created
-        if self._flight_id is not None:
-            try:
-                async with session.begin():
-                    # Get final state to extract outcome metadata
-                    state_snapshot = await self.graph.aget_state(self._graph_config)  # pyright: ignore [reportUnknownMemberType, reportArgumentType]
-                    criteria_coverage = state_snapshot.values.get("criteria_coverage", {})  # pyright: ignore [reportUnknownMemberType]
-
-                    outcome_metadata: dict[str, t.Any] = {
-                        "criteria_coverage": {
-                            cid: {
-                                "coverage": cov.get("coverage", "unknown") if isinstance(cov, dict) else "unknown",
-                                "evidence_count": len(cov.get("evidence", [])) if isinstance(cov, dict) else 0,  # pyright: ignore [reportUnknownArgumentType]
-                            }
-                            for cid, cov in criteria_coverage.items()  # pyright: ignore [reportUnknownVariableType]
-                        },
-                    }
-
-                    await flight_storage.acomplete_flight(
-                        self._flight_id,
-                        outcome_metadata=outcome_metadata,
-                        session=session,
-                    )
-                    logger.info(f"Marked flight {self._flight_id} as completed")
-            except Exception:
-                logger.exception(f"Failed to complete flight {self._flight_id}")
->>>>>>> 7893ce1 (feat(livekit): integrate flights tracking with assessment agent)
 
         event = AssessmentCompleteEvent(attempt_id=self.attempt_id)
         try:
