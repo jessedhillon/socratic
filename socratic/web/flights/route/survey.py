@@ -9,9 +9,8 @@ from socratic.core import di
 from socratic.model import FlightID, SurveyID, SurveySchemaID
 from socratic.storage import flight as flight_storage
 
-from ..view import SurveyCreateRequest, SurveyListResponse, SurveyResponse, SurveySchemaCreateRequest, \
-    SurveySchemaListResponse, SurveySchemaResponse
-from ..view.survey import SurveyDimensionView
+from ..view import SurveyCreateRequest, SurveyListView, SurveySchemaCreateRequest, SurveySchemaListView, \
+    SurveySchemaView, SurveyView
 
 router = APIRouter(tags=["surveys"])
 
@@ -26,25 +25,14 @@ router = APIRouter(tags=["surveys"])
 def list_survey_schemas(
     is_default: bool | None = None,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> SurveySchemaListResponse:
+) -> SurveySchemaListView:
     """List available survey schemas."""
     with session.begin():
         schemas = flight_storage.find_survey_schemas(
             is_default=is_default,
             session=session,
         )
-        return SurveySchemaListResponse(
-            schemas=[
-                SurveySchemaResponse(
-                    schema_id=s.schema_id,
-                    name=s.name,
-                    dimensions=[SurveyDimensionView(**d.model_dump()) for d in s.dimensions],
-                    is_default=s.is_default,
-                    create_time=s.create_time,
-                )
-                for s in schemas
-            ]
-        )
+        return SurveySchemaListView(schemas=[SurveySchemaView.from_model(s) for s in schemas])
 
 
 @router.get("/api/survey-schemas/{schema_id}", operation_id="get_survey_schema")
@@ -52,7 +40,7 @@ def list_survey_schemas(
 def get_survey_schema(
     schema_id: SurveySchemaID,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> SurveySchemaResponse:
+) -> SurveySchemaView:
     """Get a specific survey schema by ID."""
     with session.begin():
         schema = flight_storage.get_survey_schema(schema_id, session=session)
@@ -61,13 +49,7 @@ def get_survey_schema(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Survey schema not found",
             )
-        return SurveySchemaResponse(
-            schema_id=schema.schema_id,
-            name=schema.name,
-            dimensions=[SurveyDimensionView(**d.model_dump()) for d in schema.dimensions],
-            is_default=schema.is_default,
-            create_time=schema.create_time,
-        )
+        return SurveySchemaView.from_model(schema)
 
 
 @router.post("/api/survey-schemas", operation_id="create_survey_schema", status_code=status.HTTP_201_CREATED)
@@ -75,7 +57,7 @@ def get_survey_schema(
 def create_survey_schema(
     request: SurveySchemaCreateRequest,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> SurveySchemaResponse:
+) -> SurveySchemaView:
     """Create a new survey schema."""
     with session.begin():
         # Check if name already exists
@@ -88,17 +70,11 @@ def create_survey_schema(
 
         schema = flight_storage.create_survey_schema(
             name=request.name,
-            dimensions=[d.model_dump() for d in request.dimensions],
+            dimensions=[d.to_model() for d in request.dimensions],
             is_default=request.is_default,
             session=session,
         )
-        return SurveySchemaResponse(
-            schema_id=schema.schema_id,
-            name=schema.name,
-            dimensions=[SurveyDimensionView(**d.model_dump()) for d in schema.dimensions],
-            is_default=schema.is_default,
-            create_time=schema.create_time,
-        )
+        return SurveySchemaView.from_model(schema)
 
 
 # =============================================================================
@@ -111,7 +87,7 @@ def create_survey_schema(
 def list_flight_surveys(
     flight_id: FlightID,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> SurveyListResponse:
+) -> SurveyListView:
     """List surveys for a specific flight."""
     with session.begin():
         # Verify flight exists
@@ -123,21 +99,7 @@ def list_flight_surveys(
             )
 
         surveys = flight_storage.find_surveys(flight_id=flight_id, session=session)
-        return SurveyListResponse(
-            surveys=[
-                SurveyResponse(
-                    survey_id=s.survey_id,
-                    flight_id=s.flight_id,
-                    schema_id=s.schema_id,
-                    submitted_by=s.submitted_by,
-                    ratings=s.ratings,
-                    notes=s.notes,
-                    tags=s.tags,
-                    create_time=s.create_time,
-                )
-                for s in surveys
-            ]
-        )
+        return SurveyListView(surveys=[SurveyView.from_model(s) for s in surveys])
 
 
 @router.post("/api/flights/{flight_id}/surveys", operation_id="create_survey", status_code=status.HTTP_201_CREATED)
@@ -146,7 +108,7 @@ def create_survey(
     flight_id: FlightID,
     request: SurveyCreateRequest,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> SurveyResponse:
+) -> SurveyView:
     """Submit a survey for a flight."""
     with session.begin():
         # Verify flight exists
@@ -175,16 +137,7 @@ def create_survey(
             tags=request.tags,
             session=session,
         )
-        return SurveyResponse(
-            survey_id=survey.survey_id,
-            flight_id=survey.flight_id,
-            schema_id=survey.schema_id,
-            submitted_by=survey.submitted_by,
-            ratings=survey.ratings,
-            notes=survey.notes,
-            tags=survey.tags,
-            create_time=survey.create_time,
-        )
+        return SurveyView.from_model(survey)
 
 
 @router.get("/api/surveys/{survey_id}", operation_id="get_survey")
@@ -192,7 +145,7 @@ def create_survey(
 def get_survey(
     survey_id: SurveyID,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> SurveyResponse:
+) -> SurveyView:
     """Get a specific survey by ID."""
     with session.begin():
         survey = flight_storage.get_survey(survey_id, session=session)
@@ -201,13 +154,4 @@ def get_survey(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Survey not found",
             )
-        return SurveyResponse(
-            survey_id=survey.survey_id,
-            flight_id=survey.flight_id,
-            schema_id=survey.schema_id,
-            submitted_by=survey.submitted_by,
-            ratings=survey.ratings,
-            notes=survey.notes,
-            tags=survey.tags,
-            create_time=survey.create_time,
-        )
+        return SurveyView.from_model(survey)

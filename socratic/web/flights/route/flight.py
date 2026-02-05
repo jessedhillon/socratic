@@ -13,7 +13,7 @@ from socratic.core import di
 from socratic.model import AttemptID, FlightID, FlightStatus, FlightWithTemplate, PromptTemplateID
 from socratic.storage import flight as flight_storage
 
-from ..view import FlightCreateRequest, FlightListResponse, FlightResponse, FlightUpdateRequest
+from ..view import FlightCreateRequest, FlightListView, FlightUpdateRequest, FlightView
 
 router = APIRouter(prefix="/api/flights", tags=["flights"])
 
@@ -39,7 +39,7 @@ def list_flights(
     created_by: str | None = None,
     limit: int | None = 50,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> FlightListResponse:
+) -> FlightListView:
     """List flights with optional filters."""
     with session.begin():
         flights = t.cast(
@@ -54,31 +54,7 @@ def list_flights(
                 session=session,
             ),
         )
-        return FlightListResponse(
-            flights=[
-                FlightResponse(
-                    flight_id=f.flight_id,
-                    template_id=f.template_id,
-                    template_name=f.template_name,
-                    template_version=f.template_version,
-                    created_by=f.created_by,
-                    feature_flags=f.feature_flags,
-                    context=f.context,
-                    rendered_content=f.rendered_content,
-                    model_provider=f.model_provider,
-                    model_name=f.model_name,
-                    model_config_data=f.model_config_data,
-                    status=f.status,
-                    started_at=f.started_at,
-                    completed_at=f.completed_at,
-                    attempt_id=f.attempt_id,
-                    outcome_metadata=f.outcome_metadata,
-                    create_time=f.create_time,
-                    update_time=f.update_time,
-                )
-                for f in flights
-            ]
-        )
+        return FlightListView(flights=[FlightView.from_model(f) for f in flights])
 
 
 @router.get("/{flight_id}", operation_id="get_flight")
@@ -86,7 +62,7 @@ def list_flights(
 def get_flight(
     flight_id: FlightID,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> FlightResponse:
+) -> FlightView:
     """Get a specific flight by ID."""
     with session.begin():
         flight = flight_storage.get_flight(flight_id, with_template=True, session=session)
@@ -95,26 +71,7 @@ def get_flight(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Flight not found",
             )
-        return FlightResponse(
-            flight_id=flight.flight_id,
-            template_id=flight.template_id,
-            template_name=flight.template_name,
-            template_version=flight.template_version,
-            created_by=flight.created_by,
-            feature_flags=flight.feature_flags,
-            context=flight.context,
-            rendered_content=flight.rendered_content,
-            model_provider=flight.model_provider,
-            model_name=flight.model_name,
-            model_config_data=flight.model_config_data,
-            status=flight.status,
-            started_at=flight.started_at,
-            completed_at=flight.completed_at,
-            attempt_id=flight.attempt_id,
-            outcome_metadata=flight.outcome_metadata,
-            create_time=flight.create_time,
-            update_time=flight.update_time,
-        )
+        return FlightView.from_model(flight)
 
 
 @router.post("", operation_id="create_flight", status_code=status.HTTP_201_CREATED)
@@ -122,7 +79,7 @@ def get_flight(
 def create_flight(
     request: FlightCreateRequest,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> FlightResponse:
+) -> FlightView:
     """Create a new flight.
 
     Resolves the template by name (with optional content for auto-versioning),
@@ -175,26 +132,13 @@ def create_flight(
             session=session,
         )
 
-        return FlightResponse(
-            flight_id=flight.flight_id,
-            template_id=flight.template_id,
-            template_name=template.name,
-            template_version=template.version,
-            created_by=flight.created_by,
-            feature_flags=flight.feature_flags,
-            context=flight.context,
-            rendered_content=flight.rendered_content,
-            model_provider=flight.model_provider,
-            model_name=flight.model_name,
-            model_config_data=flight.model_config_data,
-            status=flight.status,
-            started_at=flight.started_at,
-            completed_at=flight.completed_at,
-            attempt_id=flight.attempt_id,
-            outcome_metadata=flight.outcome_metadata,
-            create_time=flight.create_time,
-            update_time=flight.update_time,
+        # create_flight returns a Flight (no template join), so construct
+        # the view with template info from the resolved template
+        view = FlightView.from_model(flight)
+        view = view.model_copy(
+            update={"template_name": template.name, "template_version": template.version},
         )
+        return view
 
 
 @router.patch("/{flight_id}", operation_id="update_flight")
@@ -203,30 +147,32 @@ def update_flight(
     flight_id: FlightID,
     request: FlightUpdateRequest,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> FlightResponse:
+) -> FlightView:
     """Update a flight's status or outcome metadata."""
     with session.begin():
+        status_val: FlightStatus | flight_storage.NotSet = flight_storage.NotSet()
+        completed_at: datetime.datetime | None | flight_storage.NotSet = flight_storage.NotSet()
+        outcome_metadata: dict[str, t.Any] | None | flight_storage.NotSet = flight_storage.NotSet()
+
+        if request.status is not None:
+            status_val = request.status
+            completed_at = (
+                datetime.datetime.now(datetime.UTC)
+                if request.status in (FlightStatus.Completed, FlightStatus.Abandoned)
+                else None
+            )
+
+        if request.outcome_metadata is not None:
+            outcome_metadata = request.outcome_metadata
+
         try:
-            if request.status is not None:
-                if request.status in (FlightStatus.Completed, FlightStatus.Abandoned):
-                    completed_at = datetime.datetime.now(datetime.UTC)
-                else:
-                    completed_at = None
-                flight_storage.update_flight(
-                    flight_id,
-                    status=request.status,
-                    completed_at=completed_at,
-                    outcome_metadata=request.outcome_metadata
-                    if request.outcome_metadata is not None
-                    else flight_storage.NotSet(),
-                    session=session,
-                )
-            elif request.outcome_metadata is not None:
-                flight_storage.update_flight(
-                    flight_id,
-                    outcome_metadata=request.outcome_metadata,
-                    session=session,
-                )
+            flight_storage.update_flight(
+                flight_id,
+                status=status_val,
+                completed_at=completed_at,
+                outcome_metadata=outcome_metadata,
+                session=session,
+            )
         except KeyError:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -235,26 +181,7 @@ def update_flight(
 
         flight = flight_storage.get_flight(flight_id, with_template=True, session=session)
         assert flight is not None
-        return FlightResponse(
-            flight_id=flight.flight_id,
-            template_id=flight.template_id,
-            template_name=flight.template_name,
-            template_version=flight.template_version,
-            created_by=flight.created_by,
-            feature_flags=flight.feature_flags,
-            context=flight.context,
-            rendered_content=flight.rendered_content,
-            model_provider=flight.model_provider,
-            model_name=flight.model_name,
-            model_config_data=flight.model_config_data,
-            status=flight.status,
-            started_at=flight.started_at,
-            completed_at=flight.completed_at,
-            attempt_id=flight.attempt_id,
-            outcome_metadata=flight.outcome_metadata,
-            create_time=flight.create_time,
-            update_time=flight.update_time,
-        )
+        return FlightView.from_model(flight)
 
 
 @router.post("/{flight_id}/complete", operation_id="complete_flight")
@@ -263,7 +190,7 @@ def complete_flight(
     flight_id: FlightID,
     outcome_metadata: dict[str, t.Any] | None = None,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> FlightResponse:
+) -> FlightView:
     """Mark a flight as completed."""
     with session.begin():
         try:
@@ -280,23 +207,4 @@ def complete_flight(
 
         flight = flight_storage.get_flight(flight_id, with_template=True, session=session)
         assert flight is not None
-        return FlightResponse(
-            flight_id=flight.flight_id,
-            template_id=flight.template_id,
-            template_name=flight.template_name,
-            template_version=flight.template_version,
-            created_by=flight.created_by,
-            feature_flags=flight.feature_flags,
-            context=flight.context,
-            rendered_content=flight.rendered_content,
-            model_provider=flight.model_provider,
-            model_name=flight.model_name,
-            model_config_data=flight.model_config_data,
-            status=flight.status,
-            started_at=flight.started_at,
-            completed_at=flight.completed_at,
-            attempt_id=flight.attempt_id,
-            outcome_metadata=flight.outcome_metadata,
-            create_time=flight.create_time,
-            update_time=flight.update_time,
-        )
+        return FlightView.from_model(flight)

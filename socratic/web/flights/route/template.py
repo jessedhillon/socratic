@@ -9,7 +9,7 @@ from socratic.core import di
 from socratic.model import PromptTemplateID
 from socratic.storage import flight as flight_storage
 
-from ..view import TemplateCreateRequest, TemplateListResponse, TemplateResponse
+from ..view import TemplateCreateRequest, TemplateListView, TemplateView
 
 router = APIRouter(prefix="/api/templates", tags=["templates"])
 
@@ -20,7 +20,7 @@ def list_templates(
     name: str | None = None,
     is_active: bool | None = None,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> TemplateListResponse:
+) -> TemplateListView:
     """List prompt templates.
 
     Optionally filter by name or active status.
@@ -31,21 +31,7 @@ def list_templates(
             is_active=is_active,
             session=session,
         )
-        return TemplateListResponse(
-            templates=[
-                TemplateResponse(
-                    template_id=t.template_id,
-                    name=t.name,
-                    version=t.version,
-                    content=t.content,
-                    description=t.description,
-                    is_active=t.is_active,
-                    create_time=t.create_time,
-                    update_time=t.update_time,
-                )
-                for t in templates
-            ]
-        )
+        return TemplateListView(templates=[TemplateView.from_model(t) for t in templates])
 
 
 @router.get("/{template_id}", operation_id="get_template")
@@ -53,7 +39,7 @@ def list_templates(
 def get_template(
     template_id: PromptTemplateID,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> TemplateResponse:
+) -> TemplateView:
     """Get a specific template by ID."""
     with session.begin():
         template = flight_storage.get_template(template_id, session=session)
@@ -62,16 +48,7 @@ def get_template(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Template not found",
             )
-        return TemplateResponse(
-            template_id=template.template_id,
-            name=template.name,
-            version=template.version,
-            content=template.content,
-            description=template.description,
-            is_active=template.is_active,
-            create_time=template.create_time,
-            update_time=template.update_time,
-        )
+        return TemplateView.from_model(template)
 
 
 @router.post("", operation_id="create_template", status_code=status.HTTP_201_CREATED)
@@ -79,7 +56,7 @@ def get_template(
 def create_template(
     request: TemplateCreateRequest,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> TemplateResponse:
+) -> TemplateView:
     """Create a new template.
 
     If a template with the same name exists, creates a new version.
@@ -91,16 +68,7 @@ def create_template(
             description=request.description,
             session=session,
         )
-        return TemplateResponse(
-            template_id=template.template_id,
-            name=template.name,
-            version=template.version,
-            content=template.content,
-            description=template.description,
-            is_active=template.is_active,
-            create_time=template.create_time,
-            update_time=template.update_time,
-        )
+        return TemplateView.from_model(template)
 
 
 @router.patch("/{template_id}", operation_id="update_template")
@@ -110,7 +78,7 @@ def update_template(
     description: str | None = None,
     is_active: bool | None = None,
     session: Session = Depends(di.Manage["storage.persistent.session"]),
-) -> TemplateResponse:
+) -> TemplateView:
     """Update a template's metadata.
 
     Note: Content changes require creating a new version via POST.
@@ -131,13 +99,4 @@ def update_template(
 
         template = flight_storage.get_template(template_id, session=session)
         assert template is not None
-        return TemplateResponse(
-            template_id=template.template_id,
-            name=template.name,
-            version=template.version,
-            content=template.content,
-            description=template.description,
-            is_active=template.is_active,
-            create_time=template.create_time,
-            update_time=template.update_time,
-        )
+        return TemplateView.from_model(template)

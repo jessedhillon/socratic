@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import typing as t
 
-from socratic.model import AttemptID, BaseModel, FlightID, FlightStatus, PromptTemplateID
+from socratic.model import AttemptID, BaseModel, Flight, FlightID, FlightStatus, FlightWithTemplate, PromptTemplateID
 
 
 class FlightCreateRequest(BaseModel):
@@ -28,8 +28,8 @@ class FlightCreateRequest(BaseModel):
     attempt_id: AttemptID | None = None
 
 
-class FlightResponse(BaseModel):
-    """Response for a flight."""
+class FlightView(BaseModel):
+    """View for a flight."""
 
     flight_id: FlightID
     template_id: PromptTemplateID
@@ -50,11 +50,34 @@ class FlightResponse(BaseModel):
     create_time: datetime.datetime
     update_time: datetime.datetime
 
+    @classmethod
+    def from_model(cls, flight: Flight | FlightWithTemplate) -> FlightView:
+        return cls(
+            flight_id=flight.flight_id,
+            template_id=flight.template_id,
+            template_name=flight.template_name if isinstance(flight, FlightWithTemplate) else None,
+            template_version=flight.template_version if isinstance(flight, FlightWithTemplate) else None,
+            created_by=flight.created_by,
+            feature_flags=flight.feature_flags,
+            context=flight.context,
+            rendered_content=flight.rendered_content,
+            model_provider=flight.model_provider,
+            model_name=flight.model_name,
+            model_config_data=flight.model_config_data,
+            status=flight.status,
+            started_at=flight.started_at,
+            completed_at=flight.completed_at,
+            attempt_id=flight.attempt_id,
+            outcome_metadata=flight.outcome_metadata,
+            create_time=flight.create_time,
+            update_time=flight.update_time,
+        )
 
-class FlightListResponse(BaseModel):
+
+class FlightListView(BaseModel):
     """Response for listing flights."""
 
-    flights: list[FlightResponse]
+    flights: list[FlightView]
 
 
 class FlightUpdateRequest(BaseModel):

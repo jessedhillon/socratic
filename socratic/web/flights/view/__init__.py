@@ -1,24 +1,24 @@
 __all__ = [
     # Templates
     "TemplateCreateRequest",
-    "TemplateResponse",
-    "TemplateListResponse",
+    "TemplateView",
+    "TemplateListView",
     # Survey Schemas
     "SurveySchemaCreateRequest",
-    "SurveySchemaResponse",
-    "SurveySchemaListResponse",
+    "SurveySchemaView",
+    "SurveySchemaListView",
     # Flights
     "FlightCreateRequest",
-    "FlightResponse",
-    "FlightListResponse",
+    "FlightView",
+    "FlightListView",
     "FlightUpdateRequest",
     # Surveys
     "SurveyCreateRequest",
-    "SurveyResponse",
-    "SurveyListResponse",
+    "SurveyView",
+    "SurveyListView",
 ]
 
-from .flight import FlightCreateRequest, FlightListResponse, FlightResponse, FlightUpdateRequest
-from .survey import SurveyCreateRequest, SurveyListResponse, SurveyResponse, SurveySchemaCreateRequest, \
-    SurveySchemaListResponse, SurveySchemaResponse
-from .template import TemplateCreateRequest, TemplateListResponse, TemplateResponse
+from .flight import FlightCreateRequest, FlightListView, FlightUpdateRequest, FlightView
+from .survey import SurveyCreateRequest, SurveyListView, SurveySchemaCreateRequest, SurveySchemaListView, \
+    SurveySchemaView, SurveyView
+from .template import TemplateCreateRequest, TemplateListView, TemplateView

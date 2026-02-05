@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import typing as t
 
-from socratic.model import BaseModel, FlightID, SurveyID, SurveySchemaID
+from socratic.model import BaseModel, FlightID, FlightSurvey, SurveyDimension, SurveyID, SurveySchema, SurveySchemaID
 
 
 class SurveyDimensionView(BaseModel):
@@ -21,6 +21,34 @@ class SurveyDimensionView(BaseModel):
     reverse_scored: bool = False
     spec: dict[str, t.Any] = {}
 
+    @classmethod
+    def from_model(cls, dim: SurveyDimension) -> SurveyDimensionView:
+        spec_data = dim.spec.model_dump()
+        kind = spec_data.pop("kind")
+        return cls(
+            name=dim.name,
+            label=dim.label,
+            kind=kind,
+            required=dim.required,
+            help=dim.help,
+            tags=dim.tags,
+            weight=dim.weight,
+            reverse_scored=dim.reverse_scored,
+            spec=spec_data,
+        )
+
+    def to_model(self) -> SurveyDimension:
+        return SurveyDimension.model_validate({
+            "name": self.name,
+            "label": self.label,
+            "spec": {"kind": self.kind, **self.spec},
+            "required": self.required,
+            "help": self.help,
+            "tags": self.tags,
+            "weight": self.weight,
+            "reverse_scored": self.reverse_scored,
+        })
+
 
 class SurveySchemaCreateRequest(BaseModel):
     """Request to create a survey schema."""
@@ -30,8 +58,8 @@ class SurveySchemaCreateRequest(BaseModel):
     is_default: bool = False
 
 
-class SurveySchemaResponse(BaseModel):
-    """Response for a survey schema."""
+class SurveySchemaView(BaseModel):
+    """View for a survey schema."""
 
     schema_id: SurveySchemaID
     name: str
@@ -39,11 +67,21 @@ class SurveySchemaResponse(BaseModel):
     is_default: bool
     create_time: datetime.datetime
 
+    @classmethod
+    def from_model(cls, schema: SurveySchema) -> SurveySchemaView:
+        return cls(
+            schema_id=schema.schema_id,
+            name=schema.name,
+            dimensions=[SurveyDimensionView.from_model(d) for d in schema.dimensions],
+            is_default=schema.is_default,
+            create_time=schema.create_time,
+        )
 
-class SurveySchemaListResponse(BaseModel):
-    """Response for listing survey schemas."""
 
-    schemas: list[SurveySchemaResponse]
+class SurveySchemaListView(BaseModel):
+    """View for listing survey schemas."""
+
+    schemas: list[SurveySchemaView]
 
 
 class SurveyCreateRequest(BaseModel):
@@ -56,8 +94,8 @@ class SurveyCreateRequest(BaseModel):
     tags: list[str] | None = None
 
 
-class SurveyResponse(BaseModel):
-    """Response for a survey."""
+class SurveyView(BaseModel):
+    """View for a survey."""
 
     survey_id: SurveyID
     flight_id: FlightID
@@ -68,8 +106,21 @@ class SurveyResponse(BaseModel):
     tags: list[str]
     create_time: datetime.datetime
 
+    @classmethod
+    def from_model(cls, survey: FlightSurvey) -> SurveyView:
+        return cls(
+            survey_id=survey.survey_id,
+            flight_id=survey.flight_id,
+            schema_id=survey.schema_id,
+            submitted_by=survey.submitted_by,
+            ratings=survey.ratings,
+            notes=survey.notes,
+            tags=survey.tags,
+            create_time=survey.create_time,
+        )
 
-class SurveyListResponse(BaseModel):
-    """Response for listing surveys."""
 
-    surveys: list[SurveyResponse]
+class SurveyListView(BaseModel):
+    """View for listing surveys."""
+
+    surveys: list[SurveyView]

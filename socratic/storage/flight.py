@@ -12,7 +12,7 @@ import sqlalchemy as sqla
 from socratic.core import di
 from socratic.lib import NotSet
 from socratic.model import AttemptID, Flight, FlightID, FlightStatus, FlightSurvey, FlightWithTemplate, \
-    PromptTemplate, PromptTemplateID, SurveyID, SurveySchema, SurveySchemaID
+    PromptTemplate, PromptTemplateID, SurveyDimension, SurveyID, SurveySchema, SurveySchemaID
 
 from . import Session
 from .table import flight_surveys, flights, prompt_templates, survey_schemas
@@ -299,7 +299,7 @@ def find_survey_schemas(
 def create_survey_schema(
     *,
     name: str,
-    dimensions: list[dict[str, t.Any]],
+    dimensions: list[SurveyDimension],
     is_default: bool = False,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> SurveySchema:
@@ -308,7 +308,7 @@ def create_survey_schema(
     stmt = sqla.insert(survey_schemas).values(
         schema_id=schema_id,
         name=name,
-        dimensions=dimensions,
+        dimensions=[d.model_dump() for d in dimensions],
         is_default=is_default,
     )
     session.execute(stmt)
