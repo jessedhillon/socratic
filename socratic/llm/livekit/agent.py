@@ -26,7 +26,7 @@ from socratic.core.provider import TimestampProvider
 from socratic.llm.agent.assessment import AssessmentAgent
 from socratic.llm.agent.assessment.state import AssessmentCriterion, AssessmentState, Conviviality, CriterionCoverage
 from socratic.llm.livekit.event import AssessmentCompleteEvent, AssessmentErrorEvent
-from socratic.model import AttemptID, FlightID, UtteranceType
+from socratic.model import AttemptID, FlightID, FlightStatus, UtteranceType
 from socratic.storage import flight as flight_storage
 from socratic.storage import transcript as transcript_storage
 
@@ -65,16 +65,12 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         context: AssessmentContext,
         *,
         graph: CompiledStateGraph,
-        model_settings: ModelSettings | None = None,
-        env: jinja2.Environment | None = None,
     ) -> None:
         super().__init__(
             instructions="You are a Socratic assessment proctor conducting a voice-based evaluation.",
         )
         self.context = context
         self.graph = graph
-        self.model_settings = model_settings
-        self.env = env
         self._initialized = False
         self._failed = False
         self._pending_complete = False
@@ -129,6 +125,8 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
     async def _build_initial_state(
         self,
         *,
+        env: jinja2.Environment = di.Provide["template.llm"],  # noqa: B008
+        model_settings: ModelSettings = di.Provide["config.llm.models.dialogue", di.as_(ModelSettings)],  # noqa: B008
         utcnow: TimestampProvider = di.Provide["utcnow"],  # noqa: B008
         session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],  # noqa: B008
     ) -> AssessmentState:
@@ -148,61 +146,59 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         start_time = utcnow()
         flight_id: FlightID | None = None
 
-        # Try to create a flight if we have template tracking enabled
-        if self.env is not None and self.model_settings is not None:
-            try:
-                async with session.begin():
-                    # Look up the assessment system template
-                    template = await flight_storage.aget_template(
-                        name="assessment_system",
+        try:
+            async with session.begin():
+                # Look up the assessment system template
+                template = await flight_storage.aget_template(
+                    name="assessment_system",
+                    session=session,
+                )
+                if template is not None:
+                    # Render the template (same as AssessmentAgent.system_prompt does)
+                    # Use default conviviality — could be enhanced to accept via context
+                    conviviality = Conviviality.Conversational
+                    jinja_template = env.get_template("agent/assessment_system.j2")
+                    rendered_content = jinja_template.render(
+                        objective_title=self.context.objective_title,
+                        objective_description=self.context.objective_description,
+                        rubric_criteria=self.context.rubric_criteria,
+                        initial_prompts=self.context.initial_prompts,
+                        conviviality=conviviality,
+                        time_budget_minutes=self.context.time_expectation_minutes,
+                    )
+
+                    # Create the flight
+                    flight = await flight_storage.acreate_flight(
+                        template_id=template.template_id,
+                        created_by="system",  # Could be enhanced to track user
+                        rendered_content=rendered_content,
+                        model_provider=model_settings.provider.value,
+                        model_name=model_settings.model,
+                        started_at=start_time,
+                        feature_flags={
+                            "conviviality": conviviality.value,
+                            "extension_policy": self.context.extension_policy,
+                        },
+                        context={
+                            "objective_id": self.context.objective_id,
+                            "objective_title": self.context.objective_title,
+                            "rubric_criteria_count": len(self.context.rubric_criteria),
+                            "initial_prompts_count": len(self.context.initial_prompts),
+                            "time_expectation_minutes": self.context.time_expectation_minutes,
+                        },
+                        model_config={
+                            "temperature": model_settings.temperature,
+                            "max_tokens": model_settings.max_tokens,
+                        },
+                        labels={"attempt_id": str(self.attempt_id)},
                         session=session,
                     )
-                    if template is not None:
-                        # Render the template (same as AssessmentAgent.system_prompt does)
-                        # Use default conviviality — could be enhanced to accept via context
-                        conviviality = Conviviality.Conversational
-                        jinja_template = self.env.get_template("agent/assessment_system.j2")
-                        rendered_content = jinja_template.render(
-                            objective_title=self.context.objective_title,
-                            objective_description=self.context.objective_description,
-                            rubric_criteria=self.context.rubric_criteria,
-                            initial_prompts=self.context.initial_prompts,
-                            conviviality=conviviality,
-                            time_budget_minutes=self.context.time_expectation_minutes,
-                        )
-
-                        # Create the flight
-                        flight = await flight_storage.acreate_flight(
-                            template_id=template.template_id,
-                            created_by="system",  # Could be enhanced to track user
-                            rendered_content=rendered_content,
-                            model_provider=self.model_settings.provider.value,
-                            model_name=self.model_settings.model,
-                            started_at=start_time,
-                            feature_flags={
-                                "conviviality": conviviality.value,
-                                "extension_policy": self.context.extension_policy,
-                            },
-                            context={
-                                "objective_id": self.context.objective_id,
-                                "objective_title": self.context.objective_title,
-                                "rubric_criteria_count": len(self.context.rubric_criteria),
-                                "initial_prompts_count": len(self.context.initial_prompts),
-                                "time_expectation_minutes": self.context.time_expectation_minutes,
-                            },
-                            model_config={
-                                "temperature": self.model_settings.temperature,
-                                "max_tokens": self.model_settings.max_tokens,
-                            },
-                            labels={"attempt_id": str(self.attempt_id)},
-                            session=session,
-                        )
-                        flight_id = flight.flight_id
-                        self._flight_id = flight_id
-                        logger.info(f"Created flight {flight_id} for attempt {self.attempt_id}")
-            except Exception:
-                # Flight tracking is optional — don't fail the assessment if it errors
-                logger.exception("Failed to create flight for assessment tracking")
+                    flight_id = flight.flight_id
+                    self._flight_id = flight_id
+                    logger.info(f"Created flight {flight_id} for attempt {self.attempt_id}")
+        except Exception:
+            # Flight tracking is optional — don't fail the assessment if it errors
+            logger.exception("Failed to create flight for assessment tracking")
 
         return AssessmentState(
             attempt_id=self.context.attempt_id,
@@ -420,7 +416,7 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         self,
         *,
         completion_reason: str,
-        abandon: bool = False,
+        status: FlightStatus = FlightStatus.Completed,
         session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],  # noqa: B008
     ) -> None:
         """Mark the tracked flight as completed or abandoned with outcome metadata.
@@ -454,20 +450,13 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
                 except Exception:
                     logger.warning(f"Could not retrieve graph state for flight {self._flight_id} outcome metadata")
 
-                if abandon:
-                    await flight_storage.aabandon_flight(
-                        self._flight_id,
-                        outcome_metadata=outcome_metadata,
-                        session=session,
-                    )
-                    logger.info(f"Marked flight {self._flight_id} as abandoned (reason: {completion_reason})")
-                else:
-                    await flight_storage.acomplete_flight(
-                        self._flight_id,
-                        outcome_metadata=outcome_metadata,
-                        session=session,
-                    )
-                    logger.info(f"Marked flight {self._flight_id} as completed (reason: {completion_reason})")
+                await flight_storage.acomplete_flight(
+                    self._flight_id,
+                    status=status,
+                    outcome_metadata=outcome_metadata,
+                    session=session,
+                )
+                logger.info(f"Marked flight {self._flight_id} as {status.value} (reason: {completion_reason})")
         except Exception:
             logger.exception(f"Failed to update flight {self._flight_id} (reason: {completion_reason})")
 
@@ -485,12 +474,13 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
           double-writes.
         """
         reason = event.reason
+        abandoned = FlightStatus.Abandoned
         if reason == CloseReason.PARTICIPANT_DISCONNECTED:
-            asyncio.create_task(self._complete_flight(completion_reason="participant_disconnected", abandon=True))
+            asyncio.create_task(self._complete_flight(completion_reason="participant_disconnected", status=abandoned))
         elif reason == CloseReason.ERROR:
-            asyncio.create_task(self._complete_flight(completion_reason="error", abandon=True))
+            asyncio.create_task(self._complete_flight(completion_reason="error", status=abandoned))
         elif reason == CloseReason.JOB_SHUTDOWN:
-            asyncio.create_task(self._complete_flight(completion_reason="job_shutdown", abandon=True))
+            asyncio.create_task(self._complete_flight(completion_reason="job_shutdown", status=abandoned))
 
     async def _publish_complete(self) -> None:
         """Publish assessment completion to the room data channel and shut down."""
@@ -533,7 +523,6 @@ def create_assessment_agent_from_room_metadata(
     room: "Room",
     *,
     model: BaseChatModel = di.Provide["llm.dialogue_model"],  # noqa: B008
-    model_settings: ModelSettings = di.Provide["config.llm.models.dialogue", di.as_(ModelSettings)],  # noqa: B008
     env: jinja2.Environment = di.Provide["template.llm"],  # noqa: B008
 ) -> SocraticAssessmentAgent:
     """Create an assessment agent from LiveKit room metadata.
@@ -557,6 +546,4 @@ def create_assessment_agent_from_room_metadata(
     return SocraticAssessmentAgent(
         context=context,
         graph=graph,
-        model_settings=model_settings,
-        env=env,
     )
