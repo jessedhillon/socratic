@@ -31,7 +31,7 @@ def list_templates(
             is_active=is_active,
             session=session,
         )
-        return TemplateListView(templates=[TemplateView.from_model(t) for t in templates])
+        return TemplateListView.from_model(templates)
 
 
 @router.get("/{template_id}", operation_id="get_template")

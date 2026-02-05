@@ -79,6 +79,10 @@ class FlightListView(BaseModel):
 
     flights: list[FlightView]
 
+    @classmethod
+    def from_model(cls, flights: t.Sequence[Flight | FlightWithTemplate]) -> FlightListView:
+        return cls(flights=[FlightView.from_model(f) for f in flights])
+
 
 class FlightUpdateRequest(BaseModel):
     """Request to update a flight."""

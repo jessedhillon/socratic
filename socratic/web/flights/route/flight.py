@@ -54,7 +54,7 @@ def list_flights(
                 session=session,
             ),
         )
-        return FlightListView(flights=[FlightView.from_model(f) for f in flights])
+        return FlightListView.from_model(flights)
 
 
 @router.get("/{flight_id}", operation_id="get_flight")
@@ -105,8 +105,9 @@ def create_flight(
                 detail=f"Template '{request.template}' not found",
             ) from None
 
-        # Combine feature flags and context for rendering
-        render_context = {**request.feature_flags, **request.context}
+        # Combine feature flags and context for rendering —
+        # feature flags live under their own namespace to avoid collisions
+        render_context = {"feature": request.feature_flags, **request.context}
 
         # Render the template
         try:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import typing as t
 
 from socratic.model import BaseModel, PromptTemplate, PromptTemplateID
 
@@ -45,3 +46,7 @@ class TemplateListView(BaseModel):
     """Response for listing templates."""
 
     templates: list[TemplateView]
+
+    @classmethod
+    def from_model(cls, templates: t.Sequence[PromptTemplate]) -> TemplateListView:
+        return cls(templates=[TemplateView.from_model(t_) for t_ in templates])

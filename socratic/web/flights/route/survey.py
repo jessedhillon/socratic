@@ -32,7 +32,7 @@ def list_survey_schemas(
             is_default=is_default,
             session=session,
         )
-        return SurveySchemaListView(schemas=[SurveySchemaView.from_model(s) for s in schemas])
+        return SurveySchemaListView.from_model(schemas)
 
 
 @router.get("/api/survey-schemas/{schema_id}", operation_id="get_survey_schema")
@@ -70,7 +70,7 @@ def create_survey_schema(
 
         schema = flight_storage.create_survey_schema(
             name=request.name,
-            dimensions=[d.to_model() for d in request.dimensions],
+            dimensions=request.dimensions,
             is_default=request.is_default,
             session=session,
         )
@@ -99,7 +99,7 @@ def list_flight_surveys(
             )
 
         surveys = flight_storage.find_surveys(flight_id=flight_id, session=session)
-        return SurveyListView(surveys=[SurveyView.from_model(s) for s in surveys])
+        return SurveyListView.from_model(surveys)
 
 
 @router.post("/api/flights/{flight_id}/surveys", operation_id="create_survey", status_code=status.HTTP_201_CREATED)
