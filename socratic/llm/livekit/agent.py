@@ -15,17 +15,19 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables.schema import StreamEvent
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
-from livekit.agents import Agent, llm  # pyright: ignore [reportMissingTypeStubs]
+from livekit.agents import Agent, CloseEvent, CloseReason, llm  # pyright: ignore [reportMissingTypeStubs]
 
 import socratic.lib.json as json
 import socratic.lib.uuid as uuid
 from socratic import storage
 from socratic.core import di
+from socratic.core.config.llm import ModelSettings
 from socratic.core.provider import TimestampProvider
 from socratic.llm.agent.assessment import AssessmentAgent
-from socratic.llm.agent.assessment.state import AssessmentCriterion, AssessmentState, CriterionCoverage
+from socratic.llm.agent.assessment.state import AssessmentCriterion, AssessmentState, Conviviality, CriterionCoverage
 from socratic.llm.livekit.event import AssessmentCompleteEvent, AssessmentErrorEvent
-from socratic.model import AttemptID, UtteranceType
+from socratic.model import AttemptID, FlightID, FlightStatus, UtteranceType
+from socratic.storage import flight as flight_storage
 from socratic.storage import transcript as transcript_storage
 
 if t.TYPE_CHECKING:
@@ -72,7 +74,9 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         self._initialized = False
         self._failed = False
         self._pending_complete = False
+        self._flight_completed = False
         self._thread_id = str(uuid.uuid4())
+        self._flight_id: FlightID | None = None
 
     @property
     def attempt_id(self) -> AttemptID:
@@ -118,12 +122,19 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             logger.exception(f"Failed to record {utterance_type.value} transcript segment")
 
     @di.inject
-    def _build_initial_state(
+    async def _build_initial_state(
         self,
         *,
+        env: jinja2.Environment = di.Provide["template.llm"],  # noqa: B008
+        model_settings: ModelSettings = di.Provide["config.llm.models.dialogue", di.as_(ModelSettings)],  # noqa: B008
         utcnow: TimestampProvider = di.Provide["utcnow"],  # noqa: B008
+        session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],  # noqa: B008
     ) -> AssessmentState:
-        """Build the initial graph state from the assessment context."""
+        """Build the initial graph state from the assessment context.
+
+        If a prompt template is registered in the database, creates a flight
+        to track this assessment instance.
+        """
         criteria_coverage: dict[str, CriterionCoverage] = {}
         for criterion in self.context.rubric_criteria:
             cid = str(criterion.criterion_id)
@@ -132,14 +143,72 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
                 criterion_name=criterion.name,
             )
 
+        start_time = utcnow()
+        flight_id: FlightID | None = None
+
+        try:
+            async with session.begin():
+                # Look up the assessment system template
+                template = await flight_storage.aget_template(
+                    name="assessment_system",
+                    session=session,
+                )
+                if template is not None:
+                    # Render the template (same as AssessmentAgent.system_prompt does)
+                    # Use default conviviality — could be enhanced to accept via context
+                    conviviality = Conviviality.Conversational
+                    jinja_template = env.get_template("agent/assessment_system.j2")
+                    rendered_content = jinja_template.render(
+                        objective_title=self.context.objective_title,
+                        objective_description=self.context.objective_description,
+                        rubric_criteria=self.context.rubric_criteria,
+                        initial_prompts=self.context.initial_prompts,
+                        conviviality=conviviality,
+                        time_budget_minutes=self.context.time_expectation_minutes,
+                    )
+
+                    # Create the flight
+                    flight = await flight_storage.acreate_flight(
+                        template_id=template.template_id,
+                        created_by="system",  # Could be enhanced to track user
+                        rendered_content=rendered_content,
+                        model_provider=model_settings.provider.value,
+                        model_name=model_settings.model,
+                        started_at=start_time,
+                        feature_flags={
+                            "conviviality": conviviality.value,
+                            "extension_policy": self.context.extension_policy,
+                        },
+                        context={
+                            "objective_id": self.context.objective_id,
+                            "objective_title": self.context.objective_title,
+                            "rubric_criteria_count": len(self.context.rubric_criteria),
+                            "initial_prompts_count": len(self.context.initial_prompts),
+                            "time_expectation_minutes": self.context.time_expectation_minutes,
+                        },
+                        model_config={
+                            "temperature": model_settings.temperature,
+                            "max_tokens": model_settings.max_tokens,
+                        },
+                        labels={"attempt_id": str(self.attempt_id)},
+                        session=session,
+                    )
+                    flight_id = flight.flight_id
+                    self._flight_id = flight_id
+                    logger.info(f"Created flight {flight_id} for attempt {self.attempt_id}")
+        except Exception:
+            # Flight tracking is optional — don't fail the assessment if it errors
+            logger.exception("Failed to create flight for assessment tracking")
+
         return AssessmentState(
             attempt_id=self.context.attempt_id,
+            flight_id=flight_id,
             objective_title=self.context.objective_title,
             objective_description=self.context.objective_description,
             rubric_criteria=self.context.rubric_criteria,
             initial_prompts=self.context.initial_prompts,
             time_budget_minutes=self.context.time_expectation_minutes,
-            start_time=utcnow(),
+            start_time=start_time,
             criteria_coverage=criteria_coverage,
             messages=[],
         )
@@ -263,7 +332,8 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         if not self._initialized:
             logger.info(f"Starting assessment for attempt {self.attempt_id}")
             self.session.on("agent_state_changed", self._on_agent_state_changed)  # pyright: ignore [reportUnknownMemberType]
-            input_state: AssessmentState | dict[str, t.Any] = self._build_initial_state()
+            self.session.on("close", self._on_session_close)  # pyright: ignore [reportUnknownMemberType]
+            input_state: AssessmentState | dict[str, t.Any] = await self._build_initial_state()
         else:
             # Check if the agent's previous response was interrupted — this
             # means the learner started speaking before hearing it fully.
@@ -341,9 +411,83 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
             logger.exception(f"Fatal assessment error for attempt {self.attempt_id}")
             await self._publish_error("An unexpected error occurred during the assessment.")
 
+    @di.inject
+    async def _complete_flight(
+        self,
+        *,
+        completion_reason: str,
+        status: FlightStatus = FlightStatus.Completed,
+        session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],  # noqa: B008
+    ) -> None:
+        """Mark the tracked flight as completed or abandoned with outcome metadata.
+
+        Includes ``completion_reason`` in the outcome metadata so we can
+        distinguish agent-initiated completion from user disconnect, etc.
+        Guarded by ``_flight_completed`` to prevent double-completion.
+        """
+        if self._flight_completed or self._flight_id is None:
+            return
+
+        self._flight_completed = True
+
+        try:
+            async with session.begin():
+                outcome_metadata: dict[str, t.Any] = {
+                    "completion_reason": completion_reason,
+                }
+
+                # Try to capture criteria coverage from graph state
+                try:
+                    state_snapshot = await self.graph.aget_state(self._graph_config)  # pyright: ignore [reportUnknownMemberType, reportArgumentType]
+                    criteria_coverage = state_snapshot.values.get("criteria_coverage", {})  # pyright: ignore [reportUnknownMemberType]
+                    outcome_metadata["criteria_coverage"] = {
+                        cid: {
+                            "coverage": cov.get("coverage", "unknown") if isinstance(cov, dict) else "unknown",
+                            "evidence_count": len(cov.get("evidence", [])) if isinstance(cov, dict) else 0,  # pyright: ignore [reportUnknownArgumentType]
+                        }
+                        for cid, cov in criteria_coverage.items()  # pyright: ignore [reportUnknownVariableType]
+                    }
+                except Exception:
+                    logger.warning(f"Could not retrieve graph state for flight {self._flight_id} outcome metadata")
+
+                await flight_storage.acomplete_flight(
+                    self._flight_id,
+                    status=status,
+                    outcome_metadata=outcome_metadata,
+                    session=session,
+                )
+                logger.info(f"Marked flight {self._flight_id} as {status.value} (reason: {completion_reason})")
+        except Exception:
+            logger.exception(f"Failed to update flight {self._flight_id} (reason: {completion_reason})")
+
+    def _on_session_close(self, event: CloseEvent) -> None:
+        """Handle session close to ensure the flight is marked complete or abandoned.
+
+        Maps the LiveKit ``CloseReason`` to a flight completion reason:
+
+        - ``PARTICIPANT_DISCONNECTED``: user left — abandon the flight
+        - ``ERROR``: something went wrong — abandon the flight
+        - ``JOB_SHUTDOWN``: server-side shutdown — abandon the flight
+        - ``USER_INITIATED`` / ``TASK_COMPLETED``: triggered by our own
+          ``session.shutdown()`` call in ``_publish_complete`` — the flight
+          is already completed, so the ``_flight_completed`` guard prevents
+          double-writes.
+        """
+        reason = event.reason
+        abandoned = FlightStatus.Abandoned
+        if reason == CloseReason.PARTICIPANT_DISCONNECTED:
+            asyncio.create_task(self._complete_flight(completion_reason="participant_disconnected", status=abandoned))
+        elif reason == CloseReason.ERROR:
+            asyncio.create_task(self._complete_flight(completion_reason="error", status=abandoned))
+        elif reason == CloseReason.JOB_SHUTDOWN:
+            asyncio.create_task(self._complete_flight(completion_reason="job_shutdown", status=abandoned))
+
     async def _publish_complete(self) -> None:
         """Publish assessment completion to the room data channel and shut down."""
         logger.info(f"Assessment complete for attempt {self.attempt_id}")
+
+        await self._complete_flight(completion_reason="agent")
+
         event = AssessmentCompleteEvent(attempt_id=self.attempt_id)
         try:
             room = self.session.room_io.room  # pyright: ignore [reportUnknownMemberType]

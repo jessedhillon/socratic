@@ -14,7 +14,7 @@ from socratic.lib import NotSet
 from socratic.model import Flight, FlightID, FlightStatus, FlightSurvey, FlightWithTemplate, PromptTemplate, \
     PromptTemplateID, SurveyDimension, SurveyID, SurveySchema, SurveySchemaID
 
-from . import Session
+from . import AsyncSession, Session
 from .table import flight_surveys, flights, prompt_templates, survey_schemas
 
 _jinja_env = jinja2.Environment(autoescape=False)
@@ -99,6 +99,50 @@ def get_template(
         )
 
     row = session.execute(stmt).mappings().one_or_none()
+    return PromptTemplate(**row) if row else None
+
+
+async def aget_template(
+    template_id: PromptTemplateID | None = None,
+    *,
+    name: str | None = None,
+    version: int | None = None,
+    session: AsyncSession,
+) -> PromptTemplate | None:
+    """Get a prompt template by ID or name (async).
+
+    If name is provided without version, returns the latest active version.
+    """
+    if template_id is None and name is None:
+        raise ValueError("Either template_id or name must be provided")
+    if template_id is not None and name is not None:
+        raise ValueError("Only one of template_id or name should be provided")
+
+    if template_id is not None:
+        stmt = sqla.select(prompt_templates.__table__).where(prompt_templates.template_id == template_id)
+    elif version is not None:
+        stmt = sqla.select(prompt_templates.__table__).where(
+            sqla.and_(
+                prompt_templates.name == name,
+                prompt_templates.version == version,
+            )
+        )
+    else:
+        # Get latest active version for name
+        stmt = (
+            sqla
+            .select(prompt_templates.__table__)
+            .where(
+                sqla.and_(
+                    prompt_templates.name == name,
+                    prompt_templates.is_active == True,  # noqa: E712
+                )
+            )
+            .order_by(prompt_templates.version.desc())
+            .limit(1)
+        )
+
+    row = (await session.execute(stmt)).mappings().one_or_none()
     return PromptTemplate(**row) if row else None
 
 
@@ -453,6 +497,43 @@ def create_flight(
     return flight
 
 
+async def acreate_flight(
+    *,
+    template_id: PromptTemplateID,
+    created_by: str,
+    rendered_content: str,
+    model_provider: str,
+    model_name: str,
+    started_at: datetime.datetime,
+    feature_flags: dict[str, t.Any] | None = None,
+    context: dict[str, t.Any] | None = None,
+    model_config: dict[str, t.Any] | None = None,
+    labels: dict[str, t.Any] | None = None,
+    session: AsyncSession,
+) -> Flight:
+    """Create a new flight (async)."""
+    flight_id = FlightID()
+    stmt = sqla.insert(flights).values(
+        flight_id=flight_id,
+        template_id=template_id,
+        created_by=created_by,
+        rendered_content=rendered_content,
+        model_provider=model_provider,
+        model_name=model_name,
+        started_at=started_at,
+        feature_flags=feature_flags or {},
+        context=context or {},
+        model_config_data=model_config or {},
+        labels=labels or {},
+    )
+    await session.execute(stmt)
+    await session.flush()
+
+    select_stmt = sqla.select(flights.__table__).where(flights.flight_id == flight_id)
+    row = (await session.execute(select_stmt)).mappings().one()
+    return Flight(**row)
+
+
 def update_flight(
     flight_id: FlightID,
     *,
@@ -489,33 +570,40 @@ def update_flight(
 def complete_flight(
     flight_id: FlightID,
     *,
+    status: FlightStatus = FlightStatus.Completed,
     outcome_metadata: dict[str, t.Any] | None = None,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> None:
-    """Mark a flight as completed."""
+    """Mark a flight as completed or abandoned."""
     update_flight(
         flight_id,
-        status=FlightStatus.Completed,
+        status=status,
         completed_at=datetime.datetime.now(datetime.UTC),
         outcome_metadata=outcome_metadata,
         session=session,
     )
 
 
-def abandon_flight(
+async def acomplete_flight(
     flight_id: FlightID,
     *,
+    status: FlightStatus = FlightStatus.Completed,
     outcome_metadata: dict[str, t.Any] | None = None,
-    session: Session = di.Provide["storage.persistent.session"],
+    session: AsyncSession,
 ) -> None:
-    """Mark a flight as abandoned."""
-    update_flight(
-        flight_id,
-        status=FlightStatus.Abandoned,
-        completed_at=datetime.datetime.now(datetime.UTC),
-        outcome_metadata=outcome_metadata,
-        session=session,
-    )
+    """Mark a flight as completed or abandoned (async)."""
+    values: dict[str, t.Any] = {
+        "status": status.value,
+        "completed_at": datetime.datetime.now(datetime.UTC),
+    }
+    if outcome_metadata is not None:
+        values["outcome_metadata"] = outcome_metadata
+
+    stmt = sqla.update(flights).where(flights.flight_id == flight_id).values(**values)
+    result = await session.execute(stmt)
+    if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue]
+        raise KeyError(f"Flight {flight_id} not found")
+    await session.flush()
 
 
 # =============================================================================
