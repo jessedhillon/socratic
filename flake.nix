@@ -162,6 +162,17 @@
             "$CHROME_PROFILE_DIR"
         '';
 
+        devshell.startup.install-vault-key.text = ''
+          KEY_NAME="local:secrets.vault.yaml"
+          if ! keyctl search @u user "$KEY_NAME" >/dev/null 2>&1; then
+            echo -n "''${KEY_NAME} vault key 󰌾"
+            read -rs VAULT_PASSWORD
+            echo
+            keyctl add user "$KEY_NAME" "$VAULT_PASSWORD" @u >/dev/null
+            echo "''${KEY_NAME} key installed to keyring"
+          fi
+        '';
+
         packages = with pkgs; [
           bubblewrap
           claude-code
@@ -169,6 +180,7 @@
           fzf
           gh
           isort
+          keyutils
           poetry
           postgresql_17
           pre-commit
