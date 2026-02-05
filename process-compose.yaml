@@ -93,12 +93,32 @@ processes:
       signal: 15 # TERM
       timeout_seconds: 10
 
+  flights-dev:
+    command: 'socratic-cli web develop flights'
+    depends_on:
+      postgres:
+        condition: process_healthy
+      redis:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        port: 8082
+        path: /openapi.json
+      period_seconds: 5
+      initial_delay_seconds: 6
+    shutdown:
+      signal: 15 # TERM
+      timeout_seconds: 10
+
   socratic-agent:
     command: 'socratic-cli agent serve --dev'
     depends_on:
       postgres:
         condition: process_healthy
       redis:
+        condition: process_healthy
+      flights-dev:
         condition: process_healthy
     shutdown:
       signal: 15 # TERM
