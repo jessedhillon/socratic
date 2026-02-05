@@ -16,3 +16,8 @@ socratic:
   auth:
     jwt_algorithm: HS256
     access_token_expire_minutes: 480
+
+flights:
+  backend:
+    host: 127.0.0.1
+    port: 8082

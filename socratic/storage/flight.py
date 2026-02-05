@@ -3,17 +3,37 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import typing as t
 
+import jinja2
 import sqlalchemy as sqla
 
 from socratic.core import di
 from socratic.lib import NotSet
-from socratic.model import AttemptID, Flight, FlightID, FlightStatus, FlightSurvey, FlightWithTemplate, \
-    PromptTemplate, PromptTemplateID, SurveyID, SurveySchema, SurveySchemaID
+from socratic.model import Flight, FlightID, FlightStatus, FlightSurvey, FlightWithTemplate, PromptTemplate, \
+    PromptTemplateID, SurveyDimension, SurveyID, SurveySchema, SurveySchemaID
 
 from . import Session
 from .table import flight_surveys, flights, prompt_templates, survey_schemas
+
+_jinja_env = jinja2.Environment(autoescape=False)
+
+
+def _hash_content(content: str) -> str:
+    """Compute SHA-256 hash of template content using the Jinja2 AST.
+
+    Parsing to AST normalizes syntax-only differences (e.g., ``{{ name }}`` vs
+    ``{{name}}``) while preserving semantically meaningful differences.  Falls
+    back to hashing the stripped raw content if the template fails to parse.
+    """
+    try:
+        ast = _jinja_env.parse(content.strip())
+        canonical = repr(ast.body)
+    except jinja2.TemplateSyntaxError:
+        canonical = content.strip()
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
 
 # =============================================================================
 # Prompt Templates
@@ -112,16 +132,19 @@ def create_template(
 
     If a template with this name exists, creates a new version.
     """
-    # Check for existing template to determine version
-    existing = get_template(name=name, session=session)
-    version = (existing.version + 1) if existing else 1
+    # Determine next version from the highest existing version (active or not)
+    max_version_stmt = sqla.select(sqla.func.max(prompt_templates.version)).where(prompt_templates.name == name)
+    max_version = session.execute(max_version_stmt).scalar()
+    version = (max_version + 1) if max_version is not None else 1
 
     template_id = PromptTemplateID()
+    content_hash = _hash_content(content)
     stmt = sqla.insert(prompt_templates).values(
         template_id=template_id,
         name=name,
         version=version,
         content=content,
+        content_hash=content_hash,
         description=description,
     )
     session.execute(stmt)
@@ -130,6 +153,69 @@ def create_template(
     template = get_template(template_id, session=session)
     assert template is not None
     return template
+
+
+@t.overload
+def resolve_template(
+    *,
+    name: str,
+    session: Session = ...,
+) -> PromptTemplate: ...
+
+
+@t.overload
+def resolve_template(
+    *,
+    name: str,
+    content: str,
+    description: str | None = ...,
+    session: Session = ...,
+) -> PromptTemplate: ...
+
+
+def resolve_template(
+    *,
+    name: str,
+    content: str | None = None,
+    description: str | None = None,
+    session: Session = di.Provide["storage.persistent.session"],
+) -> PromptTemplate:
+    """Resolve a template by name, optionally with content for auto-versioning.
+
+    Mode 1 (name only): Returns the latest active version.
+    Mode 2 (name + content): Hashes content, finds matching version by (name, hash),
+        or creates a new version if the content has changed.
+
+    Raises:
+        KeyError: If name-only mode and no active template exists with that name.
+    """
+    if content is None:
+        template = get_template(name=name, session=session)
+        if template is None:
+            raise KeyError(f"Template '{name}' not found")
+        return template
+
+    content_hash = _hash_content(content)
+
+    # Look for an existing version with this exact content
+    stmt = (
+        sqla
+        .select(prompt_templates.__table__)
+        .where(
+            sqla.and_(
+                prompt_templates.name == name,
+                prompt_templates.content_hash == content_hash,
+            )
+        )
+        .order_by(prompt_templates.version.desc())
+        .limit(1)
+    )
+    row = session.execute(stmt).mappings().one_or_none()
+    if row is not None:
+        return PromptTemplate(**row)
+
+    # Content doesn't match any version — create new version
+    return create_template(name=name, content=content, description=description, session=session)
 
 
 def update_template(
@@ -214,7 +300,7 @@ def find_survey_schemas(
 def create_survey_schema(
     *,
     name: str,
-    dimensions: list[dict[str, t.Any]],
+    dimensions: list[SurveyDimension],
     is_default: bool = False,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> SurveySchema:
@@ -223,7 +309,7 @@ def create_survey_schema(
     stmt = sqla.insert(survey_schemas).values(
         schema_id=schema_id,
         name=name,
-        dimensions=dimensions,
+        dimensions=[d.model_dump() for d in dimensions],
         is_default=is_default,
     )
     session.execute(stmt)
@@ -287,7 +373,7 @@ def get_flight(
 def find_flights(
     *,
     template_id: PromptTemplateID | None = None,
-    attempt_id: AttemptID | None = None,
+    labels: dict[str, t.Any] | None = None,
     status: FlightStatus | None = None,
     created_by: str | None = None,
     limit: int | None = None,
@@ -311,8 +397,8 @@ def find_flights(
 
     if template_id is not None:
         stmt = stmt.where(flights.template_id == template_id)
-    if attempt_id is not None:
-        stmt = stmt.where(flights.attempt_id == attempt_id)
+    if labels is not None:
+        stmt = stmt.where(flights.labels.contains(labels))
     if status is not None:
         stmt = stmt.where(flights.status == status.value)
     if created_by is not None:
@@ -341,7 +427,7 @@ def create_flight(
     feature_flags: dict[str, t.Any] | None = None,
     context: dict[str, t.Any] | None = None,
     model_config: dict[str, t.Any] | None = None,
-    attempt_id: AttemptID | None = None,
+    labels: dict[str, t.Any] | None = None,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> Flight:
     """Create a new flight."""
@@ -357,7 +443,7 @@ def create_flight(
         feature_flags=feature_flags or {},
         context=context or {},
         model_config_data=model_config or {},
-        attempt_id=attempt_id,
+        labels=labels or {},
     )
     session.execute(stmt)
     session.flush()
