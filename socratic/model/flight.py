@@ -198,7 +198,6 @@ class Flight(BaseModel, WithTimestamps):
 
     feature_flags: dict[str, t.Any]
     context: dict[str, t.Any]
-    rendered_content: str
 
     model_provider: str
     model_name: str
@@ -217,6 +216,7 @@ class FlightWithTemplate(Flight):
 
     template_name: str
     template_version: int
+    template_content: str
 
 
 class FlightSurvey(BaseModel, WithCtime):

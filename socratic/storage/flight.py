@@ -401,6 +401,7 @@ def get_flight(
                 flights.__table__,
                 prompt_templates.name.label("template_name"),
                 prompt_templates.version.label("template_version"),
+                prompt_templates.content.label("template_content"),
             )
             .select_from(flights)
             .join(prompt_templates, flights.template_id == prompt_templates.template_id)
@@ -432,6 +433,7 @@ def find_flights(
                 flights.__table__,
                 prompt_templates.name.label("template_name"),
                 prompt_templates.version.label("template_version"),
+                prompt_templates.content.label("template_content"),
             )
             .select_from(flights)
             .join(prompt_templates, flights.template_id == prompt_templates.template_id)
@@ -464,7 +466,6 @@ def create_flight(
     *,
     template_id: PromptTemplateID,
     created_by: str,
-    rendered_content: str,
     model_provider: str,
     model_name: str,
     started_at: datetime.datetime,
@@ -480,7 +481,6 @@ def create_flight(
         flight_id=flight_id,
         template_id=template_id,
         created_by=created_by,
-        rendered_content=rendered_content,
         model_provider=model_provider,
         model_name=model_name,
         started_at=started_at,
@@ -501,7 +501,6 @@ async def acreate_flight(
     *,
     template_id: PromptTemplateID,
     created_by: str,
-    rendered_content: str,
     model_provider: str,
     model_name: str,
     started_at: datetime.datetime,
@@ -517,7 +516,6 @@ async def acreate_flight(
         flight_id=flight_id,
         template_id=template_id,
         created_by=created_by,
-        rendered_content=rendered_content,
         model_provider=model_provider,
         model_name=model_name,
         started_at=started_at,
@@ -594,48 +592,6 @@ async def acomplete_flight(
     """Mark a flight as completed or abandoned (async)."""
     values: dict[str, t.Any] = {
         "status": status.value,
-        "completed_at": datetime.datetime.now(datetime.UTC),
-    }
-    if outcome_metadata is not None:
-        values["outcome_metadata"] = outcome_metadata
-
-    stmt = sqla.update(flights).where(flights.flight_id == flight_id).values(**values)
-    result = await session.execute(stmt)
-    if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue]
-        raise KeyError(f"Flight {flight_id} not found")
-    await session.flush()
-
-
-async def acomplete_flight(
-    flight_id: FlightID,
-    *,
-    outcome_metadata: dict[str, t.Any] | None = None,
-    session: AsyncSession,
-) -> None:
-    """Mark a flight as completed (async)."""
-    values: dict[str, t.Any] = {
-        "status": FlightStatus.Completed.value,
-        "completed_at": datetime.datetime.now(datetime.UTC),
-    }
-    if outcome_metadata is not None:
-        values["outcome_metadata"] = outcome_metadata
-
-    stmt = sqla.update(flights).where(flights.flight_id == flight_id).values(**values)
-    result = await session.execute(stmt)
-    if result.rowcount == 0:  # pyright: ignore[reportAttributeAccessIssue]
-        raise KeyError(f"Flight {flight_id} not found")
-    await session.flush()
-
-
-async def aabandon_flight(
-    flight_id: FlightID,
-    *,
-    outcome_metadata: dict[str, t.Any] | None = None,
-    session: AsyncSession,
-) -> None:
-    """Mark a flight as abandoned (async)."""
-    values: dict[str, t.Any] = {
-        "status": FlightStatus.Abandoned.value,
         "completed_at": datetime.datetime.now(datetime.UTC),
     }
     if outcome_metadata is not None:

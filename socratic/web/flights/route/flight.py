@@ -11,24 +11,12 @@ from sqlalchemy.orm import Session
 
 from socratic.core import di
 from socratic.lib import NotSet
-from socratic.model import FlightID, FlightStatus, FlightWithTemplate, PromptTemplateID
+from socratic.model import FlightID, FlightStatus, PromptTemplateID
 from socratic.storage import flight as flight_storage
 
 from ..view import FlightCreateRequest, FlightListView, FlightUpdateRequest, FlightView
 
 router = APIRouter(prefix="/api/flights", tags=["flights"])
-
-
-@di.inject
-def _render_template(
-    content: str,
-    context: dict[str, t.Any],
-    *,
-    env: jinja2.Environment = di.Provide["template.llm"],
-) -> str:
-    """Render a Jinja2 template with the given context."""
-    template = env.from_string(content)
-    return template.render(**context)
 
 
 @router.get("", operation_id="list_flights")
@@ -42,16 +30,13 @@ def list_flights(
 ) -> FlightListView:
     """List flights with optional filters."""
     with session.begin():
-        flights = t.cast(
-            tuple[FlightWithTemplate, ...],
-            flight_storage.find_flights(
-                template_id=template_id,
-                status=status_filter,
-                created_by=created_by,
-                limit=limit,
-                with_template=True,
-                session=session,
-            ),
+        flights = flight_storage.find_flights(
+            template_id=template_id,
+            status=status_filter,
+            created_by=created_by,
+            limit=limit,
+            with_template=True,
+            session=session,
         )
         return FlightListView.from_model(flights)
 
@@ -77,6 +62,7 @@ def get_flight(
 @di.inject
 def create_flight(
     request: FlightCreateRequest,
+    env: jinja2.Environment = Depends(di.Provide["template.llm"]),
     session: Session = Depends(di.Manage["storage.persistent.session"]),
 ) -> FlightView:
     """Create a new flight.
@@ -104,13 +90,10 @@ def create_flight(
                 detail=f"Template '{request.template}' not found",
             ) from None
 
-        # Combine feature flags and context for rendering —
-        # feature flags live under their own namespace to avoid collisions
-        render_context = {"feature": request.feature_flags, **request.context}
-
-        # Render the template
+        # Validate template rendering before creating the flight
+        render_context: dict[str, t.Any] = {"feature": request.feature_flags, **request.context}
         try:
-            rendered_content = _render_template(template.content, render_context)
+            env.from_string(template.content).render(**render_context)
         except jinja2.TemplateError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -118,10 +101,9 @@ def create_flight(
             ) from e
 
         # Create the flight
-        flight = flight_storage.create_flight(
+        created = flight_storage.create_flight(
             template_id=template.template_id,
             created_by=request.created_by,
-            rendered_content=rendered_content,
             model_provider=request.model_provider,
             model_name=request.model_name,
             started_at=datetime.datetime.now(datetime.UTC),
@@ -132,13 +114,10 @@ def create_flight(
             session=session,
         )
 
-        # create_flight returns a Flight (no template join), so construct
-        # the view with template info from the resolved template
-        view = FlightView.from_model(flight)
-        view = view.model_copy(
-            update={"template_name": template.name, "template_version": template.version},
-        )
-        return view
+        # Refetch with template join so FlightView.from_model can render
+        flight = flight_storage.get_flight(created.flight_id, with_template=True, session=session)
+        assert flight is not None
+        return FlightView.from_model(flight)
 
 
 @router.patch("/{flight_id}", operation_id="update_flight")

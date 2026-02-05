@@ -9,6 +9,7 @@ __all__ = [
     "SurveySchemaListView",
     # Flights
     "FlightCreateRequest",
+    "FlightSummaryView",
     "FlightView",
     "FlightListView",
     "FlightUpdateRequest",
@@ -18,7 +19,7 @@ __all__ = [
     "SurveyListView",
 ]
 
-from .flight import FlightCreateRequest, FlightListView, FlightUpdateRequest, FlightView
+from .flight import FlightCreateRequest, FlightListView, FlightSummaryView, FlightUpdateRequest, FlightView
 from .survey import SurveyCreateRequest, SurveyListView, SurveySchemaCreateRequest, SurveySchemaListView, \
     SurveySchemaView, SurveyView
 from .template import TemplateCreateRequest, TemplateListView, TemplateView
