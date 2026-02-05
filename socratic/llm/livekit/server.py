@@ -164,6 +164,7 @@ def run_agent_server(
     livekit_api_key: str,
     livekit_api_secret: str,
     agent_name: str = "socratic-assessment",
+    agent_port: int = 8081,
     devmode: bool = False,
 ) -> None:
     """Run the LiveKit agent server.
@@ -176,6 +177,7 @@ def run_agent_server(
         livekit_api_key: LiveKit API key.
         livekit_api_secret: LiveKit API secret.
         agent_name: Name to register with LiveKit for dispatch routing.
+        agent_port: Port for the agent's HTTP health endpoint.
         devmode: Run in development mode with hot reload.
     """
     # Create server with LiveKit credentials passed directly
@@ -183,6 +185,7 @@ def run_agent_server(
         ws_url=livekit_wss_url,
         api_key=livekit_api_key,
         api_secret=livekit_api_secret,
+        port=agent_port,
     )
     server.rtc_session(agent_name=agent_name)(assessment_session)  # pyright: ignore [reportUnknownMemberType]
 
