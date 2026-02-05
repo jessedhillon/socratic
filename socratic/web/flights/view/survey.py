@@ -22,7 +22,6 @@ class SurveyDimensionView(BaseModel):
     required: bool = True
     help: str | None = None
     tags: list[str] = []
-    weight: float = 1.0
     reverse_scored: bool = False
 
     @classmethod
@@ -34,7 +33,6 @@ class SurveyDimensionView(BaseModel):
             required=dim.required,
             help=dim.help,
             tags=dim.tags,
-            weight=dim.weight,
             reverse_scored=dim.reverse_scored,
         )
 

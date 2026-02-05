@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import typing as t
 
-from socratic.model import AttemptID, BaseModel, Flight, FlightID, FlightStatus, FlightWithTemplate, PromptTemplateID
+from socratic.model import BaseModel, Flight, FlightID, FlightStatus, FlightWithTemplate, PromptTemplateID
 
 
 class FlightCreateRequest(BaseModel):
@@ -25,7 +25,7 @@ class FlightCreateRequest(BaseModel):
     model_provider: str
     model_name: str
     model_config_data: dict[str, t.Any] = {}
-    attempt_id: AttemptID | None = None
+    labels: dict[str, t.Any] = {}
 
 
 class FlightView(BaseModel):
@@ -45,7 +45,7 @@ class FlightView(BaseModel):
     status: FlightStatus
     started_at: datetime.datetime
     completed_at: datetime.datetime | None
-    attempt_id: AttemptID | None
+    labels: dict[str, t.Any]
     outcome_metadata: dict[str, t.Any] | None
     create_time: datetime.datetime
     update_time: datetime.datetime
@@ -67,7 +67,7 @@ class FlightView(BaseModel):
             status=flight.status,
             started_at=flight.started_at,
             completed_at=flight.completed_at,
-            attempt_id=flight.attempt_id,
+            labels=flight.labels,
             outcome_metadata=flight.outcome_metadata,
             create_time=flight.create_time,
             update_time=flight.update_time,

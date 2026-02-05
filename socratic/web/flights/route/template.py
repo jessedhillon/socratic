@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from socratic.core import di
+from socratic.lib import NotSet
 from socratic.model import PromptTemplateID
 from socratic.storage import flight as flight_storage
 
@@ -87,8 +88,8 @@ def update_template(
         try:
             flight_storage.update_template(
                 template_id,
-                description=description if description is not None else flight_storage.NotSet(),
-                is_active=is_active if is_active is not None else flight_storage.NotSet(),
+                description=description if description is not None else NotSet(),
+                is_active=is_active if is_active is not None else NotSet(),
                 session=session,
             )
         except KeyError:

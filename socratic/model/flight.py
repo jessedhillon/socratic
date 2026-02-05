@@ -9,7 +9,7 @@ import typing as t
 import pydantic as p
 
 from .base import BaseModel, WithCtime, WithTimestamps
-from .id import AttemptID, FlightID, PromptTemplateID, SurveyID, SurveySchemaID
+from .id import FlightID, PromptTemplateID, SurveyID, SurveySchemaID
 
 
 class FlightStatus(enum.Enum):
@@ -157,7 +157,6 @@ class SurveyDimension(BaseModel):
     required: bool = True
     help: str | None = None
     tags: list[str] = []
-    weight: float = 1.0
     reverse_scored: bool = False
 
 
@@ -209,7 +208,7 @@ class Flight(BaseModel, WithTimestamps):
     started_at: datetime.datetime
     completed_at: datetime.datetime | None = None
 
-    attempt_id: AttemptID | None = None
+    labels: dict[str, t.Any] = {}
     outcome_metadata: dict[str, t.Any] | None = None
 
 

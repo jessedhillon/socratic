@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from socratic.core import di
-from socratic.model import AttemptID, FlightID, FlightStatus, FlightWithTemplate, PromptTemplateID
+from socratic.lib import NotSet
+from socratic.model import FlightID, FlightStatus, FlightWithTemplate, PromptTemplateID
 from socratic.storage import flight as flight_storage
 
 from ..view import FlightCreateRequest, FlightListView, FlightUpdateRequest, FlightView
@@ -34,7 +35,6 @@ def _render_template(
 @di.inject
 def list_flights(
     template_id: PromptTemplateID | None = None,
-    attempt_id: AttemptID | None = None,
     status_filter: FlightStatus | None = None,
     created_by: str | None = None,
     limit: int | None = 50,
@@ -46,7 +46,6 @@ def list_flights(
             tuple[FlightWithTemplate, ...],
             flight_storage.find_flights(
                 template_id=template_id,
-                attempt_id=attempt_id,
                 status=status_filter,
                 created_by=created_by,
                 limit=limit,
@@ -129,7 +128,7 @@ def create_flight(
             feature_flags=request.feature_flags,
             context=request.context,
             model_config=request.model_config_data,
-            attempt_id=request.attempt_id,
+            labels=request.labels,
             session=session,
         )
 
@@ -151,9 +150,9 @@ def update_flight(
 ) -> FlightView:
     """Update a flight's status or outcome metadata."""
     with session.begin():
-        status_val: FlightStatus | flight_storage.NotSet = flight_storage.NotSet()
-        completed_at: datetime.datetime | None | flight_storage.NotSet = flight_storage.NotSet()
-        outcome_metadata: dict[str, t.Any] | None | flight_storage.NotSet = flight_storage.NotSet()
+        status_val: FlightStatus | NotSet = NotSet()
+        completed_at: datetime.datetime | None | NotSet = NotSet()
+        outcome_metadata: dict[str, t.Any] | None | NotSet = NotSet()
 
         if request.status is not None:
             status_val = request.status

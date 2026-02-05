@@ -71,7 +71,7 @@ def upgrade() -> None:
         Column("status", String, nullable=False, server_default="active"),
         Column("started_at", DateTime(timezone=True), nullable=False),
         Column("completed_at", DateTime(timezone=True), nullable=True),
-        Column("attempt_id", String(27), ForeignKey("assessment_attempts.attempt_id"), nullable=True),
+        Column("labels", JSONB(astext_type=Text()), nullable=False, server_default="{}"),
         Column("outcome_metadata", JSONB(astext_type=Text()), nullable=True),
         Column("create_time", DateTime(timezone=True), nullable=False, server_default=f.now()),
         Column("update_time", DateTime(timezone=True), nullable=False, server_default=f.now()),
@@ -79,7 +79,7 @@ def upgrade() -> None:
 
     # Create indexes for flights
     op.create_index("ix_flights_template_id", "flights", ["template_id"])
-    op.create_index("ix_flights_attempt_id", "flights", ["attempt_id"])
+    op.create_index("ix_flights_labels", "flights", ["labels"], postgresql_using="gin")
     op.create_index("ix_flights_status", "flights", ["status"])
     op.create_index("ix_flights_created_by", "flights", ["created_by"])
 
@@ -114,7 +114,7 @@ def downgrade() -> None:
     # Drop indexes for flights
     op.drop_index("ix_flights_created_by", table_name="flights")
     op.drop_index("ix_flights_status", table_name="flights")
-    op.drop_index("ix_flights_attempt_id", table_name="flights")
+    op.drop_index("ix_flights_labels", table_name="flights")
     op.drop_index("ix_flights_template_id", table_name="flights")
 
     # Drop flights table

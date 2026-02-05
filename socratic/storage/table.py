@@ -339,7 +339,7 @@ class flights(base):
     model_config_data: Mapped[dict[str, t.Any]] = mapped_column(JSONB, default_factory=dict)
     status: Mapped[str] = mapped_column(default="active")
     completed_at: Mapped[datetime.datetime | None] = mapped_column(default=None)
-    attempt_id: Mapped[AttemptID | None] = mapped_column(ForeignKey("assessment_attempts.attempt_id"), default=None)
+    labels: Mapped[dict[str, t.Any]] = mapped_column(JSONB, default_factory=dict)
     outcome_metadata: Mapped[dict[str, t.Any] | None] = mapped_column(JSONB, default=None)
 
     create_time: Mapped[datetime.datetime] = mapped_column(default=None, server_default=func.now())

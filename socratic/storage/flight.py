@@ -11,8 +11,8 @@ import sqlalchemy as sqla
 
 from socratic.core import di
 from socratic.lib import NotSet
-from socratic.model import AttemptID, Flight, FlightID, FlightStatus, FlightSurvey, FlightWithTemplate, \
-    PromptTemplate, PromptTemplateID, SurveyDimension, SurveyID, SurveySchema, SurveySchemaID
+from socratic.model import Flight, FlightID, FlightStatus, FlightSurvey, FlightWithTemplate, PromptTemplate, \
+    PromptTemplateID, SurveyDimension, SurveyID, SurveySchema, SurveySchemaID
 
 from . import Session
 from .table import flight_surveys, flights, prompt_templates, survey_schemas
@@ -372,7 +372,7 @@ def get_flight(
 def find_flights(
     *,
     template_id: PromptTemplateID | None = None,
-    attempt_id: AttemptID | None = None,
+    labels: dict[str, t.Any] | None = None,
     status: FlightStatus | None = None,
     created_by: str | None = None,
     limit: int | None = None,
@@ -396,8 +396,8 @@ def find_flights(
 
     if template_id is not None:
         stmt = stmt.where(flights.template_id == template_id)
-    if attempt_id is not None:
-        stmt = stmt.where(flights.attempt_id == attempt_id)
+    if labels is not None:
+        stmt = stmt.where(flights.labels.contains(labels))
     if status is not None:
         stmt = stmt.where(flights.status == status.value)
     if created_by is not None:
@@ -426,7 +426,7 @@ def create_flight(
     feature_flags: dict[str, t.Any] | None = None,
     context: dict[str, t.Any] | None = None,
     model_config: dict[str, t.Any] | None = None,
-    attempt_id: AttemptID | None = None,
+    labels: dict[str, t.Any] | None = None,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> Flight:
     """Create a new flight."""
@@ -442,7 +442,7 @@ def create_flight(
         feature_flags=feature_flags or {},
         context=context or {},
         model_config_data=model_config or {},
-        attempt_id=attempt_id,
+        labels=labels or {},
     )
     session.execute(stmt)
     session.flush()
