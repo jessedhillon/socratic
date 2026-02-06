@@ -5,7 +5,11 @@ google:
     client_email: 'foo@example.com'
     client_id: '...'
 
+flights:
+  base_url: 'http://127.0.0.1:8082'
+
 livekit:
+  agent_port: 8081
   room_prefix: 'assessment'
   stt_model: 'deepgram/nova-3'
   tts_model: 'elevenlabs/eleven_turbo_v2_5'

@@ -329,7 +329,6 @@ class flights(base):
     flight_id: Mapped[FlightID] = mapped_column(primary_key=True)
     template_id: Mapped[PromptTemplateID] = mapped_column(ForeignKey("prompt_templates.template_id"))
     created_by: Mapped[str]
-    rendered_content: Mapped[str]
     model_provider: Mapped[str]
     model_name: Mapped[str]
     started_at: Mapped[datetime.datetime]

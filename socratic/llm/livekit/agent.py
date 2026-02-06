@@ -23,11 +23,11 @@ from socratic import storage
 from socratic.core import di
 from socratic.core.config.llm import ModelSettings
 from socratic.core.provider import TimestampProvider
+from socratic.lib.vendor.flights import FlightsClient
 from socratic.llm.agent.assessment import AssessmentAgent
 from socratic.llm.agent.assessment.state import AssessmentCriterion, AssessmentState, Conviviality, CriterionCoverage
 from socratic.llm.livekit.event import AssessmentCompleteEvent, AssessmentErrorEvent
 from socratic.model import AttemptID, FlightID, FlightStatus, UtteranceType
-from socratic.storage import flight as flight_storage
 from socratic.storage import transcript as transcript_storage
 
 if t.TYPE_CHECKING:
@@ -65,12 +65,16 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         context: AssessmentContext,
         *,
         graph: CompiledStateGraph,
+        model_settings: ModelSettings | None = None,
+        env: jinja2.Environment | None = None,
     ) -> None:
         super().__init__(
             instructions="You are a Socratic assessment proctor conducting a voice-based evaluation.",
         )
         self.context = context
         self.graph = graph
+        self.model_settings = model_settings
+        self.env = env
         self._initialized = False
         self._failed = False
         self._pending_complete = False
@@ -127,13 +131,14 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         *,
         env: jinja2.Environment = di.Provide["template.llm"],  # noqa: B008
         model_settings: ModelSettings = di.Provide["config.llm.models.dialogue", di.as_(ModelSettings)],  # noqa: B008
+        flights: FlightsClient = di.Provide["vendor.flights.client"],  # noqa: B008
         utcnow: TimestampProvider = di.Provide["utcnow"],  # noqa: B008
-        session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],  # noqa: B008
     ) -> AssessmentState:
         """Build the initial graph state from the assessment context.
 
-        If a prompt template is registered in the database, creates a flight
-        to track this assessment instance.
+        Creates a flight via the flights HTTP API to track this assessment
+        instance.  The template source is read from the filesystem and sent
+        for content-addressed resolution.
         """
         criteria_coverage: dict[str, CriterionCoverage] = {}
         for criterion in self.context.rubric_criteria:
@@ -145,57 +150,37 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
 
         start_time = utcnow()
         flight_id: FlightID | None = None
+        conviviality = Conviviality.Conversational
 
         try:
-            async with session.begin():
-                # Look up the assessment system template
-                template = await flight_storage.aget_template(
-                    name="assessment_system",
-                    session=session,
-                )
-                if template is not None:
-                    # Render the template (same as AssessmentAgent.system_prompt does)
-                    # Use default conviviality — could be enhanced to accept via context
-                    conviviality = Conviviality.Conversational
-                    jinja_template = env.get_template("agent/assessment_system.j2")
-                    rendered_content = jinja_template.render(
-                        objective_title=self.context.objective_title,
-                        objective_description=self.context.objective_description,
-                        rubric_criteria=self.context.rubric_criteria,
-                        initial_prompts=self.context.initial_prompts,
-                        conviviality=conviviality,
-                        time_budget_minutes=self.context.time_expectation_minutes,
-                    )
-
-                    # Create the flight
-                    flight = await flight_storage.acreate_flight(
-                        template_id=template.template_id,
-                        created_by="system",  # Could be enhanced to track user
-                        rendered_content=rendered_content,
-                        model_provider=model_settings.provider.value,
-                        model_name=model_settings.model,
-                        started_at=start_time,
-                        feature_flags={
-                            "conviviality": conviviality.value,
-                            "extension_policy": self.context.extension_policy,
-                        },
-                        context={
-                            "objective_id": self.context.objective_id,
-                            "objective_title": self.context.objective_title,
-                            "rubric_criteria_count": len(self.context.rubric_criteria),
-                            "initial_prompts_count": len(self.context.initial_prompts),
-                            "time_expectation_minutes": self.context.time_expectation_minutes,
-                        },
-                        model_config={
-                            "temperature": model_settings.temperature,
-                            "max_tokens": model_settings.max_tokens,
-                        },
-                        labels={"attempt_id": str(self.attempt_id)},
-                        session=session,
-                    )
-                    flight_id = flight.flight_id
-                    self._flight_id = flight_id
-                    logger.info(f"Created flight {flight_id} for attempt {self.attempt_id}")
+            template_source = env.loader.get_source(env, "agent/assessment_system.j2")[0]  # pyright: ignore[reportOptionalMemberAccess]
+            result = await flights.create_flight(
+                template="assessment_system",
+                template_content=template_source,
+                created_by="system",
+                feature_flags={
+                    "conviviality": conviviality.value,
+                    "extension_policy": self.context.extension_policy,
+                },
+                context={
+                    "objective_id": self.context.objective_id,
+                    "objective_title": self.context.objective_title,
+                    "objective_description": self.context.objective_description,
+                    "rubric_criteria": [c.model_dump() for c in self.context.rubric_criteria],
+                    "initial_prompts": self.context.initial_prompts,
+                    "time_budget_minutes": self.context.time_expectation_minutes,
+                },
+                model_provider=model_settings.provider.value,
+                model_name=model_settings.model,
+                model_config_data={
+                    "temperature": model_settings.temperature,
+                    "max_tokens": model_settings.max_tokens,
+                },
+                labels={"attempt_id": str(self.attempt_id)},
+            )
+            flight_id = result.flight_id
+            self._flight_id = flight_id
+            logger.info(f"Created flight {flight_id} for attempt {self.attempt_id}")
         except Exception:
             # Flight tracking is optional — don't fail the assessment if it errors
             logger.exception("Failed to create flight for assessment tracking")
@@ -417,9 +402,9 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         *,
         completion_reason: str,
         status: FlightStatus = FlightStatus.Completed,
-        session: storage.AsyncSession = di.Provide["storage.persistent.async_session"],  # noqa: B008
+        flights: FlightsClient = di.Provide["vendor.flights.client"],  # noqa: B008
     ) -> None:
-        """Mark the tracked flight as completed or abandoned with outcome metadata.
+        """Mark the tracked flight as completed or abandoned via the flights HTTP API.
 
         Includes ``completion_reason`` in the outcome metadata so we can
         distinguish agent-initiated completion from user disconnect, etc.
@@ -431,32 +416,30 @@ class SocraticAssessmentAgent(Agent):  # pyright: ignore [reportUntypedBaseClass
         self._flight_completed = True
 
         try:
-            async with session.begin():
-                outcome_metadata: dict[str, t.Any] = {
-                    "completion_reason": completion_reason,
-                }
+            outcome_metadata: dict[str, t.Any] = {
+                "completion_reason": completion_reason,
+            }
 
-                # Try to capture criteria coverage from graph state
-                try:
-                    state_snapshot = await self.graph.aget_state(self._graph_config)  # pyright: ignore [reportUnknownMemberType, reportArgumentType]
-                    criteria_coverage = state_snapshot.values.get("criteria_coverage", {})  # pyright: ignore [reportUnknownMemberType]
-                    outcome_metadata["criteria_coverage"] = {
-                        cid: {
-                            "coverage": cov.get("coverage", "unknown") if isinstance(cov, dict) else "unknown",
-                            "evidence_count": len(cov.get("evidence", [])) if isinstance(cov, dict) else 0,  # pyright: ignore [reportUnknownArgumentType]
-                        }
-                        for cid, cov in criteria_coverage.items()  # pyright: ignore [reportUnknownVariableType]
+            # Try to capture criteria coverage from graph state
+            try:
+                state_snapshot = await self.graph.aget_state(self._graph_config)  # pyright: ignore [reportUnknownMemberType, reportArgumentType]
+                criteria_coverage = state_snapshot.values.get("criteria_coverage", {})  # pyright: ignore [reportUnknownMemberType]
+                outcome_metadata["criteria_coverage"] = {
+                    cid: {
+                        "coverage": cov.get("coverage", "unknown") if isinstance(cov, dict) else "unknown",
+                        "evidence_count": len(cov.get("evidence", [])) if isinstance(cov, dict) else 0,  # pyright: ignore [reportUnknownArgumentType]
                     }
-                except Exception:
-                    logger.warning(f"Could not retrieve graph state for flight {self._flight_id} outcome metadata")
+                    for cid, cov in criteria_coverage.items()  # pyright: ignore [reportUnknownVariableType]
+                }
+            except Exception:
+                logger.warning(f"Could not retrieve graph state for flight {self._flight_id} outcome metadata")
 
-                await flight_storage.acomplete_flight(
-                    self._flight_id,
-                    status=status,
-                    outcome_metadata=outcome_metadata,
-                    session=session,
-                )
-                logger.info(f"Marked flight {self._flight_id} as {status.value} (reason: {completion_reason})")
+            await flights.update_flight(
+                self._flight_id,
+                status=status,
+                outcome_metadata=outcome_metadata,
+            )
+            logger.info(f"Marked flight {self._flight_id} as {status.value} (reason: {completion_reason})")
         except Exception:
             logger.exception(f"Failed to update flight {self._flight_id} (reason: {completion_reason})")
 
@@ -523,6 +506,7 @@ def create_assessment_agent_from_room_metadata(
     room: "Room",
     *,
     model: BaseChatModel = di.Provide["llm.dialogue_model"],  # noqa: B008
+    model_settings: ModelSettings = di.Provide["config.llm.models.dialogue", di.as_(ModelSettings)],  # noqa: B008
     env: jinja2.Environment = di.Provide["template.llm"],  # noqa: B008
 ) -> SocraticAssessmentAgent:
     """Create an assessment agent from LiveKit room metadata.
@@ -546,4 +530,6 @@ def create_assessment_agent_from_room_metadata(
     return SocraticAssessmentAgent(
         context=context,
         graph=graph,
+        model_settings=model_settings,
+        env=env,
     )

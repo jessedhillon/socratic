@@ -8,6 +8,8 @@ from dependency_injector.containers import DeclarativeContainer
 from dependency_injector.providers import Configuration, Container, Provider, Singleton
 from livekit import api as livekit_api  # pyright: ignore [reportMissingTypeStubs]
 
+from socratic.lib.vendor.flights import FlightsClient
+
 if t.TYPE_CHECKING:
     import google.oauth2.service_account
     import googleapiclient.discovery
@@ -112,9 +114,16 @@ class LiveKitContainer(DeclarativeContainer):
     )
 
 
+class FlightsContainer(DeclarativeContainer):
+    config: Configuration = Configuration(strict=True)
+
+    client: Provider[FlightsClient] = Singleton(FlightsClient, base_url=config.base_url)
+
+
 class VendorContainer(DeclarativeContainer):
     config: Configuration = Configuration()
     secrets: Configuration = Configuration()
 
+    flights: Provider[FlightsContainer] = Container(FlightsContainer, config=config.flights)
     google: Provider[GoogleContainer] = Container(GoogleContainer, config=config.google, secrets=secrets.google)
     livekit: Provider[LiveKitContainer] = Container(LiveKitContainer, config=config.livekit, secrets=secrets.livekit)

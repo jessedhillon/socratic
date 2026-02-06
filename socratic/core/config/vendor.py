@@ -5,7 +5,12 @@ import pydantic as p
 from .base import BaseSettings
 
 
+class FlightsSettings(BaseSettings):
+    base_url: str
+
+
 class VendorSettings(BaseSettings):
+    flights: FlightsSettings
     google: GoogleSettings
     livekit: LiveKitSettings
 
@@ -38,6 +43,7 @@ class LiveKitEgressSettings(BaseSettings):
 
 class LiveKitSettings(BaseSettings):
     agent_name: str = "socratic-assessment"
+    agent_port: int = 8081
     room_prefix: str = "assessment"
     stt_model: str = "deepgram/nova-3"
     tts_model: str = "openai/tts-1"
