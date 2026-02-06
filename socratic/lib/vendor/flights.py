@@ -6,7 +6,25 @@ import typing as t
 
 import httpx
 
-from socratic.model import FlightID, FlightStatus
+from socratic.model import FlightID, FlightStatus, SurveyDimension, SurveySchemaID
+
+
+class SurveySchemaResult(object):
+    """Result of creating or fetching a survey schema."""
+
+    def __init__(
+        self,
+        schema_id: SurveySchemaID,
+        name: str,
+        version: int,
+        dimensions_hash: str,
+        is_default: bool,
+    ) -> None:
+        self.schema_id = schema_id
+        self.name = name
+        self.version = version
+        self.dimensions_hash = dimensions_hash
+        self.is_default = is_default
 
 
 class FlightCreateResult(object):
@@ -83,3 +101,68 @@ class FlightsClient(object):
                 timeout=10.0,
             )
             resp.raise_for_status()
+
+    async def create_survey_schema(
+        self,
+        *,
+        name: str,
+        dimensions: list[SurveyDimension],
+        is_default: bool = False,
+    ) -> SurveySchemaResult:
+        """Create a survey schema via the flights API.
+
+        Returns the created schema with its ID, version, and hash.
+        """
+        payload: dict[str, t.Any] = {
+            "name": name,
+            "dimensions": [d.model_dump() for d in dimensions],
+            "is_default": is_default,
+        }
+
+        async with httpx.AsyncClient(base_url=self._base_url) as client:
+            resp = await client.post("/api/survey-schemas", json=payload, timeout=10.0)
+            resp.raise_for_status()
+            data = resp.json()
+            return SurveySchemaResult(
+                schema_id=SurveySchemaID(data["schema_id"]),
+                name=data["name"],
+                version=data["version"],
+                dimensions_hash=data["dimensions_hash"],
+                is_default=data["is_default"],
+            )
+
+
+class FlightsClientSync(object):
+    """Synchronous client for the flights HTTP API (for CLI scripts)."""
+
+    def __init__(self, base_url: str) -> None:
+        self._base_url = base_url
+
+    def create_survey_schema(
+        self,
+        *,
+        name: str,
+        dimensions: list[SurveyDimension],
+        is_default: bool = False,
+    ) -> SurveySchemaResult:
+        """Create a survey schema via the flights API.
+
+        Returns the created schema with its ID, version, and hash.
+        """
+        payload: dict[str, t.Any] = {
+            "name": name,
+            "dimensions": [d.model_dump() for d in dimensions],
+            "is_default": is_default,
+        }
+
+        with httpx.Client(base_url=self._base_url) as client:
+            resp = client.post("/api/survey-schemas", json=payload, timeout=10.0)
+            resp.raise_for_status()
+            data = resp.json()
+            return SurveySchemaResult(
+                schema_id=SurveySchemaID(data["schema_id"]),
+                name=data["name"],
+                version=data["version"],
+                dimensions_hash=data["dimensions_hash"],
+                is_default=data["is_default"],
+            )
