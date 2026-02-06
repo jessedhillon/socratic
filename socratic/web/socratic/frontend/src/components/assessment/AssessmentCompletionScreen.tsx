@@ -1,5 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import SurveyForm from '../SurveyForm';
 import type { ChatMessageData } from './ChatMessage';
 
 export type CompletionStep =
@@ -8,6 +9,34 @@ export type CompletionStep =
   | 'completing'
   | 'complete'
   | 'error';
+
+// Survey types matching the flights API
+interface SurveyDimension {
+  name: string;
+  label: string;
+  spec: {
+    kind: string;
+    [key: string]: unknown;
+  };
+  required?: boolean;
+  help?: string;
+}
+
+interface SurveySchema {
+  schema_id: string;
+  name: string;
+  dimensions: SurveyDimension[];
+  is_default: boolean;
+}
+
+type SurveyState =
+  | 'loading'
+  | 'ready'
+  | 'submitting'
+  | 'submitted'
+  | 'skipped'
+  | 'error'
+  | 'idle';
 
 export interface AssessmentSummary {
   objectiveTitle: string;
@@ -33,6 +62,12 @@ export interface AssessmentCompletionScreenProps {
   onReturn?: () => void;
   /** Messages from the conversation (for review) */
   messages?: ChatMessageData[];
+  /** Flight ID for submitting survey feedback (survey form only shown if provided) */
+  flightId?: string;
+  /** Base URL for the flights API (required if flightId is provided) */
+  flightsApiUrl?: string;
+  /** User identifier for survey submission */
+  submittedBy?: string;
 }
 
 /**
@@ -52,9 +87,88 @@ export function AssessmentCompletionScreen({
   onRetry,
   onReturn,
   messages = [],
+  flightId,
+  flightsApiUrl,
+  submittedBy = 'anonymous',
 }: AssessmentCompletionScreenProps): React.ReactElement {
   const navigate = useNavigate();
   const [showTranscript, setShowTranscript] = useState(false);
+  const [surveyState, setSurveyState] = useState<SurveyState>('idle');
+  const [surveySchema, setSurveySchema] = useState<SurveySchema | null>(null);
+  const [surveyError, setSurveyError] = useState<string | null>(null);
+
+  // Fetch the default survey schema when assessment completes
+  useEffect(() => {
+    if (step !== 'complete' || !flightId || !flightsApiUrl) {
+      return;
+    }
+
+    const fetchSurveySchema = async () => {
+      setSurveyState('loading');
+      try {
+        const response = await fetch(
+          `${flightsApiUrl}/api/survey-schemas?is_default=true`
+        );
+        if (!response.ok) {
+          throw new Error('Failed to fetch survey schema');
+        }
+        const data = await response.json();
+        if (data.schemas && data.schemas.length > 0) {
+          setSurveySchema(data.schemas[0]);
+          setSurveyState('ready');
+        } else {
+          // No default schema configured, skip survey
+          setSurveyState('skipped');
+        }
+      } catch (err) {
+        console.error('Failed to load survey:', err);
+        setSurveyError(
+          err instanceof Error ? err.message : 'Failed to load survey'
+        );
+        setSurveyState('error');
+      }
+    };
+
+    fetchSurveySchema();
+  }, [step, flightId, flightsApiUrl]);
+
+  const handleSurveySubmit = useCallback(
+    async (ratings: Record<string, unknown>, notes?: string) => {
+      if (!flightId || !flightsApiUrl) return;
+
+      setSurveyState('submitting');
+      try {
+        const response = await fetch(
+          `${flightsApiUrl}/api/flights/${flightId}/surveys`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              submitted_by: submittedBy,
+              ratings,
+              schema_id: surveySchema?.schema_id,
+              notes: notes || null,
+            }),
+          }
+        );
+        if (!response.ok) {
+          throw new Error('Failed to submit survey');
+        }
+        setSurveyState('submitted');
+      } catch (err) {
+        console.error('Failed to submit survey:', err);
+        setSurveyError(
+          err instanceof Error ? err.message : 'Failed to submit survey'
+        );
+        setSurveyState('error');
+      }
+    },
+    [flightId, flightsApiUrl, submittedBy, surveySchema]
+  );
+
+  const handleSkipSurvey = useCallback(() => {
+    setSurveyState('skipped');
+  }, []);
 
   const handleReturn = useCallback(() => {
     if (onReturn) {
@@ -379,6 +493,94 @@ export function AssessmentCompletionScreen({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Survey feedback section */}
+        {flightId && surveyState === 'loading' && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div className="flex items-center justify-center gap-3 text-gray-500">
+              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <span>Loading feedback form...</span>
+            </div>
+          </div>
+        )}
+
+        {flightId && surveyState === 'ready' && surveySchema && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+              Share Your Feedback
+            </h2>
+            <p className="text-gray-600 text-sm mb-6">
+              Help us improve by sharing your experience with this assessment.
+            </p>
+            <SurveyForm
+              dimensions={surveySchema.dimensions}
+              onSubmit={handleSurveySubmit}
+              onCancel={handleSkipSurvey}
+              isSubmitting={surveyState === 'submitting'}
+            />
+          </div>
+        )}
+
+        {flightId && surveyState === 'submitted' && (
+          <div className="bg-green-50 rounded-xl p-6 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <svg
+                  className="w-5 h-5 text-green-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-green-900">
+                  Thank you for your feedback!
+                </h3>
+                <p className="text-green-800 text-sm">
+                  Your input helps us improve the assessment experience.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {flightId && surveyState === 'error' && (
+          <div className="bg-yellow-50 rounded-xl p-6 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                <svg
+                  className="w-5 h-5 text-yellow-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-yellow-900">
+                  Could not load feedback form
+                </h3>
+                <p className="text-yellow-800 text-sm">
+                  {surveyError ||
+                    'There was a problem loading the feedback form.'}
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
