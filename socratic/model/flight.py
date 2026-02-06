@@ -177,7 +177,9 @@ class SurveySchema(BaseModel, WithCtime):
 
     schema_id: SurveySchemaID
     name: str
+    version: int = 1
     dimensions: list[SurveyDimension]
+    dimensions_hash: str
     is_default: bool = False
 
 

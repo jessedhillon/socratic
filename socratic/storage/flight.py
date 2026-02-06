@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import json
 import typing as t
 
 import jinja2
@@ -32,6 +33,20 @@ def _hash_content(content: str) -> str:
         canonical = repr(ast.body)
     except jinja2.TemplateSyntaxError:
         canonical = content.strip()
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _hash_dimensions(dimensions: list[SurveyDimension]) -> str:
+    """Compute canonical hash of survey dimensions.
+
+    Uses sorted JSON serialization to ensure consistent hashing
+    regardless of dict key ordering.
+    """
+    canonical = json.dumps(
+        [d.model_dump() for d in dimensions],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -308,9 +323,13 @@ def get_survey_schema(
     schema_id: SurveySchemaID | None = None,
     *,
     name: str | None = None,
+    version: int | None = None,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> SurveySchema | None:
-    """Get a survey schema by ID or name."""
+    """Get a survey schema by ID or name.
+
+    If name is provided without version, returns the latest version.
+    """
     if schema_id is None and name is None:
         raise ValueError("Either schema_id or name must be provided")
     if schema_id is not None and name is not None:
@@ -318,8 +337,22 @@ def get_survey_schema(
 
     if schema_id is not None:
         stmt = sqla.select(survey_schemas.__table__).where(survey_schemas.schema_id == schema_id)
+    elif version is not None:
+        stmt = sqla.select(survey_schemas.__table__).where(
+            sqla.and_(
+                survey_schemas.name == name,
+                survey_schemas.version == version,
+            )
+        )
     else:
-        stmt = sqla.select(survey_schemas.__table__).where(survey_schemas.name == name)
+        # Get latest version for name
+        stmt = (
+            sqla
+            .select(survey_schemas.__table__)
+            .where(survey_schemas.name == name)
+            .order_by(survey_schemas.version.desc())
+            .limit(1)
+        )
 
     row = session.execute(stmt).mappings().one_or_none()
     return SurveySchema(**row) if row else None
@@ -348,12 +381,40 @@ def create_survey_schema(
     is_default: bool = False,
     session: Session = di.Provide["storage.persistent.session"],
 ) -> SurveySchema:
-    """Create a new survey schema."""
+    """Create a new survey schema, or return existing if dimensions match.
+
+    If a schema with the same name exists:
+    - If dimensions hash matches, return the existing schema (idempotent)
+    - If dimensions differ, create a new version
+    """
+    dimensions_hash = _hash_dimensions(dimensions)
+
+    # Check for existing schema with same name
+    existing_stmt = (
+        sqla
+        .select(survey_schemas.__table__)
+        .where(survey_schemas.name == name)
+        .order_by(survey_schemas.version.desc())
+        .limit(1)
+    )
+    existing_row = session.execute(existing_stmt).mappings().one_or_none()
+
+    if existing_row is not None:
+        # If hash matches, return existing (idempotent)
+        if existing_row["dimensions_hash"] == dimensions_hash:
+            return SurveySchema(**existing_row)
+        # Otherwise, create new version
+        next_version = existing_row["version"] + 1
+    else:
+        next_version = 1
+
     schema_id = SurveySchemaID()
     stmt = sqla.insert(survey_schemas).values(
         schema_id=schema_id,
         name=name,
+        version=next_version,
         dimensions=[d.model_dump() for d in dimensions],
+        dimensions_hash=dimensions_hash,
         is_default=is_default,
     )
     session.execute(stmt)

@@ -50,7 +50,9 @@ class SurveySchemaView(BaseModel):
 
     schema_id: SurveySchemaID
     name: str
+    version: int
     dimensions: list[SurveyDimensionView]
+    dimensions_hash: str
     is_default: bool
     create_time: datetime.datetime
 
@@ -59,7 +61,9 @@ class SurveySchemaView(BaseModel):
         return cls(
             schema_id=schema.schema_id,
             name=schema.name,
+            version=schema.version,
             dimensions=[SurveyDimensionView.from_model(d) for d in schema.dimensions],
+            dimensions_hash=schema.dimensions_hash,
             is_default=schema.is_default,
             create_time=schema.create_time,
         )
