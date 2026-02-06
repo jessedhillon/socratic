@@ -21,3 +21,6 @@ flights:
   backend:
     host: 127.0.0.1
     port: 8082
+  cors_origins:
+    - 'http://localhost:9099'
+    - 'http://127.0.0.1:9099'
