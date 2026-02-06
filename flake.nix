@@ -245,9 +245,17 @@
                 exit 1
               fi
 
+              FRONTEND_DIR="$PRJ_ROOT/socratic/web/$APP_NAME/frontend"
+              FLIGHTS_CONFIG="$FRONTEND_DIR/openapi-ts.flights.config.ts"
+              HAS_FLIGHTS_CONFIG=false
+              if [[ -f "$FLIGHTS_CONFIG" ]]; then
+                HAS_FLIGHTS_CONFIG=true
+                FLIGHTS_PORT=$(yq -r ".flights.backend.port" "$PRJ_ROOT/config/web.yaml")
+              fi
+
               cleanup() {
                 if [[ "$STARTED_SERVER" == "true" ]]; then
-                  echo "Stopping API server..."
+                  echo "Stopping API servers..."
                   for pid in "''${SERVER_PIDS[@]}"; do
                     kill "$pid" 2>/dev/null || true
                   done
@@ -255,7 +263,7 @@
               }
               trap cleanup EXIT
 
-              # Check if something is already listening on the port
+              # Start main app server
               if ss -tln | grep -q ":$API_PORT "; then
                 echo "Server already running on port $API_PORT, skipping backend startup..."
               else
@@ -263,13 +271,37 @@
                 poetry run python -m socratic.cli web serve $APP_NAME &
                 SERVER_PIDS+=($!)
                 STARTED_SERVER=true
+              fi
+
+              # Start flights server if needed
+              if [[ "$HAS_FLIGHTS_CONFIG" == "true" ]]; then
+                if ss -tln | grep -q ":$FLIGHTS_PORT "; then
+                  echo "Flights server already running on port $FLIGHTS_PORT..."
+                else
+                  echo "Starting flights API server on port $FLIGHTS_PORT..."
+                  poetry run python -m socratic.cli web serve flights &
+                  SERVER_PIDS+=($!)
+                  STARTED_SERVER=true
+                fi
+              fi
+
+              # Wait for servers to be ready
+              if [[ "$STARTED_SERVER" == "true" ]]; then
                 sleep 3
               fi
 
               echo "Generating API client for $APP_NAME..."
-              pushd $PRJ_ROOT/socratic/web/$APP_NAME/frontend > /dev/null
+              pushd $FRONTEND_DIR > /dev/null
               npx openapi-ts
               popd > /dev/null
+
+              # Generate flights client if config exists
+              if [[ "$HAS_FLIGHTS_CONFIG" == "true" ]]; then
+                echo "Generating flights API client..."
+                pushd $FRONTEND_DIR > /dev/null
+                npx openapi-ts -c openapi-ts.flights.config.ts
+                popd > /dev/null
+              fi
 
               echo "$APP_NAME API clients generated successfully"
             '';
