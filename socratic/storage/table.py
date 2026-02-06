@@ -3,7 +3,7 @@ import decimal
 import enum
 import typing as t
 
-from sqlalchemy import ForeignKey, func, MetaData
+from sqlalchemy import ForeignKey, func, MetaData, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, MappedAsDataclass
 from sqlalchemy.types import DateTime, Numeric, String
@@ -312,9 +312,13 @@ class survey_schemas(base):
     """Schemas defining survey dimensions for flight feedback."""
 
     __tablename__ = "survey_schemas"
+    __table_args__ = (UniqueConstraint("name", "version", name="uq_survey_schemas_name_version"),)
 
     schema_id: Mapped[SurveySchemaID] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(unique=True)
+    name: Mapped[str]
+    dimensions_hash: Mapped[str] = mapped_column(String(64))
+
+    version: Mapped[int] = mapped_column(default=1)
     dimensions: Mapped[list[dict[str, t.Any]]] = mapped_column(JSONB, default_factory=list)
     is_default: Mapped[bool] = mapped_column(default=False)
 
