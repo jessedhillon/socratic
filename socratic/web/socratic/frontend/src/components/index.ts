@@ -18,3 +18,6 @@ export {
   SpeakButton,
   VoiceInput,
 } from './assessment';
+
+// Survey components
+export { default as SurveyForm } from './SurveyForm';
