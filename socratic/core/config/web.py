@@ -44,3 +44,4 @@ class FlightsWebSettings(BaseSettings):
 
     backend: ServeSettings
     frontend: ServeSettings | None = None
+    cors_origins: list[str] = []

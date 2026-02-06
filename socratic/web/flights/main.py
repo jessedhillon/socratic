@@ -24,27 +24,32 @@ def _create_app(
         title="Flights",
         description="Prompt experimentation tracking service",
     )
-    if env is DeploymentEnvironment.Local:
-        if config.frontend is not None:
-            app.add_middleware(
-                CORSMiddleware,
-                allow_origins=[
-                    f"http://{config.frontend.host}:{config.frontend.port}",
-                    f"http://localhost:{config.frontend.port}",
-                ],
-                allow_credentials=True,
-                allow_methods=["*"],
-                allow_headers=["*"],
-            )
-        else:
-            # Allow all origins in local mode without frontend
-            app.add_middleware(
-                CORSMiddleware,
-                allow_origins=["*"],
-                allow_credentials=True,
-                allow_methods=["*"],
-                allow_headers=["*"],
-            )
+
+    # Configure CORS
+    cors_origins: list[str] = []
+
+    # Add explicitly configured origins
+    if config.cors_origins:
+        cors_origins.extend(config.cors_origins)
+
+    # Add frontend origin if configured
+    if config.frontend is not None:
+        cors_origins.append(f"http://{config.frontend.host}:{config.frontend.port}")
+        cors_origins.append(f"http://localhost:{config.frontend.port}")
+
+    # In local mode without explicit config, allow all origins for convenience
+    if env is DeploymentEnvironment.Local and not cors_origins:
+        cors_origins = ["*"]
+
+    if cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
     app.include_router(router)
     return app
 
